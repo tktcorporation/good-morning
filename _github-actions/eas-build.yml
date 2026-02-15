@@ -1,0 +1,49 @@
+# EAS Build - 内部配布用ワークフロー
+#
+# 使い方:
+#   1. このファイルを .github/workflows/eas-build.yml にコピー
+#   2. GitHub リポジトリの Settings > Secrets に EXPO_TOKEN を追加
+#      (https://expo.dev/accounts/[account]/settings/access-tokens で発行)
+#   3. 初回のみローカルPCで以下を実行:
+#      - npx eas-cli login
+#      - npx eas-cli build:configure
+#      - iOS内部配布の場合: Apple Developer アカウントの登録とデバイス登録が必要
+#        npx eas-cli device:create  (iPhoneのUDIDを登録)
+#   4. push すると自動でビルドが走り、Expo のダッシュボードからインストール可能
+
+name: EAS Build (Internal Distribution)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: EAS Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS (internal distribution)
+        run: eas build --platform ios --profile preview --non-interactive
+
+      - name: Build Android (internal distribution)
+        run: eas build --platform android --profile preview --non-interactive
