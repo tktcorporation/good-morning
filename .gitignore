@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# pnpm
+.pnpm-store/
+
 # Expo
 .expo/
 dist/
@@ -34,3 +37,4 @@ coverage/
 *.tsbuildinfo
 *.log
 npm-debug.log*
+pnpm-debug.log*

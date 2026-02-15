@@ -1,6 +1,7 @@
 {
   "name": "good-morning",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.29.3",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -42,5 +43,8 @@
     "jest-expo": "^54.0.17",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "pnpm": ">=10"
+  }
 }

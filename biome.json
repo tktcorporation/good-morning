@@ -42,6 +42,9 @@
     "includes": [
       "**",
       "!**/node_modules",
+      "!**/.pnpm-store",
+      "!**/.claude",
+      "!**/.devenv.json",
       "!**/.expo",
       "!**/dist",
       "!**/web-build",
