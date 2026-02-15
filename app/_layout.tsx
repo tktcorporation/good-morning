@@ -1,0 +1,71 @@
+import { Stack, useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { colors } from '../src/constants/theme';
+import {
+  addNotificationReceivedListener,
+  addNotificationResponseListener,
+  requestNotificationPermissions,
+} from '../src/services/notifications';
+import { useAlarmStore } from '../src/stores/alarm-store';
+
+export default function RootLayout() {
+  const router = useRouter();
+  const loadAlarms = useAlarmStore((s) => s.loadAlarms);
+  const setActiveAlarm = useAlarmStore((s) => s.setActiveAlarm);
+  const resetTodos = useAlarmStore((s) => s.resetTodos);
+
+  useEffect(() => {
+    loadAlarms();
+    requestNotificationPermissions();
+  }, [loadAlarms]);
+
+  useEffect(() => {
+    const handleAlarmTrigger = (alarmId: string) => {
+      setActiveAlarm(alarmId);
+      resetTodos(alarmId);
+      router.push(`/wakeup/${alarmId}`);
+    };
+
+    const responseSub = addNotificationResponseListener(handleAlarmTrigger);
+    const receivedSub = addNotificationReceivedListener(handleAlarmTrigger);
+
+    return () => {
+      responseSub.remove();
+      receivedSub.remove();
+    };
+  }, [router, setActiveAlarm, resetTodos]);
+
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="alarm/create"
+        options={{
+          title: 'New Alarm',
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="alarm/[id]"
+        options={{
+          title: 'Edit Alarm',
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="wakeup/[id]"
+        options={{
+          headerShown: false,
+          gestureEnabled: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+    </Stack>
+  );
+}
