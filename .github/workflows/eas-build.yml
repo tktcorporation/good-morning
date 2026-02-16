@@ -2,8 +2,15 @@
 #
 # 使い方:
 #   1. このファイルを .github/workflows/eas-build.yml にコピー
-#   2. GitHub リポジトリの Settings > Secrets に EXPO_TOKEN を追加
-#      (https://expo.dev/accounts/[account]/settings/access-tokens で発行)
+#   2. GitHub リポジトリの Settings > Secrets に以下を追加:
+#      - EXPO_TOKEN: Expo アクセストークン
+#        (https://expo.dev/accounts/[account]/settings/access-tokens で発行)
+#      - EXPO_ASC_KEY_ID: App Store Connect API の Key ID
+#      - EXPO_ASC_ISSUER_ID: App Store Connect API の Issuer ID
+#      - EXPO_ASC_API_KEY_P8_BASE64: AuthKey_*.p8 ファイルの中身 (base64)
+#        (cat AuthKey_*.p8 | base64 で取得)
+#      - EXPO_APPLE_TEAM_ID: Apple Team ID
+#      - EXPO_APPLE_TEAM_TYPE: Apple Team Type (INDIVIDUAL / COMPANY_OR_ORGANIZATION / IN_HOUSE)
 #   3. 初回のみローカルPCで以下を実行:
 #      - npx eas-cli login
 #      - npx eas-cli build:configure
@@ -45,8 +52,19 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Decode Apple ASC API Key
+        run: echo "$EXPO_ASC_API_KEY_P8_BASE64" | base64 -d > ./AuthKey.p8
+        env:
+          EXPO_ASC_API_KEY_P8_BASE64: ${{ secrets.EXPO_ASC_API_KEY_P8_BASE64 }}
+
       - name: Build iOS (internal distribution)
         run: eas build --platform ios --profile preview --non-interactive
+        env:
+          EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.EXPO_ASC_ISSUER_ID }}
+          EXPO_ASC_API_KEY_PATH: ./AuthKey.p8
+          EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
+          EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
 
       - name: Build Android (internal distribution)
         run: eas build --platform android --profile preview --non-interactive

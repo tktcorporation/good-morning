@@ -69,8 +69,7 @@
   },
   "postCreateCommand": {
     "mise-install": "mise install",
-    "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"],
-    "pnpm-install": ["bash", "-lc", "pnpm install"]
+    "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"]
   },
   "postStartCommand": {
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
