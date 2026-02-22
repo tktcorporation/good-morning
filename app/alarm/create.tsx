@@ -76,7 +76,7 @@ export default function CreateAlarmScreen() {
       repeatDays,
     });
     router.back();
-  }, [hour, minute, label, todos, repeatDays, addAlarm, router]);
+  }, [hour, minute, label, todos, repeatDays, addAlarm, router, t]);
 
   return (
     <KeyboardAvoidingView
@@ -133,9 +133,7 @@ export default function CreateAlarmScreen() {
               <Text style={styles.addButtonText}>{t('addTask')}</Text>
             </Pressable>
           </View>
-          <Text style={styles.sectionDescription}>
-            {t('tasksDescription')}
-          </Text>
+          <Text style={styles.sectionDescription}>{t('tasksDescription')}</Text>
           {todos.map((todo) => (
             <TodoListItem
               key={todo.id}
@@ -146,11 +144,7 @@ export default function CreateAlarmScreen() {
               onDelete={handleDeleteTodo}
             />
           ))}
-          {todos.length === 0 && (
-            <Text style={styles.emptyText}>
-              {t('noTasksYet')}
-            </Text>
-          )}
+          {todos.length === 0 && <Text style={styles.emptyText}>{t('noTasksYet')}</Text>}
         </View>
       </ScrollView>
 

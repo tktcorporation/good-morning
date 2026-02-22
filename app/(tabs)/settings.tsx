@@ -10,9 +10,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings.about')}</Text>
         <Text style={styles.text}>{t('settings.version', { version: '1.0.0' })}</Text>
-        <Text style={styles.description}>
-          {t('settings.description')}
-        </Text>
+        <Text style={styles.description}>{t('settings.description')}</Text>
       </View>
     </View>
   );

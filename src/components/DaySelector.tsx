@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize } from '../constants/theme';
-import { type DayOfWeek, type TranslateFn, getDayLabel } from '../types/alarm';
+import { type DayOfWeek, getDayLabel, type TranslateFn } from '../types/alarm';
 
 interface DaySelectorProps {
   readonly selectedDays: readonly DayOfWeek[];

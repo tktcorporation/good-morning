@@ -17,9 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.tktcorporation.goodmorning",
       "infoPlist": {
-        "UIBackgroundModes": [
-          "audio"
-        ],
+        "UIBackgroundModes": ["audio"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -30,15 +28,9 @@
       },
       "package": "com.goodmorning.app",
       "edgeToEdgeEnabled": true,
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+      "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
     },
-    "plugins": [
-      "expo-router",
-      "expo-av"
-    ],
+    "plugins": ["expo-router", "expo-av"],
     "extra": {
       "router": {},
       "eas": {

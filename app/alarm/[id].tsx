@@ -84,7 +84,7 @@ export default function EditAlarmScreen() {
       repeatDays,
     });
     router.back();
-  }, [id, hour, minute, label, todos, repeatDays, updateAlarm, router]);
+  }, [id, hour, minute, label, todos, repeatDays, updateAlarm, router, t]);
 
   const handleDelete = useCallback(() => {
     if (!id) return;
@@ -100,7 +100,7 @@ export default function EditAlarmScreen() {
         },
       },
     ]);
-  }, [id, deleteAlarm, router]);
+  }, [id, deleteAlarm, router, t, tCommon]);
 
   if (!alarm) {
     return null;
@@ -161,9 +161,7 @@ export default function EditAlarmScreen() {
               <Text style={styles.addButtonText}>{t('addTask')}</Text>
             </Pressable>
           </View>
-          <Text style={styles.sectionDescription}>
-            {t('tasksDescription')}
-          </Text>
+          <Text style={styles.sectionDescription}>{t('tasksDescription')}</Text>
           {todos.map((todo) => (
             <TodoListItem
               key={todo.id}

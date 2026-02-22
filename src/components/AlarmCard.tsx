@@ -21,7 +21,10 @@ export function AlarmCard({ alarm, onPress, onToggle }: AlarmCardProps) {
       style={styles.container}
       onPress={() => onPress(alarm.id)}
       accessibilityRole="button"
-      accessibilityLabel={tAlarm('accessibilityAlarmAt', { time: formatTime(alarm.time), status: alarm.enabled ? tAlarm('accessibilityEnabled') : tAlarm('accessibilityDisabled') })}
+      accessibilityLabel={tAlarm('accessibilityAlarmAt', {
+        time: formatTime(alarm.time),
+        status: alarm.enabled ? tAlarm('accessibilityEnabled') : tAlarm('accessibilityDisabled'),
+      })}
     >
       <View style={styles.content}>
         <Text style={[styles.time, { color: textColor }]}>{formatTime(alarm.time)}</Text>
@@ -29,9 +32,7 @@ export function AlarmCard({ alarm, onPress, onToggle }: AlarmCardProps) {
           {alarm.label !== '' && (
             <Text style={[styles.label, { color: textColor }]}>{alarm.label}</Text>
           )}
-          <Text style={styles.repeat}>
-            {formatRepeatDays(alarm.repeatDays, t as TranslateFn)}
-          </Text>
+          <Text style={styles.repeat}>{formatRepeatDays(alarm.repeatDays, t as TranslateFn)}</Text>
           {todoCount > 0 && (
             <Text style={styles.todoCount}>{tAlarm('tasksToComplete', { count: todoCount })}</Text>
           )}
