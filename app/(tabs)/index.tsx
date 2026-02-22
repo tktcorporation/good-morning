@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { RESULT_COLORS, borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import { RESULT_COLORS, borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
@@ -118,8 +118,8 @@ export default function DashboardScreen() {
       </Pressable>
 
       {/* Todo List */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('todos.title')}</Text>
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
         {target !== null && target.todos.length > 0 ? (
           target.todos.map((todo) => (
             <View key={todo.id} style={styles.todoRow}>
@@ -150,8 +150,8 @@ export default function DashboardScreen() {
       </View>
 
       {/* Weekly Calendar */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('week.title')}</Text>
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
         <View style={styles.weekRow}>
           {weekDates.map((date) => {
             const record = getRecordForDate(weekRecords, date);
@@ -177,7 +177,7 @@ export default function DashboardScreen() {
       </View>
 
       {/* Streak + Stats */}
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statEmoji}>{'🔥'}</Text>
@@ -246,17 +246,6 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontSize: fontSize.sm,
     fontWeight: '600',
-  },
-
-  // Sections
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    marginBottom: spacing.md,
   },
 
   // Todos

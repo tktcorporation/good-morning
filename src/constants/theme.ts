@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import type { WakeResult } from '../types/wake-record';
 
 export const colors = {
@@ -52,3 +53,20 @@ export const semanticColors = {
   successLight: 'rgba(46, 213, 115, 0.15)',
   warningLight: 'rgba(255, 165, 2, 0.15)',
 } as const;
+
+export const commonStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  section: {
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    marginBottom: spacing.md,
+  },
+});

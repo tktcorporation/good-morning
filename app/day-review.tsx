@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { RESULT_COLORS, borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
+import { RESULT_COLORS, borderRadius, colors, commonStyles, fontSize, spacing } from '../src/constants/theme';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { formatTime } from '../src/types/alarm';
 import type { WakeResult } from '../src/types/wake-record';
@@ -72,7 +72,7 @@ export default function DayReviewScreen() {
       {/* Todo Completion */}
       {record.todos.length > 0 && (
         <View style={styles.todosSection}>
-          <Text style={styles.sectionTitle}>{t('review.todos')}</Text>
+          <Text style={commonStyles.sectionTitle}>{t('review.todos')}</Text>
           {record.todos.map((todo) => (
             <View key={todo.id} style={styles.todoRow}>
               <Text style={styles.todoCheckmark}>{todo.completedAt !== null ? '✓' : '○'}</Text>
@@ -154,12 +154,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    marginBottom: spacing.md,
   },
   todoRow: {
     flexDirection: 'row',
