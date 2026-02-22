@@ -1,16 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   transform: {
-    '^.+\\.(js|jsx|ts|tsx)$': [
-      'babel-jest',
-      {
-        presets: [
-          ['@babel/preset-env', { targets: { node: 'current' } }],
-          '@babel/preset-typescript',
-          '@babel/preset-flow',
-        ],
-      },
-    ],
+    '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
   },
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|react-navigation|@react-navigation/.*|zustand)',
