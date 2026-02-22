@@ -14,6 +14,7 @@ function TabIcon({ label, focused }: { readonly label: string; readonly focused:
 export default function TabLayout() {
   const { t } = useTranslation('alarm');
   const { t: tCommon } = useTranslation('common');
+  const { t: tStats } = useTranslation('stats');
 
   return (
     <Tabs
@@ -33,6 +34,13 @@ export default function TabLayout() {
         options={{
           title: t('title'),
           tabBarIcon: ({ focused }) => <TabIcon label="⏰" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: tStats('title'),
+          tabBarIcon: ({ focused }) => <TabIcon label="📊" focused={focused} />,
         }}
       />
       <Tabs.Screen

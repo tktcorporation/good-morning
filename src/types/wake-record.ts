@@ -46,10 +46,7 @@ export function calculateWakeResult(diffMinutes: number): WakeResult {
   return 'late';
 }
 
-export function calculateDiffMinutes(
-  targetTime: AlarmTime,
-  actualTime: Date,
-): number {
+export function calculateDiffMinutes(targetTime: AlarmTime, actualTime: Date): number {
   const targetMinutes = targetTime.hour * 60 + targetTime.minute;
   const actualMinutes = actualTime.getHours() * 60 + actualTime.getMinutes();
   return actualMinutes - targetMinutes;

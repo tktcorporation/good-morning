@@ -1,0 +1,20 @@
+{
+  "title": "Stats",
+  "noData": "No data yet",
+  "noDataHint": "Dismiss alarms to start tracking your wake-up patterns",
+  "thisWeek": "This Week",
+  "successRate": "Success Rate",
+  "avgWakeTime": "Avg Wake Time",
+  "avgDiff": "Avg Difference",
+  "streak": "Streak",
+  "longestStreak": "Longest",
+  "days": "days",
+  "minutesLate": "+{{count}}min",
+  "minutesEarly": "-{{count}}min",
+  "onTime": "On time",
+  "weekOf": "Week of {{date}}",
+  "great": "Great",
+  "ok": "OK",
+  "late": "Late",
+  "missed": "Missed"
+}

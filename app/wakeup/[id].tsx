@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +7,10 @@ import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
 import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
 import { useAlarmStore } from '../../src/stores/alarm-store';
+import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { formatTime } from '../../src/types/alarm';
+import type { WakeTodoRecord } from '../../src/types/wake-record';
+import { calculateDiffMinutes, calculateWakeResult } from '../../src/types/wake-record';
 
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 
@@ -22,10 +25,17 @@ export default function WakeUpScreen() {
   const areAllTodosCompleted = useAlarmStore((s) => s.areAllTodosCompleted);
   const setActiveAlarm = useAlarmStore((s) => s.setActiveAlarm);
 
+  const addRecord = useWakeRecordStore((s) => s.addRecord);
+
   const alarm = alarms.find((a) => a.id === id);
   const allCompleted = id ? areAllTodosCompleted(id) : false;
 
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Track when the wakeup screen mounted (alarm triggered time)
+  const mountedAt = useRef(new Date());
+  // Track the last todo completion timestamp
+  const lastTodoCompletedAt = useRef<Date | null>(null);
 
   // Start alarm sound and vibration
   useEffect(() => {
@@ -57,18 +67,58 @@ export default function WakeUpScreen() {
   const handleToggleTodo = useCallback(
     (todoId: string) => {
       if (id) {
+        // Track when a todo is completed (not unchecked)
+        const todo = alarm?.todos.find((t) => t.id === todoId);
+        if (todo && !todo.completed) {
+          lastTodoCompletedAt.current = new Date();
+        }
         toggleTodo(id, todoId);
       }
     },
-    [id, toggleTodo],
+    [id, toggleTodo, alarm?.todos],
   );
 
   const handleDismiss = useCallback(() => {
     stopAlarmSound();
     Vibration.cancel();
+
+    // Record wake data
+    if (alarm) {
+      const now = new Date();
+      const diffMinutes = calculateDiffMinutes(alarm.time, now);
+      const result = calculateWakeResult(diffMinutes);
+
+      const todoCompletionSeconds = lastTodoCompletedAt.current
+        ? Math.round((lastTodoCompletedAt.current.getTime() - mountedAt.current.getTime()) / 1000)
+        : 0;
+
+      const todos: readonly WakeTodoRecord[] = alarm.todos.map((todo, index) => ({
+        id: todo.id,
+        title: todo.title,
+        completedAt: todo.completed ? now.toISOString() : null,
+        orderCompleted: todo.completed ? index + 1 : null,
+      }));
+
+      const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+
+      addRecord({
+        alarmId: alarm.id,
+        date: dateStr,
+        targetTime: alarm.time,
+        alarmTriggeredAt: mountedAt.current.toISOString(),
+        dismissedAt: now.toISOString(),
+        healthKitWakeTime: null,
+        result,
+        diffMinutes,
+        todos,
+        todoCompletionSeconds,
+        alarmLabel: alarm.label,
+      });
+    }
+
     setActiveAlarm(null);
     router.replace('/');
-  }, [setActiveAlarm, router]);
+  }, [alarm, addRecord, setActiveAlarm, router]);
 
   if (!alarm) {
     return (

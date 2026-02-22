@@ -9,6 +9,7 @@ import {
   requestNotificationPermissions,
 } from '../src/services/notifications';
 import { useAlarmStore } from '../src/stores/alarm-store';
+import { useWakeRecordStore } from '../src/stores/wake-record-store';
 
 export default function RootLayout() {
   const { t } = useTranslation('alarm');
@@ -16,11 +17,13 @@ export default function RootLayout() {
   const loadAlarms = useAlarmStore((s) => s.loadAlarms);
   const setActiveAlarm = useAlarmStore((s) => s.setActiveAlarm);
   const resetTodos = useAlarmStore((s) => s.resetTodos);
+  const loadRecords = useWakeRecordStore((s) => s.loadRecords);
 
   useEffect(() => {
     loadAlarms();
+    loadRecords();
     requestNotificationPermissions();
-  }, [loadAlarms]);
+  }, [loadAlarms, loadRecords]);
 
   useEffect(() => {
     const handleAlarmTrigger = (alarmId: string) => {

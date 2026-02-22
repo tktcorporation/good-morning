@@ -4,9 +4,11 @@ import { initReactI18next } from 'react-i18next';
 
 import alarmEn from './locales/en/alarm.json';
 import commonEn from './locales/en/common.json';
+import statsEn from './locales/en/stats.json';
 import wakeupEn from './locales/en/wakeup.json';
 import alarmJa from './locales/ja/alarm.json';
 import commonJa from './locales/ja/common.json';
+import statsJa from './locales/ja/stats.json';
 import wakeupJa from './locales/ja/wakeup.json';
 
 const SUPPORTED_LANGUAGES = ['ja', 'en'] as const;
@@ -25,8 +27,8 @@ i18n.use(initReactI18next).init({
   fallbackLng: DEFAULT_LANGUAGE,
   defaultNS: 'common',
   resources: {
-    ja: { common: commonJa, alarm: alarmJa, wakeup: wakeupJa },
-    en: { common: commonEn, alarm: alarmEn, wakeup: wakeupEn },
+    ja: { common: commonJa, alarm: alarmJa, wakeup: wakeupJa, stats: statsJa },
+    en: { common: commonEn, alarm: alarmEn, wakeup: wakeupEn, stats: statsEn },
   },
   interpolation: { escapeValue: false },
 });

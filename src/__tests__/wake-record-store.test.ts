@@ -15,7 +15,12 @@ const sampleRecord: Omit<WakeRecord, 'id'> = {
   result: 'great',
   diffMinutes: 3,
   todos: [
-    { id: 'todo_1', title: 'Drink water', completedAt: '2026-02-22T07:01:00.000Z', orderCompleted: 1 },
+    {
+      id: 'todo_1',
+      title: 'Drink water',
+      completedAt: '2026-02-22T07:01:00.000Z',
+      orderCompleted: 1,
+    },
     { id: 'todo_2', title: 'Stretch', completedAt: '2026-02-22T07:02:30.000Z', orderCompleted: 2 },
   ],
   todoCompletionSeconds: 150,

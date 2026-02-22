@@ -1,0 +1,20 @@
+{
+  "title": "統計",
+  "noData": "まだデータがありません",
+  "noDataHint": "アラームを解除すると起床記録が蓄積されます",
+  "thisWeek": "今週",
+  "successRate": "起床成功率",
+  "avgWakeTime": "平均起床時間",
+  "avgDiff": "平均差分",
+  "streak": "連続成功",
+  "longestStreak": "最長記録",
+  "days": "日",
+  "minutesLate": "+{{count}}分",
+  "minutesEarly": "-{{count}}分",
+  "onTime": "時間通り",
+  "weekOf": "{{date}} の週",
+  "great": "成功",
+  "ok": "まあまあ",
+  "late": "遅刻",
+  "missed": "未起床"
+}
