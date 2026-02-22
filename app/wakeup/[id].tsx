@@ -120,16 +120,29 @@ export default function WakeUpScreen() {
         todos,
         todoCompletionSeconds,
         alarmLabel: alarm.label,
-      }).then((record) => {
-        // Asynchronously fetch HealthKit data and update the record if available
-        if (isHealthKitInitialized()) {
-          getSleepSummary(now).then((summary) => {
-            if (summary !== null) {
-              updateRecord(record.id, { healthKitWakeTime: summary.wakeUpTime });
+      })
+        .then((record) => {
+          // Asynchronously fetch HealthKit data and update the record if available
+          if (!isHealthKitInitialized()) {
+            return;
+          }
+          return getSleepSummary(now).then((summary) => {
+            if (summary === null) {
+              return;
             }
+            const hkWakeTime = new Date(summary.wakeUpTime);
+            const hkDiffMinutes = calculateDiffMinutes(alarm.time, hkWakeTime);
+            const hkResult = calculateWakeResult(hkDiffMinutes);
+            return updateRecord(record.id, {
+              healthKitWakeTime: summary.wakeUpTime,
+              diffMinutes: hkDiffMinutes,
+              result: hkResult,
+            });
           });
-        }
-      });
+        })
+        .catch(() => {
+          // Non-blocking: record may not persist but don't disrupt dismiss flow
+        });
     }
 
     setActiveAlarm(null);

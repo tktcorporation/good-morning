@@ -19,7 +19,6 @@ function getHealthKit(): import('react-native-health').AppleHealthKit | null {
   }
   try {
     // Dynamic require to avoid crashes on Android/non-iOS platforms
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const AppleHealthKit = require('react-native-health')
       .default as import('react-native-health').AppleHealthKit;
     return AppleHealthKit;
@@ -42,6 +41,8 @@ export function isHealthKitInitialized(): boolean {
  * Returns true if initialization succeeded, false otherwise.
  */
 export async function initHealthKit(): Promise<boolean> {
+  if (initialized) return true;
+
   const kit = getHealthKit();
   if (kit === null) {
     return false;
@@ -114,11 +115,15 @@ export async function getSleepSummary(date: Date): Promise<SleepSummary | null> 
       return null;
     }
 
+    // Filter for INBED samples (value 0); fall back to all samples if none found
+    const inBedSamples = samples.filter((s) => s.value === 0);
+    const samplesToUse = inBedSamples.length > 0 ? inBedSamples : samples;
+
     // Find the earliest bedtime and latest wake time from INBED samples
     let earliestStart: Date | null = null;
     let latestEnd: Date | null = null;
 
-    for (const sample of samples) {
+    for (const sample of samplesToUse) {
       const sampleStart = new Date(sample.startDate);
       const sampleEnd = new Date(sample.endDate);
 
