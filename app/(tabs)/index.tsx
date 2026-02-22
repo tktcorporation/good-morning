@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlarmCard } from '../../src/components/AlarmCard';
 import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
@@ -7,6 +8,8 @@ import { useAlarmStore } from '../../src/stores/alarm-store';
 import type { Alarm } from '../../src/types/alarm';
 
 export default function AlarmsScreen() {
+  const { t } = useTranslation('alarm');
+  const { t: tCommon } = useTranslation('common');
   const router = useRouter();
   const alarms = useAlarmStore((s) => s.alarms);
   const loaded = useAlarmStore((s) => s.loaded);
@@ -42,7 +45,7 @@ export default function AlarmsScreen() {
   if (!loaded) {
     return (
       <View style={styles.center}>
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>{tCommon('loading')}</Text>
       </View>
     );
   }
@@ -56,8 +59,8 @@ export default function AlarmsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={styles.emptyTitle}>No alarms yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to create your first alarm</Text>
+            <Text style={styles.emptyTitle}>{t('noAlarms')}</Text>
+            <Text style={styles.emptySubtitle}>{t('noAlarmsHint')}</Text>
           </View>
         }
       />
@@ -65,7 +68,7 @@ export default function AlarmsScreen() {
         style={styles.fab}
         onPress={handleCreate}
         accessibilityRole="button"
-        accessibilityLabel="Create new alarm"
+        accessibilityLabel={t('createNewAlarm')}
       >
         <Text style={styles.fabText}>+</Text>
       </Pressable>

@@ -21,7 +21,7 @@ export function AlarmCard({ alarm, onPress, onToggle }: AlarmCardProps) {
       style={styles.container}
       onPress={() => onPress(alarm.id)}
       accessibilityRole="button"
-      accessibilityLabel={`Alarm at ${formatTime(alarm.time)}, ${alarm.enabled ? 'enabled' : 'disabled'}`}
+      accessibilityLabel={tAlarm('accessibilityAlarmAt', { time: formatTime(alarm.time), status: alarm.enabled ? tAlarm('accessibilityEnabled') : tAlarm('accessibilityDisabled') })}
     >
       <View style={styles.content}>
         <Text style={[styles.time, { color: textColor }]}>{formatTime(alarm.time)}</Text>
@@ -42,7 +42,7 @@ export function AlarmCard({ alarm, onPress, onToggle }: AlarmCardProps) {
         onValueChange={() => onToggle(alarm.id)}
         trackColor={{ false: colors.disabled, true: colors.primary }}
         thumbColor={colors.text}
-        accessibilityLabel={`Toggle alarm ${formatTime(alarm.time)}`}
+        accessibilityLabel={tAlarm('accessibilityToggleAlarm', { time: formatTime(alarm.time) })}
       />
     </Pressable>
   );
