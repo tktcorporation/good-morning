@@ -25,6 +25,8 @@ export interface WakeRecord {
   readonly todos: readonly WakeTodoRecord[];
   readonly todoCompletionSeconds: number;
   readonly alarmLabel: string;
+  readonly todosCompleted: boolean;
+  readonly todosCompletedAt: string | null;
 }
 
 export interface WakeStats {

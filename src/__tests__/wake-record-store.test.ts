@@ -25,6 +25,8 @@ const sampleRecord: Omit<WakeRecord, 'id'> = {
   ],
   todoCompletionSeconds: 150,
   alarmLabel: 'Morning',
+  todosCompleted: true,
+  todosCompletedAt: '2026-02-22T07:03:00.000Z',
 };
 
 describe('wake-record store', () => {
@@ -55,6 +57,24 @@ describe('wake-record store', () => {
     await store.addRecord({ ...sampleRecord, date: '2026-02-21', result: 'late' });
     await store.addRecord({ ...sampleRecord, date: '2026-02-22', result: 'great' });
     expect(useWakeRecordStore.getState().getCurrentStreak()).toBe(1);
+  });
+
+  it('updates todosCompleted via updateRecord', async () => {
+    const store = useWakeRecordStore.getState();
+    const record = await store.addRecord({
+      ...sampleRecord,
+      todosCompleted: false,
+      todosCompletedAt: null,
+    });
+    await useWakeRecordStore.getState().updateRecord(record.id, {
+      todosCompleted: true,
+      todosCompletedAt: '2026-02-22T07:10:00.000Z',
+      todoCompletionSeconds: 420,
+    });
+    const updated = useWakeRecordStore.getState().records.find((r) => r.id === record.id);
+    expect(updated?.todosCompleted).toBe(true);
+    expect(updated?.todosCompletedAt).toBe('2026-02-22T07:10:00.000Z');
+    expect(updated?.todoCompletionSeconds).toBe(420);
   });
 
   it('calculates week stats', async () => {

@@ -1,6 +1,8 @@
+import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
+import { MorningRoutineBanner } from '../../src/components/MorningRoutineBanner';
 import { colors } from '../../src/constants/theme';
 
 function TabIcon({ label, focused }: { readonly label: string; readonly focused: boolean }) {
@@ -11,12 +13,22 @@ function TabIcon({ label, focused }: { readonly label: string; readonly focused:
   );
 }
 
+function TabBarWithBanner(props: BottomTabBarProps) {
+  return (
+    <View>
+      <MorningRoutineBanner />
+      <BottomTabBar {...props} />
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
 
   return (
     <Tabs
+      tabBar={(props) => <TabBarWithBanner {...props} />}
       screenOptions={{
         tabBarStyle: {
           backgroundColor: colors.background,

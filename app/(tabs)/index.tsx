@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { TodoListItem } from '../../src/components/TodoListItem';
 import {
   borderRadius,
   colors,
@@ -10,14 +11,15 @@ import {
   RESULT_COLORS,
   spacing,
 } from '../../src/constants/theme';
+import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
-import type { WakeRecord } from '../../src/types/wake-record';
+import type { WakeRecord, WakeTodoRecord } from '../../src/types/wake-record';
 import { formatDateString } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
-import { getWeekDates } from '../../src/utils/date';
+import { getRecentDates } from '../../src/utils/date';
 
 function getTomorrowDate(): Date {
   const tomorrow = new Date();
@@ -43,6 +45,13 @@ export default function DashboardScreen() {
   const getRecordsForPeriod = useWakeRecordStore((s) => s.getRecordsForPeriod);
   const getCurrentStreak = useWakeRecordStore((s) => s.getCurrentStreak);
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
+  const updateRecord = useWakeRecordStore((s) => s.updateRecord);
+
+  const session = useMorningSessionStore((s) => s.session);
+  const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
+  const clearSession = useMorningSessionStore((s) => s.clearSession);
+  const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
+  const getProgress = useMorningSessionStore((s) => s.getProgress);
 
   const [newTodoText, setNewTodoText] = useState('');
 
@@ -59,8 +68,8 @@ export default function DashboardScreen() {
     return `${tCommon('tomorrow')}, ${dayLabel}`;
   }, [tomorrow, tCommon]);
 
-  const weekDates = useMemo(() => getWeekDates(), []);
-  const weekStart = weekDates[0];
+  const recentDates = useMemo(() => getRecentDates(), []);
+  const weekStart = recentDates[0];
   const weekStats = useMemo(
     () => (weekStart !== undefined ? getWeekStats(weekStart) : null),
     [getWeekStats, weekStart],
@@ -73,6 +82,38 @@ export default function DashboardScreen() {
     weekEnd.setDate(weekEnd.getDate() + 6);
     return getRecordsForPeriod(weekStart, weekEnd);
   }, [getRecordsForPeriod, weekStart]);
+
+  // Complete session when all todos are done
+  useEffect(() => {
+    if (session === null || !areAllCompleted()) return;
+
+    const now = new Date();
+    const todosCompletedAt = now.toISOString();
+    const todoCompletionSeconds = Math.round(
+      (now.getTime() - new Date(session.startedAt).getTime()) / 1000,
+    );
+
+    const todoRecords: readonly WakeTodoRecord[] = session.todos.map((todo, index) => ({
+      id: todo.id,
+      title: todo.title,
+      completedAt: todo.completedAt,
+      orderCompleted: todo.completed ? index + 1 : null,
+    }));
+
+    updateRecord(session.recordId, {
+      todosCompleted: true,
+      todosCompletedAt,
+      todoCompletionSeconds,
+      todos: todoRecords,
+    }).then(() => clearSession());
+  }, [session, areAllCompleted, updateRecord, clearSession]);
+
+  const handleToggleTodo = useCallback(
+    (todoId: string) => {
+      toggleTodo(todoId);
+    },
+    [toggleTodo],
+  );
 
   const handleAddTodo = useCallback(async () => {
     const trimmed = newTodoText.trim();
@@ -112,6 +153,9 @@ export default function DashboardScreen() {
     weekStats !== null ? weekStats.resultCounts.great + weekStats.resultCounts.ok : 0;
   const totalCount = weekStats?.totalRecords ?? 0;
 
+  const sessionActive = session !== null;
+  const progress = sessionActive ? getProgress() : null;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Target Time Display */}
@@ -127,43 +171,77 @@ export default function DashboardScreen() {
         )}
       </Pressable>
 
-      {/* Todo List */}
-      <View style={commonStyles.section}>
-        <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
-        {target !== null && target.todos.length > 0 ? (
-          target.todos.map((todo) => (
-            <View key={todo.id} style={styles.todoRow}>
-              <View style={styles.todoBullet} />
-              <Text style={styles.todoText}>{todo.title}</Text>
-              <Pressable style={styles.todoDeleteButton} onPress={() => handleRemoveTodo(todo.id)}>
-                <Text style={styles.todoDeleteText}>{'x'}</Text>
-              </Pressable>
+      {/* Morning Routine Session (active) OR Todo List (inactive) */}
+      {sessionActive && progress !== null ? (
+        <View style={commonStyles.section}>
+          <Text style={commonStyles.sectionTitle}>{t('morningRoutine.title')}</Text>
+          <View style={styles.routineProgressContainer}>
+            <View style={styles.routineProgressBar}>
+              <View
+                style={[
+                  styles.routineProgressFill,
+                  {
+                    width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%`,
+                  },
+                ]}
+              />
             </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>{t('todos.empty')}</Text>
-        )}
-        <View style={styles.addTodoRow}>
-          <TextInput
-            style={styles.addTodoInput}
-            value={newTodoText}
-            onChangeText={setNewTodoText}
-            placeholder={t('todos.placeholder')}
-            placeholderTextColor={colors.textMuted}
-            onSubmitEditing={handleAddTodo}
-            returnKeyType="done"
-          />
-          <Pressable style={styles.addTodoButton} onPress={handleAddTodo}>
-            <Text style={styles.addTodoButtonText}>{'+'}</Text>
-          </Pressable>
+            <Text style={styles.routineProgressText}>
+              {t('morningRoutine.progress', {
+                completed: progress.completed,
+                total: progress.total,
+              })}
+            </Text>
+          </View>
+          {session.todos.map((todo) => (
+            <TodoListItem
+              key={todo.id}
+              item={{ id: todo.id, title: todo.title, completed: todo.completed }}
+              onToggle={handleToggleTodo}
+            />
+          ))}
         </View>
-      </View>
+      ) : (
+        <View style={commonStyles.section}>
+          <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
+          {target !== null && target.todos.length > 0 ? (
+            target.todos.map((todo) => (
+              <View key={todo.id} style={styles.todoRow}>
+                <View style={styles.todoBullet} />
+                <Text style={styles.todoText}>{todo.title}</Text>
+                <Pressable
+                  style={styles.todoDeleteButton}
+                  onPress={() => handleRemoveTodo(todo.id)}
+                >
+                  <Text style={styles.todoDeleteText}>{'x'}</Text>
+                </Pressable>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>{t('todos.empty')}</Text>
+          )}
+          <View style={styles.addTodoRow}>
+            <TextInput
+              style={styles.addTodoInput}
+              value={newTodoText}
+              onChangeText={setNewTodoText}
+              placeholder={t('todos.placeholder')}
+              placeholderTextColor={colors.textMuted}
+              onSubmitEditing={handleAddTodo}
+              returnKeyType="done"
+            />
+            <Pressable style={styles.addTodoButton} onPress={handleAddTodo}>
+              <Text style={styles.addTodoButtonText}>{'+'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* Weekly Calendar */}
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
         <View style={styles.weekRow}>
-          {weekDates.map((date) => {
+          {recentDates.map((date) => {
             const record = getRecordForDate(weekRecords, date);
             const today = new Date();
             const isToday = formatDateString(date) === formatDateString(today);
@@ -256,6 +334,28 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontSize: fontSize.sm,
     fontWeight: '600',
+  },
+
+  // Morning Routine
+  routineProgressContainer: {
+    marginBottom: spacing.md,
+  },
+  routineProgressBar: {
+    height: 8,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  routineProgressFill: {
+    height: '100%',
+    backgroundColor: colors.success,
+    borderRadius: borderRadius.full,
+  },
+  routineProgressText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 
   // Todos

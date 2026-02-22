@@ -10,6 +10,11 @@
     "placeholder": "New task",
     "empty": "Add tasks to complete when your alarm rings"
   },
+  "morningRoutine": {
+    "title": "Morning Routine",
+    "progress": "{{completed}} / {{total}} completed",
+    "banner": "Morning Routine: {{completed}}/{{total}} done"
+  },
   "week": {
     "title": "This Week",
     "success": "{{count}}/{{total}} success"
