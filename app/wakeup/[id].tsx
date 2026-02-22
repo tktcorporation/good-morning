@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TodoListItem } from '../../src/components/TodoListItem';
@@ -11,6 +12,8 @@ import { formatTime } from '../../src/types/alarm';
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 
 export default function WakeUpScreen() {
+  const { t } = useTranslation('wakeup');
+  const { t: tCommon } = useTranslation('common');
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -70,9 +73,9 @@ export default function WakeUpScreen() {
   if (!alarm) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.errorText}>Alarm not found</Text>
+        <Text style={styles.errorText}>{t('alarmNotFound')}</Text>
         <Pressable style={styles.dismissButton} onPress={handleDismiss}>
-          <Text style={styles.dismissButtonText}>Go Back</Text>
+          <Text style={styles.dismissButtonText}>{tCommon('goBack')}</Text>
         </Pressable>
       </View>
     );
@@ -91,7 +94,7 @@ export default function WakeUpScreen() {
       </Text>
 
       {/* Alarm info */}
-      <Text style={styles.alarmTime}>Alarm: {formatTime(alarm.time)}</Text>
+      <Text style={styles.alarmTime}>{t('alarmPrefix', { time: formatTime(alarm.time) })}</Text>
       {alarm.label !== '' && <Text style={styles.label}>{alarm.label}</Text>}
 
       {/* Progress */}
@@ -100,15 +103,13 @@ export default function WakeUpScreen() {
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
         <Text style={styles.progressText}>
-          {completedCount} / {totalCount} tasks completed
+          {t('progress', { completed: completedCount, total: totalCount })}
         </Text>
       </View>
 
       {/* Status message */}
       <Text style={[styles.statusText, allCompleted && styles.statusTextSuccess]}>
-        {allCompleted
-          ? 'All tasks completed! You can dismiss the alarm.'
-          : 'Complete all tasks to dismiss the alarm.'}
+        {allCompleted ? t('statusComplete') : t('statusIncomplete')}
       </Text>
 
       {/* Todo list */}
@@ -124,11 +125,11 @@ export default function WakeUpScreen() {
         onPress={handleDismiss}
         disabled={!allCompleted}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss alarm"
+        accessibilityLabel={t('dismissAlarm')}
         accessibilityState={{ disabled: !allCompleted }}
       >
         <Text style={[styles.dismissButtonText, !allCompleted && styles.dismissButtonTextDisabled]}>
-          {allCompleted ? 'Dismiss Alarm' : 'Complete All Tasks'}
+          {allCompleted ? t('dismissAlarm') : t('completeAllTasks')}
         </Text>
       </Pressable>
     </View>
