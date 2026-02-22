@@ -1,3 +1,4 @@
+import '../src/i18n';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { colors } from '../src/constants/theme';
