@@ -103,22 +103,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing.xl,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
   presets: {
     flexDirection: 'row',
     flexWrap: 'wrap',

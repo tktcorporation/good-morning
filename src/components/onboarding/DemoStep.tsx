@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, spacing } from '../../constants/theme';
+import { StyleSheet, View } from 'react-native';
+import { spacing } from '../../constants/theme';
 import { StepButton } from './StepButton';
+import { StepHeader } from './StepHeader';
 
 interface DemoStepProps {
   readonly onNext: () => void;
@@ -20,8 +21,7 @@ export function DemoStep({ onNext, onBack }: DemoStepProps) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>{t('demo.title')}</Text>
-        <Text style={styles.subtitle}>{t('demo.subtitle')}</Text>
+        <StepHeader title={t('demo.title')} subtitle={t('demo.subtitle')} />
       </View>
 
       <View style={styles.buttonsColumn}>
@@ -47,19 +47,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-  },
-  title: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
   },
   buttonsColumn: {
     gap: spacing.md,

@@ -33,7 +33,7 @@ export default function DashboardScreen() {
   const addTodo = useWakeTargetStore((s) => s.addTodo);
   const removeTodo = useWakeTargetStore((s) => s.removeTodo);
 
-  const records = useWakeRecordStore((s) => s.records);
+  const getRecordsForPeriod = useWakeRecordStore((s) => s.getRecordsForPeriod);
   const getCurrentStreak = useWakeRecordStore((s) => s.getCurrentStreak);
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
 
@@ -61,10 +61,8 @@ export default function DashboardScreen() {
     if (weekStart === undefined) return [];
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    const startStr = formatDateString(weekStart);
-    const endStr = formatDateString(weekEnd);
-    return records.filter((r) => r.date >= startStr && r.date <= endStr);
-  }, [records, weekStart]);
+    return getRecordsForPeriod(weekStart, weekEnd);
+  }, [getRecordsForPeriod, weekStart]);
 
   const handleAddTodo = useCallback(async () => {
     const trimmed = newTodoText.trim();
