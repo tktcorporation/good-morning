@@ -21,9 +21,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       UIBackgroundModes: ['audio'],
       ITSAppUsesNonExemptEncryption: false,
+      NSAlarmKitUsageDescription:
+        'Good Morning uses alarms to wake you up at your scheduled time.',
+      NSSupportsLiveActivities: true,
     },
     entitlements: {
       'com.apple.developer.healthkit': true,
+      'com.apple.security.application-groups': ['group.com.tktcorporation.goodmorning'],
     },
   },
   android: {
