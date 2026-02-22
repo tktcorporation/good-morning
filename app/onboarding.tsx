@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ConfirmStep } from '../src/components/onboarding/ConfirmStep';
 import { DemoStep } from '../src/components/onboarding/DemoStep';
 import { PermissionStep } from '../src/components/onboarding/PermissionStep';
 import { TimeStep } from '../src/components/onboarding/TimeStep';
@@ -13,7 +14,7 @@ import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
 import { DEFAULT_WAKE_TARGET } from '../src/types/wake-target';
 
-const STEP_KEYS = ['welcome', 'time', 'todos', 'permission', 'demo'] as const;
+const STEP_KEYS = ['welcome', 'time', 'todos', 'permission', 'confirm', 'demo'] as const;
 const TOTAL_STEPS = STEP_KEYS.length;
 
 export default function OnboardingScreen() {
@@ -24,6 +25,7 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
   const [defaultTime, setDefaultTime] = useState<AlarmTime>({ hour: 7, minute: 0 });
   const [todos, setTodos] = useState<readonly string[]>([]);
+  const [alarmEnabled, setAlarmEnabled] = useState(true);
 
   const handleNext = useCallback(() => {
     if (step < TOTAL_STEPS - 1) {
@@ -37,6 +39,14 @@ export default function OnboardingScreen() {
     }
   }, [step]);
 
+  const handleConfirm = useCallback(
+    (enabled: boolean) => {
+      setAlarmEnabled(enabled);
+      handleNext();
+    },
+    [handleNext],
+  );
+
   const handleComplete = useCallback(async () => {
     const todoItems = todos.map((title, index) => ({
       id: `todo_onboarding_${index}_${Date.now()}`,
@@ -48,10 +58,11 @@ export default function OnboardingScreen() {
       ...DEFAULT_WAKE_TARGET,
       defaultTime,
       todos: todoItems,
+      enabled: alarmEnabled,
     });
     await AsyncStorage.setItem('onboarding-completed', 'true');
     router.replace('/');
-  }, [defaultTime, todos, setTarget, router]);
+  }, [defaultTime, todos, setTarget, router, alarmEnabled]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
@@ -75,7 +86,8 @@ export default function OnboardingScreen() {
           <TodosStep onNext={handleNext} onBack={handleBack} todos={todos} setTodos={setTodos} />
         )}
         {step === 3 && <PermissionStep onNext={handleNext} onBack={handleBack} />}
-        {step === 4 && <DemoStep onNext={handleComplete} onBack={handleBack} />}
+        {step === 4 && <ConfirmStep onConfirm={handleConfirm} onBack={handleBack} />}
+        {step === 5 && <DemoStep onNext={handleComplete} onBack={handleBack} />}
       </View>
     </View>
   );

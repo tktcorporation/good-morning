@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';
+import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 
 const STORAGE_KEY = 'wake-target';
 
@@ -41,7 +42,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
       const parsed = JSON.parse(raw) as WakeTarget;
       set({ target: parsed, loaded: true });
     } else {
-      set({ loaded: true });
+      const fallback: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
+      set({ target: fallback, loaded: true });
     }
   },
 

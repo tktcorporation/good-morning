@@ -24,6 +24,12 @@
     "subtitle": "Required to sound your alarm",
     "allow": "Allow Notifications"
   },
+  "confirm": {
+    "title": "Turn on your alarm?",
+    "subtitle": "Your alarm will ring at the time you set. You can turn it off anytime.",
+    "enable": "Turn On",
+    "skip": "Later"
+  },
   "demo": {
     "title": "Let's try it out!",
     "subtitle": "Experience what your morning alarm will be like",
