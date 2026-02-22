@@ -25,6 +25,8 @@
   "accessibilityEnabled": "enabled",
   "accessibilityDisabled": "disabled",
   "accessibilityToggleAlarm": "Toggle alarm {{time}}",
+  "accessibilityTask": "Task: {{title}}",
+  "accessibilityDeleteTask": "Delete task: {{title}}",
   "notification": {
     "title": "Good Morning!",
     "defaultBody": "Time to wake up!"

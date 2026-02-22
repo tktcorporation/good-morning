@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../constants/theme';
 import type { TodoItem } from '../types/alarm';
@@ -17,6 +18,8 @@ export function TodoListItem({
   onChangeTitle,
   onDelete,
 }: TodoListItemProps) {
+  const { t } = useTranslation('alarm');
+
   return (
     <View style={styles.container}>
       <Pressable
@@ -24,7 +27,7 @@ export function TodoListItem({
         onPress={() => onToggle(item.id)}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: item.completed }}
-        accessibilityLabel={`Task: ${item.title}`}
+        accessibilityLabel={t('accessibilityTask', { title: item.title })}
       >
         {item.completed && <Text style={styles.checkmark}>✓</Text>}
       </Pressable>
@@ -34,7 +37,7 @@ export function TodoListItem({
           style={[styles.title, item.completed && styles.titleCompleted]}
           value={item.title}
           onChangeText={(text) => onChangeTitle?.(item.id, text)}
-          placeholder="Task description..."
+          placeholder={t('taskPlaceholder')}
           placeholderTextColor={colors.textMuted}
         />
       ) : (
@@ -46,7 +49,7 @@ export function TodoListItem({
           style={styles.deleteButton}
           onPress={() => onDelete(item.id)}
           accessibilityRole="button"
-          accessibilityLabel={`Delete task: ${item.title}`}
+          accessibilityLabel={t('accessibilityDeleteTask', { title: item.title })}
         >
           <Text style={styles.deleteText}>×</Text>
         </Pressable>

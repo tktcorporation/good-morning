@@ -10,7 +10,7 @@
   "tasks": "起床タスク",
   "tasksDescription": "アラームを解除するにはすべてのタスクを完了する必要があります。",
   "taskPlaceholder": "タスクの内容...",
-  "addTask": "追加",
+  "addTask": "+ 追加",
   "saveAlarm": "アラームを保存",
   "saveChanges": "変更を保存",
   "deleteAlarm": "アラームを削除",
@@ -25,6 +25,8 @@
   "accessibilityEnabled": "有効",
   "accessibilityDisabled": "無効",
   "accessibilityToggleAlarm": "アラーム{{time}}を切替",
+  "accessibilityTask": "タスク: {{title}}",
+  "accessibilityDeleteTask": "タスクを削除: {{title}}",
   "notification": {
     "title": "おはようございます！",
     "defaultBody": "起きる時間です！"
