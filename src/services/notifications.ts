@@ -139,23 +139,23 @@ export async function scheduleWakeTargetNotifications(
 }
 
 export function addNotificationResponseListener(
-  callback: (alarmId: string) => void,
+  callback: () => void,
 ): Notifications.EventSubscription {
   return Notifications.addNotificationResponseReceivedListener((response) => {
-    const alarmId = response.notification.request.content.data?.alarmId;
-    if (typeof alarmId === 'string') {
-      callback(alarmId);
+    const data = response.notification.request.content.data;
+    if (data?.wakeTarget === true || typeof data?.alarmId === 'string') {
+      callback();
     }
   });
 }
 
 export function addNotificationReceivedListener(
-  callback: (alarmId: string) => void,
+  callback: () => void,
 ): Notifications.EventSubscription {
   return Notifications.addNotificationReceivedListener((notification) => {
-    const alarmId = notification.request.content.data?.alarmId;
-    if (typeof alarmId === 'string') {
-      callback(alarmId);
+    const data = notification.request.content.data;
+    if (data?.wakeTarget === true || typeof data?.alarmId === 'string') {
+      callback();
     }
   });
 }

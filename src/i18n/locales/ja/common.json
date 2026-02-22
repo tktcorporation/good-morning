@@ -28,10 +28,23 @@
     "weekdays": "平日",
     "weekends": "週末"
   },
+  "schedule": {
+    "title": "スケジュール",
+    "defaultTime": "デフォルト時刻",
+    "useDefault": "デフォルト",
+    "customTime": "カスタム",
+    "off": "OFF",
+    "subtitle": "曜日ごとのルール"
+  },
   "settings": {
     "title": "設定",
     "about": "このアプリについて",
     "version": "Good Morning v{{version}}",
-    "description": "アラームを解除する前にタスクを完了して、より良い朝を。"
+    "description": "アラームを解除する前にタスクを完了して、より良い朝を。",
+    "schedule": "スケジュール",
+    "alarm": "アラーム",
+    "notifications": "通知",
+    "notificationsGranted": "許可済み",
+    "notificationsDenied": "未許可"
   }
 }

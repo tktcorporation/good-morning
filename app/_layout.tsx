@@ -1,6 +1,7 @@
 import '../src/i18n';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../src/constants/theme';
 import {
@@ -8,28 +9,37 @@ import {
   addNotificationResponseListener,
   requestNotificationPermissions,
 } from '../src/services/notifications';
-import { useAlarmStore } from '../src/stores/alarm-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
+import { useWakeTargetStore } from '../src/stores/wake-target-store';
 
 export default function RootLayout() {
-  const { t } = useTranslation('alarm');
+  const { t } = useTranslation('dashboard');
+  const { t: tCommon } = useTranslation('common');
   const router = useRouter();
-  const loadAlarms = useAlarmStore((s) => s.loadAlarms);
-  const setActiveAlarm = useAlarmStore((s) => s.setActiveAlarm);
-  const resetTodos = useAlarmStore((s) => s.resetTodos);
+  const loadTarget = useWakeTargetStore((s) => s.loadTarget);
+  const resetTodos = useWakeTargetStore((s) => s.resetTodos);
   const loadRecords = useWakeRecordStore((s) => s.loadRecords);
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
-    loadAlarms();
+    loadTarget();
     loadRecords();
     requestNotificationPermissions();
-  }, [loadAlarms, loadRecords]);
+    AsyncStorage.getItem('onboarding-completed').then((val) => {
+      setOnboardingDone(val === 'true');
+    });
+  }, [loadTarget, loadRecords]);
 
   useEffect(() => {
-    const handleAlarmTrigger = (alarmId: string) => {
-      setActiveAlarm(alarmId);
-      resetTodos(alarmId);
-      router.push(`/wakeup/${alarmId}`);
+    if (onboardingDone === false) {
+      router.replace('/onboarding');
+    }
+  }, [onboardingDone, router]);
+
+  useEffect(() => {
+    const handleAlarmTrigger = () => {
+      resetTodos();
+      router.push('/wakeup');
     };
 
     const responseSub = addNotificationResponseListener(handleAlarmTrigger);
@@ -39,7 +49,7 @@ export default function RootLayout() {
       responseSub.remove();
       receivedSub.remove();
     };
-  }, [router, setActiveAlarm, resetTodos]);
+  }, [router, resetTodos]);
 
   return (
     <Stack
@@ -49,23 +59,31 @@ export default function RootLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
-        name="alarm/create"
+        name="target-edit"
         options={{
-          title: t('newAlarm'),
           presentation: 'modal',
+          title: t('targetEdit.title'),
         }}
       />
       <Stack.Screen
-        name="alarm/[id]"
+        name="schedule"
         options={{
-          title: t('editAlarm'),
           presentation: 'modal',
+          title: tCommon('schedule.title'),
         }}
       />
       <Stack.Screen
-        name="wakeup/[id]"
+        name="day-review"
+        options={{
+          presentation: 'modal',
+          title: '',
+        }}
+      />
+      <Stack.Screen
+        name="wakeup"
         options={{
           headerShown: false,
           gestureEnabled: false,
