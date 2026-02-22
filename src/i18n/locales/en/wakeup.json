@@ -1,0 +1,9 @@
+{
+  "alarmPrefix": "Alarm: {{time}}",
+  "progress": "{{completed}} / {{total}} tasks completed",
+  "statusIncomplete": "Complete all tasks to dismiss the alarm.",
+  "statusComplete": "All tasks completed! You can dismiss the alarm.",
+  "dismissAlarm": "Dismiss Alarm",
+  "completeAllTasks": "Complete All Tasks",
+  "alarmNotFound": "Alarm not found"
+}

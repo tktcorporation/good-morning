@@ -1,0 +1,9 @@
+{
+  "alarmPrefix": "アラーム: {{time}}",
+  "progress": "{{completed}} / {{total}} タスク完了",
+  "statusIncomplete": "すべてのタスクを完了してアラームを解除してください。",
+  "statusComplete": "すべてのタスクが完了しました！アラームを解除できます。",
+  "dismissAlarm": "アラームを解除",
+  "completeAllTasks": "すべてのタスクを完了",
+  "alarmNotFound": "アラームが見つかりません"
+}

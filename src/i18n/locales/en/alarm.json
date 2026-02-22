@@ -1,0 +1,26 @@
+{
+  "title": "Alarms",
+  "newAlarm": "New Alarm",
+  "editAlarm": "Edit Alarm",
+  "noAlarms": "No alarms yet",
+  "noAlarmsHint": "Tap + to create your first alarm",
+  "label": "Label",
+  "labelPlaceholder": "Alarm label (optional)",
+  "repeat": "Repeat",
+  "tasks": "Wake-up Tasks",
+  "tasksDescription": "You must complete all tasks to dismiss the alarm.",
+  "taskPlaceholder": "Task description...",
+  "addTask": "+ Add",
+  "saveAlarm": "Save Alarm",
+  "saveChanges": "Save Changes",
+  "deleteAlarm": "Delete Alarm",
+  "deleteConfirmTitle": "Delete Alarm",
+  "deleteConfirmMessage": "Are you sure you want to delete this alarm?",
+  "addTasksTitle": "Add Tasks",
+  "addTasksMessage": "Add at least one task to complete when the alarm rings.",
+  "tasksToComplete": "{{count}} task(s) to complete",
+  "notification": {
+    "title": "Good Morning!",
+    "defaultBody": "Time to wake up!"
+  }
+}

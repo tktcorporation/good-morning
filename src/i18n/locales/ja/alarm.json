@@ -1,0 +1,26 @@
+{
+  "title": "アラーム",
+  "newAlarm": "新規アラーム",
+  "editAlarm": "アラーム編集",
+  "noAlarms": "アラームがありません",
+  "noAlarmsHint": "+ をタップして最初のアラームを作成しましょう",
+  "label": "ラベル",
+  "labelPlaceholder": "アラーム名（任意）",
+  "repeat": "繰り返し",
+  "tasks": "起床タスク",
+  "tasksDescription": "アラームを解除するにはすべてのタスクを完了する必要があります。",
+  "taskPlaceholder": "タスクの内容...",
+  "addTask": "追加",
+  "saveAlarm": "アラームを保存",
+  "saveChanges": "変更を保存",
+  "deleteAlarm": "アラームを削除",
+  "deleteConfirmTitle": "アラームの削除",
+  "deleteConfirmMessage": "このアラームを削除してもよろしいですか？",
+  "addTasksTitle": "タスクを追加",
+  "addTasksMessage": "アラーム発動時に完了するタスクを1つ以上追加してください。",
+  "tasksToComplete": "{{count}}個のタスク",
+  "notification": {
+    "title": "おはようございます！",
+    "defaultBody": "起きる時間です！"
+  }
+}
