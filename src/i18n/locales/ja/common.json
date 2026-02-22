@@ -27,5 +27,11 @@
     "everyDay": "毎日",
     "weekdays": "平日",
     "weekends": "週末"
+  },
+  "settings": {
+    "title": "設定",
+    "about": "このアプリについて",
+    "version": "Good Morning v{{version}}",
+    "description": "アラームを解除する前にタスクを完了して、より良い朝を。"
   }
 }

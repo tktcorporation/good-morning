@@ -19,6 +19,12 @@
   "addTasksTitle": "タスクを追加",
   "addTasksMessage": "アラーム発動時に完了するタスクを1つ以上追加してください。",
   "tasksToComplete": "{{count}}個のタスク",
+  "noTasksYet": "まだタスクがありません。アラームを解除するために完了するタスクを追加してください。",
+  "createNewAlarm": "新しいアラームを作成",
+  "accessibilityAlarmAt": "{{time}}のアラーム、{{status}}",
+  "accessibilityEnabled": "有効",
+  "accessibilityDisabled": "無効",
+  "accessibilityToggleAlarm": "アラーム{{time}}を切替",
   "notification": {
     "title": "おはようございます！",
     "defaultBody": "起きる時間です！"

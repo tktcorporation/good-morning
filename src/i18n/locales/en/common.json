@@ -27,5 +27,11 @@
     "everyDay": "Every day",
     "weekdays": "Weekdays",
     "weekends": "Weekends"
+  },
+  "settings": {
+    "title": "Settings",
+    "about": "About",
+    "version": "Good Morning v{{version}}",
+    "description": "Wake up better by completing tasks before dismissing your alarm."
   }
 }

@@ -19,6 +19,12 @@
   "addTasksTitle": "Add Tasks",
   "addTasksMessage": "Add at least one task to complete when the alarm rings.",
   "tasksToComplete": "{{count}} task(s) to complete",
+  "noTasksYet": "No tasks yet. Add tasks that you need to complete to dismiss the alarm.",
+  "createNewAlarm": "Create new alarm",
+  "accessibilityAlarmAt": "Alarm at {{time}}, {{status}}",
+  "accessibilityEnabled": "enabled",
+  "accessibilityDisabled": "disabled",
+  "accessibilityToggleAlarm": "Toggle alarm {{time}}",
   "notification": {
     "title": "Good Morning!",
     "defaultBody": "Time to wake up!"
