@@ -16,7 +16,12 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         <Text style={styles.title}>{t('welcome.title')}</Text>
         <Text style={styles.subtitle}>{t('welcome.subtitle')}</Text>
       </View>
-      <StepButton label={t('welcome.start')} onPress={onNext} variant="primary" style={{ marginHorizontal: spacing.md }} />
+      <StepButton
+        label={t('welcome.start')}
+        onPress={onNext}
+        variant="primary"
+        style={{ marginHorizontal: spacing.md }}
+      />
     </View>
   );
 }

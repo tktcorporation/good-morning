@@ -4,7 +4,14 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
-import { borderRadius, colors, commonStyles, fontSize, semanticColors, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  semanticColors,
+  spacing,
+} from '../../src/constants/theme';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 
 export default function SettingsScreen() {
@@ -75,7 +82,9 @@ export default function SettingsScreen() {
       {/* About */}
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('settings.about')}</Text>
-        <Text style={styles.text}>{t('settings.version', { version: Constants.expoConfig?.version ?? '0.0.0' })}</Text>
+        <Text style={styles.text}>
+          {t('settings.version', { version: Constants.expoConfig?.version ?? '0.0.0' })}
+        </Text>
         <Text style={styles.description}>{t('settings.description')}</Text>
       </View>
     </View>

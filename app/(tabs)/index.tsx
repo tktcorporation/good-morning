@@ -2,11 +2,18 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { RESULT_COLORS, borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  RESULT_COLORS,
+  spacing,
+} from '../../src/constants/theme';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
-import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { DayOfWeek } from '../../src/types/alarm';
+import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { WakeRecord } from '../../src/types/wake-record';
 import { formatDateString } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
@@ -45,7 +52,10 @@ export default function DashboardScreen() {
     [target, tomorrow],
   );
   const tomorrowLabel = useMemo(() => {
-    const dayLabel = getDayLabel(tomorrow.getDay() as DayOfWeek, tCommon as (key: string) => string);
+    const dayLabel = getDayLabel(
+      tomorrow.getDay() as DayOfWeek,
+      tCommon as (key: string) => string,
+    );
     return `${tCommon('tomorrow')}, ${dayLabel}`;
   }, [tomorrow, tCommon]);
 

@@ -1,6 +1,5 @@
-import type { ExpoConfig, ConfigContext } from 'expo/config';
+import type { ConfigContext, ExpoConfig } from 'expo/config';
 
-// biome-ignore lint/style/noDefaultExport: Expo config requires default export
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Good Morning',

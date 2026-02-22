@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { RESULT_COLORS, borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { borderRadius, colors, fontSize, RESULT_COLORS, spacing } from '../../constants/theme';
 import { formatTime } from '../../types/alarm';
 import type { WakeRecord } from '../../types/wake-record';
 import { formatDateString } from '../../types/wake-record';

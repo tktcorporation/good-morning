@@ -2,7 +2,14 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { RESULT_COLORS, borderRadius, colors, commonStyles, fontSize, spacing } from '../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  RESULT_COLORS,
+  spacing,
+} from '../src/constants/theme';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { formatTime } from '../src/types/alarm';
 import type { WakeResult } from '../src/types/wake-record';
