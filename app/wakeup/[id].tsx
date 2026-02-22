@@ -10,7 +10,11 @@ import { useAlarmStore } from '../../src/stores/alarm-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { formatTime } from '../../src/types/alarm';
 import type { WakeTodoRecord } from '../../src/types/wake-record';
-import { calculateDiffMinutes, calculateWakeResult } from '../../src/types/wake-record';
+import {
+  calculateDiffMinutes,
+  calculateWakeResult,
+  formatDateString,
+} from '../../src/types/wake-record';
 
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 
@@ -99,7 +103,7 @@ export default function WakeUpScreen() {
         orderCompleted: todo.completed ? index + 1 : null,
       }));
 
-      const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+      const dateStr = formatDateString(now);
 
       addRecord({
         alarmId: alarm.id,

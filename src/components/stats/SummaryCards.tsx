@@ -40,11 +40,6 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
         <Text style={styles.cardValue}>{diffText}</Text>
         <Text style={styles.cardLabel}>{t('avgDiff')}</Text>
       </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardValue}>{`${stats.currentStreak}`}</Text>
-        <Text style={styles.cardLabel}>{t('streak')}</Text>
-      </View>
     </View>
   );
 }

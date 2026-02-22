@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
-import { createWakeRecordId } from '../types/wake-record';
+import { createWakeRecordId, formatDateString } from '../types/wake-record';
 
 const STORAGE_KEY = 'wake-records';
 
@@ -122,10 +122,23 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
 
     const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
     let streak = 0;
+    let previousDate: Date | null = null;
 
     for (const record of sorted) {
+      const currentDate = new Date(`${record.date}T00:00:00`);
+
+      // Check for date gap: if more than 1 day between consecutive records, break streak
+      if (previousDate !== null) {
+        const diffMs = previousDate.getTime() - currentDate.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (diffDays > 1) {
+          break;
+        }
+      }
+
       if (isSuccessResult(record.result)) {
         streak += 1;
+        previousDate = currentDate;
       } else {
         break;
       }
@@ -134,12 +147,5 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     return streak;
   },
 }));
-
-function formatDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 export type { WakeRecordState };

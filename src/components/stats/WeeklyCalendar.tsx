@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
 import { formatTime } from '../../types/alarm';
 import type { WakeRecord, WakeResult } from '../../types/wake-record';
+import { formatDateString } from '../../types/wake-record';
 
 interface WeeklyCalendarProps {
   readonly records: readonly WakeRecord[];
@@ -19,15 +20,16 @@ const RESULT_COLORS: Record<WakeResult, string> = {
   missed: colors.textMuted,
 };
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-const DAY_LABELS_JA = ['月', '火', '水', '木', '金', '土', '日'] as const;
-
-function formatDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+// Mon-Sun order using i18n keys: 1=Mon, 2=Tue, ..., 6=Sat, 0=Sun
+const DAY_LABEL_KEYS = [
+  'dayLabelsShort.1',
+  'dayLabelsShort.2',
+  'dayLabelsShort.3',
+  'dayLabelsShort.4',
+  'dayLabelsShort.5',
+  'dayLabelsShort.6',
+  'dayLabelsShort.0',
+] as const;
 
 function formatWeekLabel(weekStart: Date): string {
   return `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
@@ -39,11 +41,16 @@ export function WeeklyCalendar({
   onPrevWeek,
   onNextWeek,
 }: WeeklyCalendarProps) {
-  const { t, i18n } = useTranslation('stats');
+  const { t } = useTranslation('stats');
+  const { t: tCommon } = useTranslation('common');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const isJa = i18n.language === 'ja';
-  const dayLabels = isJa ? DAY_LABELS_JA : DAY_LABELS;
+  // Reset selection when navigating to a different week
+  const prevWeekStartRef = useRef(weekStart);
+  if (prevWeekStartRef.current !== weekStart) {
+    prevWeekStartRef.current = weekStart;
+    setSelectedDay(null);
+  }
 
   // Build a map of date -> record for the week
   const weekDays = useMemo(() => {
@@ -99,7 +106,9 @@ export function WeeklyCalendar({
               style={[styles.dayColumn, isSelected && styles.dayColumnSelected]}
               onPress={() => handleDayPress(index)}
             >
-              <Text style={styles.dayLabel}>{dayLabels[index]}</Text>
+              <Text style={styles.dayLabel}>
+                {tCommon(DAY_LABEL_KEYS[index] ?? 'dayLabelsShort.0')}
+              </Text>
               <View style={[styles.dot, { backgroundColor: dotColor }]} />
               <Text style={styles.dayNumber}>{`${day.date.getDate()}`}</Text>
             </Pressable>
