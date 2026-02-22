@@ -205,10 +205,10 @@ export default function DashboardScreen() {
             const record = getRecordForDate(weekRecords, date);
             const today = new Date();
             const isToday = formatDateString(date) === formatDateString(today);
-            let dotColor = colors.disabled;
-            if (record !== undefined) {
-              dotColor = RESULT_COLORS[record.result];
-            }
+            const dotColor =
+              record !== undefined
+                ? RESULT_COLORS[record.result]
+                : colors.disabled;
 
             return (
               <Pressable
