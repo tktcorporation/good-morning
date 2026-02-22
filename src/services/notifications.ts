@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import i18n from '@/i18n';
 import type { Alarm, AlarmTime, DayOfWeek } from '../types/alarm';
 
 Notifications.setNotificationHandler({
@@ -52,8 +53,8 @@ export async function scheduleAlarmNotifications(alarm: Alarm): Promise<readonly
   await cancelAlarmNotifications(alarm.notificationIds);
 
   const notificationContent: Notifications.NotificationContentInput = {
-    title: 'Good Morning!',
-    body: alarm.label || 'Time to wake up!',
+    title: i18n.t('alarm:notification.title'),
+    body: alarm.label || i18n.t('alarm:notification.defaultBody'),
     sound: 'alarm.wav',
     data: { alarmId: alarm.id },
   };
