@@ -16,5 +16,12 @@
   "great": "Great",
   "ok": "OK",
   "late": "Late",
-  "missed": "Missed"
+  "missed": "Missed",
+  "healthKit": {
+    "connect": "Connect to Health",
+    "connected": "Health Connected",
+    "noData": "No sleep data found",
+    "noDataHint": "Check permissions in the Health app",
+    "wakeTime": "HealthKit Wake Time"
+  }
 }

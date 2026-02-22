@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, Vibration, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import { getSleepSummary, isHealthKitInitialized } from '../../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
 import { useAlarmStore } from '../../src/stores/alarm-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
@@ -30,6 +31,7 @@ export default function WakeUpScreen() {
   const setActiveAlarm = useAlarmStore((s) => s.setActiveAlarm);
 
   const addRecord = useWakeRecordStore((s) => s.addRecord);
+  const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
   const alarm = alarms.find((a) => a.id === id);
   const allCompleted = id ? areAllTodosCompleted(id) : false;
@@ -105,6 +107,7 @@ export default function WakeUpScreen() {
 
       const dateStr = formatDateString(now);
 
+      // Add record immediately (don't block on HealthKit)
       addRecord({
         alarmId: alarm.id,
         date: dateStr,
@@ -117,12 +120,21 @@ export default function WakeUpScreen() {
         todos,
         todoCompletionSeconds,
         alarmLabel: alarm.label,
+      }).then((record) => {
+        // Asynchronously fetch HealthKit data and update the record if available
+        if (isHealthKitInitialized()) {
+          getSleepSummary(now).then((summary) => {
+            if (summary !== null) {
+              updateRecord(record.id, { healthKitWakeTime: summary.wakeUpTime });
+            }
+          });
+        }
       });
     }
 
     setActiveAlarm(null);
     router.replace('/');
-  }, [alarm, addRecord, setActiveAlarm, router]);
+  }, [alarm, addRecord, updateRecord, setActiveAlarm, router]);
 
   if (!alarm) {
     return (

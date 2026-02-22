@@ -16,5 +16,12 @@
   "great": "成功",
   "ok": "まあまあ",
   "late": "遅刻",
-  "missed": "未起床"
+  "missed": "未起床",
+  "healthKit": {
+    "connect": "ヘルスケアと連携",
+    "connected": "ヘルスケア連携済み",
+    "noData": "睡眠データが見つかりません",
+    "noDataHint": "ヘルスケアアプリで権限を確認してください",
+    "wakeTime": "HealthKit起床時刻"
+  }
 }

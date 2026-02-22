@@ -35,6 +35,13 @@ function formatWeekLabel(weekStart: Date): string {
   return `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
 }
 
+function formatIsoTime(isoString: string): string {
+  const date = new Date(isoString);
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
 export function WeeklyCalendar({
   records,
   weekStart,
@@ -136,6 +143,14 @@ export function WeeklyCalendar({
               ]}
             />
           </View>
+          {selectedRecord.healthKitWakeTime != null && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{t('healthKit.wakeTime')}</Text>
+              <Text style={styles.detailValue}>
+                {formatIsoTime(selectedRecord.healthKitWakeTime)}
+              </Text>
+            </View>
+          )}
           {selectedRecord.todos.length > 0 && (
             <View style={styles.todosSection}>
               {selectedRecord.todos.map((todo) => (
