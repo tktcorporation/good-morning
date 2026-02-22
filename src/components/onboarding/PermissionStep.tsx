@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, spacing } from '../../constants/theme';
+import { StyleSheet, View } from 'react-native';
+import { colors, spacing } from '../../constants/theme';
 import { requestNotificationPermissions } from '../../services/notifications';
 import { StepButton } from './StepButton';
+import { StepHeader } from './StepHeader';
 
 interface PermissionStepProps {
   readonly onNext: () => void;
@@ -25,8 +26,7 @@ export function PermissionStep({ onNext, onBack }: PermissionStepProps) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>{t('permission.title')}</Text>
-        <Text style={styles.subtitle}>{t('permission.subtitle')}</Text>
+        <StepHeader title={t('permission.title')} subtitle={t('permission.subtitle')} />
       </View>
 
       <View style={styles.buttons}>
@@ -54,19 +54,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-  },
-  title: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
   },
   buttons: {
     flexDirection: 'row',

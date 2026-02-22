@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
 import { StepButton } from './StepButton';
+import { StepHeader } from './StepHeader';
 
 interface TodosStepProps {
   readonly onNext: () => void;
@@ -37,10 +38,7 @@ export function TodosStep({ onNext, onBack, todos, setTodos }: TodosStepProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('todos.title')}</Text>
-        <Text style={styles.subtitle}>{t('todos.subtitle')}</Text>
-      </View>
+      <StepHeader title={t('todos.title')} subtitle={t('todos.subtitle')} />
 
       <View style={styles.presets}>
         {PRESET_KEYS.map((key) => {

@@ -5,39 +5,17 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { RESULT_COLORS, borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
-import { formatTime } from '../../src/types/alarm';
+import { formatTime, getDayLabel } from '../../src/types/alarm';
+import type { DayOfWeek } from '../../src/types/alarm';
 import type { WakeRecord } from '../../src/types/wake-record';
 import { formatDateString } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
-
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+import { getWeekDates } from '../../src/utils/date';
 
 function getTomorrowDate(): Date {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return tomorrow;
-}
-
-function getDayLabel(date: Date): string {
-  const dayName = DAY_NAMES[date.getDay()];
-  return dayName ?? '';
-}
-
-function getWeekDates(): readonly Date[] {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  // Week starts on Monday
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + mondayOffset);
-
-  const dates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    dates.push(d);
-  }
-  return dates;
 }
 
 function getRecordForDate(records: readonly WakeRecord[], date: Date): WakeRecord | undefined {
@@ -66,7 +44,10 @@ export default function DashboardScreen() {
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),
     [target, tomorrow],
   );
-  const tomorrowLabel = useMemo(() => `Tomorrow, ${getDayLabel(tomorrow)}`, [tomorrow]);
+  const tomorrowLabel = useMemo(() => {
+    const dayLabel = getDayLabel(tomorrow.getDay() as DayOfWeek, tCommon as (key: string) => string);
+    return `${tCommon('tomorrow')}, ${dayLabel}`;
+  }, [tomorrow, tCommon]);
 
   const weekDates = useMemo(() => getWeekDates(), []);
   const weekStart = weekDates[0];
@@ -187,7 +168,7 @@ export default function DashboardScreen() {
                 onPress={() => handleDayPress(date)}
               >
                 <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
-                  {DAY_NAMES[date.getDay()]}
+                  {getDayLabel(date.getDay() as DayOfWeek, tCommon as (key: string) => string)}
                 </Text>
                 <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
                 <Text style={styles.dayNumber}>{`${date.getDate()}`}</Text>

@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { colors, fontSize, spacing } from '../../constants/theme';
 import type { AlarmTime } from '../../types/alarm';
 import { StepButton } from './StepButton';
+import { StepHeader } from './StepHeader';
 
 interface TimeStepProps {
   readonly onNext: () => void;
@@ -20,10 +21,7 @@ export function TimeStep({ onNext, onBack, time, setTime }: TimeStepProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('time.title')}</Text>
-        <Text style={styles.subtitle}>{t('time.subtitle')}</Text>
-      </View>
+      <StepHeader title={t('time.title')} subtitle={t('time.subtitle')} />
 
       <View style={styles.pickerContainer}>
         <ScrollView
@@ -97,22 +95,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingVertical: spacing.xl,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
   },
   pickerContainer: {
     flexDirection: 'row',

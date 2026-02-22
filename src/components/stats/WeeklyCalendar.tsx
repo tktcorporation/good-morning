@@ -5,6 +5,7 @@ import { RESULT_COLORS, borderRadius, colors, fontSize, spacing } from '../../co
 import { formatTime } from '../../types/alarm';
 import type { WakeRecord } from '../../types/wake-record';
 import { formatDateString } from '../../types/wake-record';
+import { formatIsoTime } from '../../utils/date';
 
 interface WeeklyCalendarProps {
   readonly records: readonly WakeRecord[];
@@ -26,13 +27,6 @@ const DAY_LABEL_KEYS = [
 
 function formatWeekLabel(weekStart: Date): string {
   return `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
-}
-
-function formatIsoTime(isoString: string): string {
-  const date = new Date(isoString);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
 }
 
 export function WeeklyCalendar({
