@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { StepButton } from './StepButton';
+import { StepHeader } from './StepHeader';
 
 interface TodosStepProps {
   readonly onNext: () => void;
@@ -36,10 +38,7 @@ export function TodosStep({ onNext, onBack, todos, setTodos }: TodosStepProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('todos.title')}</Text>
-        <Text style={styles.subtitle}>{t('todos.subtitle')}</Text>
-      </View>
+      <StepHeader title={t('todos.title')} subtitle={t('todos.subtitle')} />
 
       <View style={styles.presets}>
         {PRESET_KEYS.map((key) => {
@@ -92,12 +91,8 @@ export function TodosStep({ onNext, onBack, todos, setTodos }: TodosStepProps) {
       </ScrollView>
 
       <View style={styles.buttons}>
-        <Pressable style={styles.backButton} onPress={onBack} accessibilityRole="button">
-          <Text style={styles.backButtonText}>{t('back')}</Text>
-        </Pressable>
-        <Pressable style={styles.nextButton} onPress={onNext} accessibilityRole="button">
-          <Text style={styles.nextButtonText}>{t('next')}</Text>
-        </Pressable>
+        <StepButton label={t('back')} onPress={onBack} variant="secondary" flex={1} />
+        <StepButton label={t('next')} onPress={onNext} variant="primary" flex={1} />
       </View>
     </View>
   );
@@ -107,22 +102,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingVertical: spacing.xl,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: fontSize.xxl,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
   },
   presets: {
     flexDirection: 'row',
@@ -209,30 +188,5 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
-  },
-  backButton: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  backButtonText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-  },
-  nextButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  nextButtonText: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
   },
 });

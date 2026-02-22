@@ -1,9 +1,17 @@
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  semanticColors,
+  spacing,
+} from '../../src/constants/theme';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 
 export default function SettingsScreen() {
@@ -31,7 +39,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       {/* Schedule */}
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <Pressable style={styles.row} onPress={() => router.push('/schedule')}>
           <View>
             <Text style={styles.rowTitle}>{t('settings.schedule')}</Text>
@@ -42,7 +50,7 @@ export default function SettingsScreen() {
       </View>
 
       {/* Alarm Toggle */}
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>{isEnabled ? tDash('enabled') : tDash('disabled')}</Text>
           <Switch
@@ -55,7 +63,7 @@ export default function SettingsScreen() {
       </View>
 
       {/* Notification Status */}
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>{t('settings.notifications')}</Text>
           <Text
@@ -72,9 +80,11 @@ export default function SettingsScreen() {
       </View>
 
       {/* About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings.about')}</Text>
-        <Text style={styles.text}>{t('settings.version', { version: '1.0.0' })}</Text>
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('settings.about')}</Text>
+        <Text style={styles.text}>
+          {t('settings.version', { version: Constants.expoConfig?.version ?? '0.0.0' })}
+        </Text>
         <Text style={styles.description}>{t('settings.description')}</Text>
       </View>
     </View>
@@ -86,15 +96,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     padding: spacing.md,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
   },
   row: {
     flexDirection: 'row',
@@ -129,11 +130,11 @@ const styles = StyleSheet.create({
   },
   statusGranted: {
     color: colors.success,
-    backgroundColor: 'rgba(46, 213, 115, 0.15)',
+    backgroundColor: semanticColors.successLight,
   },
   statusDenied: {
     color: colors.warning,
-    backgroundColor: 'rgba(255, 165, 2, 0.15)',
+    backgroundColor: semanticColors.warningLight,
   },
   text: {
     fontSize: fontSize.md,

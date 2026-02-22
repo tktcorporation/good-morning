@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, fontSize, spacing } from '../../constants/theme';
+import { StepButton } from './StepButton';
 
 interface WelcomeStepProps {
   readonly onNext: () => void;
@@ -15,9 +16,12 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         <Text style={styles.title}>{t('welcome.title')}</Text>
         <Text style={styles.subtitle}>{t('welcome.subtitle')}</Text>
       </View>
-      <Pressable style={styles.button} onPress={onNext} accessibilityRole="button">
-        <Text style={styles.buttonText}>{t('welcome.start')}</Text>
-      </Pressable>
+      <StepButton
+        label={t('welcome.start')}
+        onPress={onNext}
+        variant="primary"
+        style={{ marginHorizontal: spacing.md }}
+      />
     </View>
   );
 }
@@ -46,17 +50,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 28,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginHorizontal: spacing.md,
-  },
-  buttonText: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
   },
 });

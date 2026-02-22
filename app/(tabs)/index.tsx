@@ -2,49 +2,27 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  RESULT_COLORS,
+  spacing,
+} from '../../src/constants/theme';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
-import { formatTime } from '../../src/types/alarm';
-import type { WakeRecord, WakeResult } from '../../src/types/wake-record';
+import type { DayOfWeek } from '../../src/types/alarm';
+import { formatTime, getDayLabel } from '../../src/types/alarm';
+import type { WakeRecord } from '../../src/types/wake-record';
 import { formatDateString } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
-
-const RESULT_COLORS: Readonly<Record<WakeResult, string>> = {
-  great: colors.success,
-  ok: colors.success,
-  late: colors.warning,
-  missed: colors.primary,
-};
-
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+import { getWeekDates } from '../../src/utils/date';
 
 function getTomorrowDate(): Date {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return tomorrow;
-}
-
-function getDayLabel(date: Date): string {
-  const dayName = DAY_NAMES[date.getDay()];
-  return dayName ?? '';
-}
-
-function getWeekDates(): readonly Date[] {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  // Week starts on Monday
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + mondayOffset);
-
-  const dates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    dates.push(d);
-  }
-  return dates;
 }
 
 function getRecordForDate(records: readonly WakeRecord[], date: Date): WakeRecord | undefined {
@@ -62,7 +40,7 @@ export default function DashboardScreen() {
   const addTodo = useWakeTargetStore((s) => s.addTodo);
   const removeTodo = useWakeTargetStore((s) => s.removeTodo);
 
-  const records = useWakeRecordStore((s) => s.records);
+  const getRecordsForPeriod = useWakeRecordStore((s) => s.getRecordsForPeriod);
   const getCurrentStreak = useWakeRecordStore((s) => s.getCurrentStreak);
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
 
@@ -73,7 +51,13 @@ export default function DashboardScreen() {
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),
     [target, tomorrow],
   );
-  const tomorrowLabel = useMemo(() => `Tomorrow, ${getDayLabel(tomorrow)}`, [tomorrow]);
+  const tomorrowLabel = useMemo(() => {
+    const dayLabel = getDayLabel(
+      tomorrow.getDay() as DayOfWeek,
+      tCommon as (key: string) => string,
+    );
+    return `${tCommon('tomorrow')}, ${dayLabel}`;
+  }, [tomorrow, tCommon]);
 
   const weekDates = useMemo(() => getWeekDates(), []);
   const weekStart = weekDates[0];
@@ -87,10 +71,8 @@ export default function DashboardScreen() {
     if (weekStart === undefined) return [];
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    const startStr = formatDateString(weekStart);
-    const endStr = formatDateString(weekEnd);
-    return records.filter((r) => r.date >= startStr && r.date <= endStr);
-  }, [records, weekStart]);
+    return getRecordsForPeriod(weekStart, weekEnd);
+  }, [getRecordsForPeriod, weekStart]);
 
   const handleAddTodo = useCallback(async () => {
     const trimmed = newTodoText.trim();
@@ -146,8 +128,8 @@ export default function DashboardScreen() {
       </Pressable>
 
       {/* Todo List */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('todos.title')}</Text>
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
         {target !== null && target.todos.length > 0 ? (
           target.todos.map((todo) => (
             <View key={todo.id} style={styles.todoRow}>
@@ -178,8 +160,8 @@ export default function DashboardScreen() {
       </View>
 
       {/* Weekly Calendar */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('week.title')}</Text>
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
         <View style={styles.weekRow}>
           {weekDates.map((date) => {
             const record = getRecordForDate(weekRecords, date);
@@ -194,7 +176,7 @@ export default function DashboardScreen() {
                 onPress={() => handleDayPress(date)}
               >
                 <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
-                  {DAY_NAMES[date.getDay()]}
+                  {getDayLabel(date.getDay() as DayOfWeek, tCommon as (key: string) => string)}
                 </Text>
                 <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
                 <Text style={styles.dayNumber}>{`${date.getDate()}`}</Text>
@@ -205,7 +187,7 @@ export default function DashboardScreen() {
       </View>
 
       {/* Streak + Stats */}
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statEmoji}>{'🔥'}</Text>
@@ -274,17 +256,6 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontSize: fontSize.sm,
     fontWeight: '600',
-  },
-
-  // Sections
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    marginBottom: spacing.md,
   },
 
   // Todos

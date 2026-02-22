@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { borderRadius, colors, fontSize, RESULT_COLORS, spacing } from '../../constants/theme';
 import { formatTime } from '../../types/alarm';
-import type { WakeRecord, WakeResult } from '../../types/wake-record';
+import type { WakeRecord } from '../../types/wake-record';
 import { formatDateString } from '../../types/wake-record';
+import { formatIsoTime } from '../../utils/date';
 
 interface WeeklyCalendarProps {
   readonly records: readonly WakeRecord[];
@@ -12,13 +13,6 @@ interface WeeklyCalendarProps {
   readonly onPrevWeek: () => void;
   readonly onNextWeek: () => void;
 }
-
-const RESULT_COLORS: Record<WakeResult, string> = {
-  great: colors.success,
-  ok: colors.warning,
-  late: colors.primary,
-  missed: colors.textMuted,
-};
 
 // Mon-Sun order using i18n keys: 1=Mon, 2=Tue, ..., 6=Sat, 0=Sun
 const DAY_LABEL_KEYS = [
@@ -33,13 +27,6 @@ const DAY_LABEL_KEYS = [
 
 function formatWeekLabel(weekStart: Date): string {
   return `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
-}
-
-function formatIsoTime(isoString: string): string {
-  const date = new Date(isoString);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
 }
 
 export function WeeklyCalendar({
