@@ -65,6 +65,3 @@ jobs:
           EXPO_ASC_API_KEY_PATH: ./AuthKey.p8
           EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
           EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
-
-      - name: Build Android (internal distribution)
-        run: eas build --platform android --profile preview --non-interactive
