@@ -1,3 +1,5 @@
+import type { WakeResult } from '../types/wake-record';
+
 export const colors = {
   background: '#1a1a2e',
   surface: '#16213e',
@@ -37,4 +39,16 @@ export const borderRadius = {
   md: 12,
   lg: 16,
   full: 9999,
+} as const;
+
+export const RESULT_COLORS: Readonly<Record<WakeResult, string>> = {
+  great: colors.success,
+  ok: colors.success,
+  late: colors.warning,
+  missed: colors.primary,
+};
+
+export const semanticColors = {
+  successLight: 'rgba(46, 213, 115, 0.15)',
+  warningLight: 'rgba(255, 165, 2, 0.15)',
 } as const;

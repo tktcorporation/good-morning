@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -74,7 +75,7 @@ export default function SettingsScreen() {
       {/* About */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings.about')}</Text>
-        <Text style={styles.text}>{t('settings.version', { version: '1.0.0' })}</Text>
+        <Text style={styles.text}>{t('settings.version', { version: Constants.expoConfig?.version ?? '0.0.0' })}</Text>
         <Text style={styles.description}>{t('settings.description')}</Text>
       </View>
     </View>
