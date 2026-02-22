@@ -75,7 +75,8 @@ describe('useWakeTargetStore', () => {
     expect(todos).toHaveLength(1);
     expect(todos[0]?.title).toBe('Drink water');
 
-    await useWakeTargetStore.getState().removeTodo(todos[0]!.id);
+    const todoId = todos[0]?.id ?? '';
+    await useWakeTargetStore.getState().removeTodo(todoId);
     expect(useWakeTargetStore.getState().target?.todos).toHaveLength(0);
   });
 
@@ -128,7 +129,9 @@ describe('useWakeTargetStore', () => {
       ...DEFAULT_WAKE_TARGET,
       todos,
     });
-    const reordered = [todos[1]!, todos[0]!];
+    const reordered = [todos[1], todos[0]].filter(
+      (t): t is (typeof todos)[number] => t !== undefined,
+    );
     await useWakeTargetStore.getState().reorderTodos(reordered);
     expect(useWakeTargetStore.getState().target?.todos[0]?.id).toBe('todo-2');
     expect(useWakeTargetStore.getState().target?.todos[1]?.id).toBe('todo-1');

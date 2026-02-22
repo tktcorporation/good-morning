@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import i18n from '@/i18n';
 import type { Alarm, AlarmTime, DayOfWeek } from '../types/alarm';
+import type { WakeTarget } from '../types/wake-target';
+import { resolveTimeForDate } from '../types/wake-target';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -87,6 +89,53 @@ export async function cancelAlarmNotifications(notificationIds: readonly string[
     Notifications.cancelScheduledNotificationAsync(id),
   );
   await Promise.all(cancellations);
+}
+
+export async function scheduleWakeTargetNotifications(
+  target: WakeTarget,
+  existingIds: readonly string[],
+): Promise<readonly string[]> {
+  const hasPermission = await requestNotificationPermissions();
+  if (!hasPermission) return [];
+
+  await cancelAlarmNotifications(existingIds);
+
+  const ids: string[] = [];
+  const content: Notifications.NotificationContentInput = {
+    title: i18n.t('alarm:notification.title'),
+    body: i18n.t('alarm:notification.defaultBody'),
+    sound: 'alarm.wav',
+    data: { wakeTarget: true },
+  };
+
+  // Schedule for each day of the week based on resolved time
+  for (let day = 0; day < 7; day++) {
+    const dayOfWeek = day as DayOfWeek;
+    // Create a date for this weekday to resolve the time
+    const testDate = new Date();
+    testDate.setDate(testDate.getDate() + ((dayOfWeek - testDate.getDay() + 7) % 7));
+    const time = resolveTimeForDate(target, testDate);
+
+    if (time === null) continue; // Day is OFF
+
+    const calendarWeekday = dayOfWeekToCalendarWeekday(dayOfWeek);
+    const id = await Notifications.scheduleNotificationAsync({
+      content,
+      trigger: buildCalendarTrigger(time, calendarWeekday),
+    });
+    ids.push(id);
+  }
+
+  // If nextOverride exists, also schedule a one-time notification for tomorrow
+  if (target.nextOverride !== null) {
+    const id = await Notifications.scheduleNotificationAsync({
+      content,
+      trigger: buildCalendarTrigger(target.nextOverride.time),
+    });
+    ids.push(id);
+  }
+
+  return ids;
 }
 
 export function addNotificationResponseListener(

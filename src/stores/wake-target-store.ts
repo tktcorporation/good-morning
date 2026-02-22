@@ -135,9 +135,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     if (target === null) return;
     const updated: WakeTarget = {
       ...target,
-      todos: target.todos.map((t) =>
-        t.id === todoId ? { ...t, completed: !t.completed } : t,
-      ),
+      todos: target.todos.map((t) => (t.id === todoId ? { ...t, completed: !t.completed } : t)),
     };
     set({ target: updated });
   },
