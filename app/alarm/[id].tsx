@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -19,6 +20,8 @@ import type { DayOfWeek, TodoItem } from '../../src/types/alarm';
 import { createTodoId } from '../../src/types/alarm';
 
 export default function EditAlarmScreen() {
+  const { t } = useTranslation('alarm');
+  const { t: tCommon } = useTranslation('common');
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const alarms = useAlarmStore((s) => s.alarms);
@@ -70,7 +73,7 @@ export default function EditAlarmScreen() {
 
     const validTodos = todos.filter((t) => t.title.trim() !== '');
     if (validTodos.length === 0) {
-      Alert.alert('Add Tasks', 'Add at least one task to complete when the alarm rings.');
+      Alert.alert(t('addTasksTitle'), t('addTasksMessage'));
       return;
     }
 
@@ -86,10 +89,10 @@ export default function EditAlarmScreen() {
   const handleDelete = useCallback(() => {
     if (!id) return;
 
-    Alert.alert('Delete Alarm', 'Are you sure you want to delete this alarm?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deleteConfirmTitle'), t('deleteConfirmMessage'), [
+      { text: tCommon('cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: tCommon('delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteAlarm(id);
@@ -134,32 +137,32 @@ export default function EditAlarmScreen() {
 
         {/* Label */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Label</Text>
+          <Text style={styles.sectionTitle}>{t('label')}</Text>
           <TextInput
             style={styles.input}
             value={label}
             onChangeText={setLabel}
-            placeholder="Alarm label (optional)"
+            placeholder={t('labelPlaceholder')}
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
         {/* Repeat Days */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Repeat</Text>
+          <Text style={styles.sectionTitle}>{t('repeat')}</Text>
           <DaySelector selectedDays={repeatDays} onToggle={handleToggleDay} />
         </View>
 
         {/* Todo Items */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Wake-up Tasks</Text>
+            <Text style={styles.sectionTitle}>{t('tasks')}</Text>
             <Pressable style={styles.addButton} onPress={handleAddTodo}>
-              <Text style={styles.addButtonText}>+ Add</Text>
+              <Text style={styles.addButtonText}>{t('addTask')}</Text>
             </Pressable>
           </View>
           <Text style={styles.sectionDescription}>
-            You must complete all tasks to dismiss the alarm.
+            {t('tasksDescription')}
           </Text>
           {todos.map((todo) => (
             <TodoListItem
@@ -175,13 +178,13 @@ export default function EditAlarmScreen() {
 
         {/* Delete Button */}
         <Pressable style={styles.deleteButton} onPress={handleDelete}>
-          <Text style={styles.deleteButtonText}>Delete Alarm</Text>
+          <Text style={styles.deleteButtonText}>{t('deleteAlarm')}</Text>
         </Pressable>
       </ScrollView>
 
       {/* Save Button */}
       <Pressable style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Save Changes</Text>
+        <Text style={styles.saveButtonText}>{t('saveChanges')}</Text>
       </Pressable>
     </KeyboardAvoidingView>
   );

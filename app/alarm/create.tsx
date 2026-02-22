@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -19,6 +20,7 @@ import type { AlarmTime, DayOfWeek, TodoItem } from '../../src/types/alarm';
 import { createTodoId } from '../../src/types/alarm';
 
 export default function CreateAlarmScreen() {
+  const { t } = useTranslation('alarm');
   const router = useRouter();
   const addAlarm = useAlarmStore((s) => s.addAlarm);
 
@@ -62,7 +64,7 @@ export default function CreateAlarmScreen() {
   const handleSave = useCallback(async () => {
     const validTodos = todos.filter((t) => t.title.trim() !== '');
     if (validTodos.length === 0) {
-      Alert.alert('Add Tasks', 'Add at least one task to complete when the alarm rings.');
+      Alert.alert(t('addTasksTitle'), t('addTasksMessage'));
       return;
     }
 
@@ -107,32 +109,32 @@ export default function CreateAlarmScreen() {
 
         {/* Label */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Label</Text>
+          <Text style={styles.sectionTitle}>{t('label')}</Text>
           <TextInput
             style={styles.input}
             value={label}
             onChangeText={setLabel}
-            placeholder="Alarm label (optional)"
+            placeholder={t('labelPlaceholder')}
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
         {/* Repeat Days */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Repeat</Text>
+          <Text style={styles.sectionTitle}>{t('repeat')}</Text>
           <DaySelector selectedDays={repeatDays} onToggle={handleToggleDay} />
         </View>
 
         {/* Todo Items */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Wake-up Tasks</Text>
+            <Text style={styles.sectionTitle}>{t('tasks')}</Text>
             <Pressable style={styles.addButton} onPress={handleAddTodo}>
-              <Text style={styles.addButtonText}>+ Add</Text>
+              <Text style={styles.addButtonText}>{t('addTask')}</Text>
             </Pressable>
           </View>
           <Text style={styles.sectionDescription}>
-            You must complete all tasks to dismiss the alarm.
+            {t('tasksDescription')}
           </Text>
           {todos.map((todo) => (
             <TodoListItem
@@ -146,7 +148,7 @@ export default function CreateAlarmScreen() {
           ))}
           {todos.length === 0 && (
             <Text style={styles.emptyText}>
-              No tasks yet. Add tasks that you need to complete to dismiss the alarm.
+              {t('noTasksYet')}
             </Text>
           )}
         </View>
@@ -154,7 +156,7 @@ export default function CreateAlarmScreen() {
 
       {/* Save Button */}
       <Pressable style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Save Alarm</Text>
+        <Text style={styles.saveButtonText}>{t('saveAlarm')}</Text>
       </Pressable>
     </KeyboardAvoidingView>
   );
