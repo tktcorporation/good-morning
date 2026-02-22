@@ -137,7 +137,7 @@ export default function ScheduleScreen() {
                 onPress={() => handleDayPress(day)}
               >
                 <View style={styles.dayInfo}>
-                  <Text style={styles.dayName}>{getDayLabel(day, t)}</Text>
+                  <Text style={styles.dayName}>{getDayLabel(day, t as TranslateFn)}</Text>
                   <Text style={[styles.dayState, hasOverride && styles.dayStateOverride]}>
                     {state === 'default'
                       ? t('schedule.useDefault')
