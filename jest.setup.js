@@ -36,6 +36,34 @@ jest.mock('expo-av', () => ({
   },
 }));
 
+// Mock expo-localization
+jest.mock('expo-localization', () => ({
+  getLocales: () => [{ languageCode: 'en', languageTag: 'en-US' }],
+  getCalendars: () => [{ calendar: 'gregory', timeZone: 'America/New_York' }],
+}));
+
+// Mock i18n module
+jest.mock('./src/i18n', () => ({
+  __esModule: true,
+  default: {
+    t: (key) => key,
+    use: () => ({ init: () => {} }),
+    language: 'en',
+  },
+}));
+
+// Mock react-i18next
+jest.mock('react-i18next', () => ({
+  useTranslation: (ns) => ({
+    t: (key, params) => {
+      if (params) return `${key}:${JSON.stringify(params)}`;
+      return key;
+    },
+    i18n: { language: 'en', changeLanguage: jest.fn() },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}));
+
 // Mock expo-router
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
