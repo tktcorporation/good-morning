@@ -46,6 +46,16 @@
     "alarm": "Alarm",
     "notifications": "Notifications",
     "notificationsGranted": "Enabled",
-    "notificationsDenied": "Disabled"
+    "notificationsDenied": "Disabled",
+    "alarmSound": "Alarm Sound",
+    "dayBoundary": "Day Boundary",
+    "dayBoundaryDescription": "Hours before midnight count as the previous day",
+    "dayBoundaryHour": "{{hour}}:00"
+  },
+  "alarmSounds": {
+    "default": "Default",
+    "chime": "Chime",
+    "birds": "Birds",
+    "bell": "Bell"
   }
 }

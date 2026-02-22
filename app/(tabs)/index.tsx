@@ -12,24 +12,19 @@ import {
   spacing,
 } from '../../src/constants/theme';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
+import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
-import type { WakeRecord, WakeTodoRecord } from '../../src/types/wake-record';
-import { formatDateString } from '../../src/types/wake-record';
+import type { WakeTodoRecord } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
-import { getRecentDates } from '../../src/utils/date';
+import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 
 function getTomorrowDate(): Date {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return tomorrow;
-}
-
-function getRecordForDate(records: readonly WakeRecord[], date: Date): WakeRecord | undefined {
-  const dateStr = formatDateString(date);
-  return records.find((r) => r.date === dateStr);
 }
 
 export default function DashboardScreen() {
@@ -46,6 +41,8 @@ export default function DashboardScreen() {
   const getCurrentStreak = useWakeRecordStore((s) => s.getCurrentStreak);
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
+
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
@@ -135,10 +132,10 @@ export default function DashboardScreen() {
 
   const handleDayPress = useCallback(
     (date: Date) => {
-      const dateStr = formatDateString(date);
+      const dateStr = getLogicalDateString(date, dayBoundaryHour);
       router.push(`/day-review?date=${dateStr}`);
     },
-    [router],
+    [router, dayBoundaryHour],
   );
 
   if (!loaded) {
@@ -242,14 +239,14 @@ export default function DashboardScreen() {
         <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
         <View style={styles.weekRow}>
           {recentDates.map((date) => {
-            const record = getRecordForDate(weekRecords, date);
-            const today = new Date();
-            const isToday = formatDateString(date) === formatDateString(today);
+            const dateStr = getLogicalDateString(date, dayBoundaryHour);
+            const record = weekRecords.find((r) => r.date === dateStr);
+            const isToday = dateStr === getLogicalDateString(new Date(), dayBoundaryHour);
             const dotColor = record !== undefined ? RESULT_COLORS[record.result] : colors.disabled;
 
             return (
               <Pressable
-                key={formatDateString(date)}
+                key={dateStr}
                 style={styles.dayColumn}
                 onPress={() => handleDayPress(date)}
               >

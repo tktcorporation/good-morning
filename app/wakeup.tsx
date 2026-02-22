@@ -8,17 +8,15 @@ import { getSleepSummary, isHealthKitInitialized } from '../src/services/health'
 import { cancelAlarmNotifications } from '../src/services/notifications';
 import { isPlaying, playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
+import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import { formatTime } from '../src/types/alarm';
 import type { SessionTodo } from '../src/types/morning-session';
 import type { WakeTodoRecord } from '../src/types/wake-record';
-import {
-  calculateDiffMinutes,
-  calculateWakeResult,
-  formatDateString,
-} from '../src/types/wake-record';
+import { calculateDiffMinutes, calculateWakeResult } from '../src/types/wake-record';
 import { resolveTimeForDate } from '../src/types/wake-target';
+import { getLogicalDateString } from '../src/utils/date';
 
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 const DEMO_SOUND_DURATION_MS = 3000;
@@ -41,6 +39,8 @@ export default function WakeUpScreen() {
 
   const startSession = useMorningSessionStore((s) => s.startSession);
 
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
+
   const todos = target?.todos ?? [];
   const resolvedTime = target !== null ? resolveTimeForDate(target, new Date()) : null;
 
@@ -51,7 +51,7 @@ export default function WakeUpScreen() {
   // Start alarm sound and vibration
   useEffect(() => {
     if (isDemo) {
-      playAlarmSound();
+      playAlarmSound(target?.soundId);
       const timer = setTimeout(() => {
         stopAlarmSound();
       }, DEMO_SOUND_DURATION_MS);
@@ -62,7 +62,7 @@ export default function WakeUpScreen() {
     }
 
     if (!isPlaying()) {
-      playAlarmSound();
+      playAlarmSound(target?.soundId);
     }
     Vibration.vibrate(VIBRATION_PATTERN, true);
 
@@ -70,7 +70,7 @@ export default function WakeUpScreen() {
       stopAlarmSound();
       Vibration.cancel();
     };
-  }, [isDemo]);
+  }, [isDemo, target?.soundId]);
 
   // Update current time display
   useEffect(() => {
@@ -100,7 +100,7 @@ export default function WakeUpScreen() {
       const now = new Date();
       const diffMinutes = calculateDiffMinutes(resolvedTime, now);
       const result = calculateWakeResult(diffMinutes);
-      const dateStr = formatDateString(now);
+      const dateStr = getLogicalDateString(now, dayBoundaryHour);
       const hasTodos = todos.length > 0;
 
       const todoRecords: readonly WakeTodoRecord[] = todos.map((todo) => ({
@@ -161,6 +161,7 @@ export default function WakeUpScreen() {
     resolvedTime,
     todos,
     isDemo,
+    dayBoundaryHour,
     notificationIds,
     setNotificationIds,
     addRecord,

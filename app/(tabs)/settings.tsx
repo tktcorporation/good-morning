@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
 import {
   borderRadius,
   colors,
@@ -12,6 +13,8 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
+import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
+import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 
 export default function SettingsScreen() {
@@ -21,6 +24,11 @@ export default function SettingsScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
+  const soundId = target?.soundId ?? 'default';
+  const setSoundId = useWakeTargetStore((s) => s.setSoundId);
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
+  const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
 
@@ -30,9 +38,33 @@ export default function SettingsScreen() {
     });
   }, []);
 
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
   const handleToggleEnabled = useCallback(async () => {
     await toggleEnabled();
   }, [toggleEnabled]);
+
+  const handleSoundSelect = useCallback(
+    async (id: string) => {
+      await setSoundId(id);
+      await stopAlarmSound();
+      await playAlarmSound(id);
+      // Stop preview after 3 seconds
+      setTimeout(() => {
+        stopAlarmSound();
+      }, 3000);
+    },
+    [setSoundId],
+  );
+
+  const handleDayBoundaryChange = useCallback(
+    async (hour: number) => {
+      await setDayBoundaryHour(hour);
+    },
+    [setDayBoundaryHour],
+  );
 
   const isEnabled = target?.enabled ?? false;
 
@@ -59,6 +91,52 @@ export default function SettingsScreen() {
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.text}
           />
+        </View>
+      </View>
+
+      {/* Alarm Sound Selection */}
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('settings.alarmSound')}</Text>
+        {ALARM_SOUNDS.map((sound) => (
+          <Pressable
+            key={sound.id}
+            style={[styles.soundRow, sound.id === soundId && styles.soundRowSelected]}
+            onPress={() => handleSoundSelect(sound.id)}
+          >
+            <Text
+              style={[styles.soundRowText, sound.id === soundId && styles.soundRowTextSelected]}
+            >
+              {t(sound.nameKey as 'alarmSounds.default')}
+            </Text>
+            {sound.id === soundId && <Text style={styles.checkmark}>{'✓'}</Text>}
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Day Boundary */}
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('settings.dayBoundary')}</Text>
+        <Text style={styles.description}>{t('settings.dayBoundaryDescription')}</Text>
+        <View style={styles.dayBoundaryRow}>
+          {[0, 1, 2, 3, 4, 5, 6].map((hour) => (
+            <Pressable
+              key={hour}
+              style={[
+                styles.dayBoundaryOption,
+                hour === dayBoundaryHour && styles.dayBoundaryOptionSelected,
+              ]}
+              onPress={() => handleDayBoundaryChange(hour)}
+            >
+              <Text
+                style={[
+                  styles.dayBoundaryText,
+                  hour === dayBoundaryHour && styles.dayBoundaryTextSelected,
+                ]}
+              >
+                {t('settings.dayBoundaryHour', { hour })}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </View>
 
@@ -145,5 +223,56 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textMuted,
     lineHeight: 22,
+  },
+  soundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  soundRowSelected: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  soundRowText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  soundRowTextSelected: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  checkmark: {
+    color: colors.primary,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+  },
+  dayBoundaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  dayBoundaryOption: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  dayBoundaryOptionSelected: {
+    backgroundColor: colors.primary,
+  },
+  dayBoundaryText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  dayBoundaryTextSelected: {
+    color: colors.text,
+    fontWeight: '600',
   },
 });

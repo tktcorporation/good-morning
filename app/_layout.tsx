@@ -14,6 +14,7 @@ import {
 } from '../src/services/notifications';
 import { playAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
+import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 
@@ -30,17 +31,19 @@ export default function RootLayout() {
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
   const loadSession = useMorningSessionStore((s) => s.loadSession);
   const clearSession = useMorningSessionStore((s) => s.clearSession);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     loadTarget();
     loadRecords();
     loadSession();
+    loadSettings();
     requestNotificationPermissions();
     AsyncStorage.getItem('onboarding-completed').then((val) => {
       setOnboardingDone(val === 'true');
     });
-  }, [loadTarget, loadRecords, loadSession]);
+  }, [loadTarget, loadRecords, loadSession, loadSettings]);
 
   useEffect(() => {
     if (onboardingDone === false) {
@@ -89,8 +92,9 @@ export default function RootLayout() {
         }).then(() => clearSession());
       }
 
+      const currentTarget = useWakeTargetStore.getState().target;
       resetTodos();
-      playAlarmSound();
+      playAlarmSound(currentTarget?.soundId);
       Vibration.vibrate(VIBRATION_PATTERN, true);
       router.push('/wakeup');
     };

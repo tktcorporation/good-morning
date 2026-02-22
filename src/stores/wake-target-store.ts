@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';
@@ -22,6 +23,7 @@ interface WakeTargetState {
   addTodo: (title: string) => Promise<void>;
   removeTodo: (id: string) => Promise<void>;
   reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
+  setSoundId: (soundId: string) => Promise<void>;
   toggleEnabled: () => Promise<void>;
   toggleTodoCompleted: (todoId: string) => void;
   resetTodos: () => void;
@@ -46,8 +48,12 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const notificationIds: readonly string[] =
       rawIds !== null ? (JSON.parse(rawIds) as string[]) : [];
     if (raw !== null) {
-      const parsed = JSON.parse(raw) as WakeTarget;
-      set({ target: parsed, loaded: true, notificationIds });
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const migrated: WakeTarget = {
+        ...(parsed as unknown as WakeTarget),
+        soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
+      };
+      set({ target: migrated, loaded: true, notificationIds });
     } else {
       const fallback: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
       set({ target: fallback, loaded: true, notificationIds });
@@ -127,6 +133,14 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const { target } = get();
     if (target === null) return;
     const updated: WakeTarget = { ...target, todos };
+    set({ target: updated });
+    await persist(updated);
+  },
+
+  setSoundId: async (soundId: string) => {
+    const { target } = get();
+    if (target === null) return;
+    const updated: WakeTarget = { ...target, soundId };
     set({ target: updated });
     await persist(updated);
   },
