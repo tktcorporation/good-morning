@@ -1,0 +1,36 @@
+{
+  "welcome": {
+    "title": "Good Morning",
+    "subtitle": "毎朝の起床をトラッキングして、より良い朝を作りましょう",
+    "start": "はじめる"
+  },
+  "time": {
+    "title": "何時に起きたいですか？",
+    "subtitle": "あとからいつでも変更できます"
+  },
+  "todos": {
+    "title": "朝のタスクを追加しましょう",
+    "subtitle": "全てのタスクを完了するとアラームを止められます",
+    "addTask": "タスクを追加",
+    "placeholder": "例: 水を飲む",
+    "presets": {
+      "drinkWater": "水を飲む",
+      "stretch": "ストレッチ",
+      "washFace": "顔を洗う"
+    }
+  },
+  "permission": {
+    "title": "通知を許可してください",
+    "subtitle": "アラームを鳴らすために必要です",
+    "allow": "通知を許可する"
+  },
+  "demo": {
+    "title": "試してみましょう！",
+    "subtitle": "朝のアラームがどんな感じか体験してみましょう",
+    "start": "デモを開始",
+    "complete": "準備完了！はじめましょう",
+    "skip": "スキップ"
+  },
+  "next": "次へ",
+  "back": "戻る"
+}

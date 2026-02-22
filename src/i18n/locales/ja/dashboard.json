@@ -1,0 +1,37 @@
+{
+  "title": "ホーム",
+  "tomorrowTarget": "明日のターゲット",
+  "todayTarget": "今日のターゲット",
+  "targetOff": "OFF",
+  "override": "明日だけ",
+  "todos": {
+    "title": "朝のタスク",
+    "addTask": "タスクを追加",
+    "placeholder": "新しいタスク",
+    "empty": "アラームが鳴ったときに完了するタスクを追加しましょう"
+  },
+  "week": {
+    "title": "今週",
+    "success": "{{count}}/{{total}} 成功"
+  },
+  "streak": {
+    "current": "{{count}}日連続",
+    "best": "最高: {{count}}日"
+  },
+  "review": {
+    "title": "{{date}}",
+    "target": "ターゲット",
+    "actual": "実際",
+    "result": "結果",
+    "todos": "タスク",
+    "noRecord": "記録なし"
+  },
+  "targetEdit": {
+    "title": "起床時刻を変更",
+    "tomorrowOnly": "明日だけ変更",
+    "changeDefault": "デフォルトを変更",
+    "save": "保存"
+  },
+  "enabled": "アラームON",
+  "disabled": "アラームOFF"
+}

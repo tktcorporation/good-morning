@@ -28,10 +28,23 @@
     "weekdays": "Weekdays",
     "weekends": "Weekends"
   },
+  "schedule": {
+    "title": "Schedule",
+    "defaultTime": "Default Time",
+    "useDefault": "Default",
+    "customTime": "Custom",
+    "off": "OFF",
+    "subtitle": "Weekday rules"
+  },
   "settings": {
     "title": "Settings",
     "about": "About",
     "version": "Good Morning v{{version}}",
-    "description": "Wake up better by completing tasks before dismissing your alarm."
+    "description": "Wake up better by completing tasks before dismissing your alarm.",
+    "schedule": "Schedule",
+    "alarm": "Alarm",
+    "notifications": "Notifications",
+    "notificationsGranted": "Enabled",
+    "notificationsDenied": "Disabled"
   }
 }

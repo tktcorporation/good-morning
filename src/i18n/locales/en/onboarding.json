@@ -1,0 +1,36 @@
+{
+  "welcome": {
+    "title": "Good Morning",
+    "subtitle": "Track your wake-up routine and build better mornings",
+    "start": "Get Started"
+  },
+  "time": {
+    "title": "What time do you want to wake up?",
+    "subtitle": "You can change this anytime"
+  },
+  "todos": {
+    "title": "Add your morning tasks",
+    "subtitle": "Complete all tasks to dismiss the alarm",
+    "addTask": "Add task",
+    "placeholder": "e.g. Drink water",
+    "presets": {
+      "drinkWater": "Drink water",
+      "stretch": "Stretch",
+      "washFace": "Wash face"
+    }
+  },
+  "permission": {
+    "title": "Enable notifications",
+    "subtitle": "Required to sound your alarm",
+    "allow": "Allow Notifications"
+  },
+  "demo": {
+    "title": "Let's try it out!",
+    "subtitle": "Experience what your morning alarm will be like",
+    "start": "Start Demo",
+    "complete": "All set! Let's go",
+    "skip": "Skip"
+  },
+  "next": "Next",
+  "back": "Back"
+}

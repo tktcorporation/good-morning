@@ -1,0 +1,37 @@
+{
+  "title": "Home",
+  "tomorrowTarget": "Tomorrow's Target",
+  "todayTarget": "Today's Target",
+  "targetOff": "OFF",
+  "override": "Tomorrow only",
+  "todos": {
+    "title": "Morning Tasks",
+    "addTask": "Add task",
+    "placeholder": "New task",
+    "empty": "Add tasks to complete when your alarm rings"
+  },
+  "week": {
+    "title": "This Week",
+    "success": "{{count}}/{{total}} success"
+  },
+  "streak": {
+    "current": "{{count}} day streak",
+    "best": "Best: {{count}} days"
+  },
+  "review": {
+    "title": "{{date}}",
+    "target": "Target",
+    "actual": "Actual",
+    "result": "Result",
+    "todos": "Tasks",
+    "noRecord": "No record"
+  },
+  "targetEdit": {
+    "title": "Change wake time",
+    "tomorrowOnly": "Tomorrow only",
+    "changeDefault": "Change default",
+    "save": "Save"
+  },
+  "enabled": "Alarm on",
+  "disabled": "Alarm off"
+}
