@@ -9,6 +9,7 @@ import {
   addNotificationResponseListener,
   requestNotificationPermissions,
 } from '../src/services/notifications';
+import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 
@@ -19,16 +20,20 @@ export default function RootLayout() {
   const loadTarget = useWakeTargetStore((s) => s.loadTarget);
   const resetTodos = useWakeTargetStore((s) => s.resetTodos);
   const loadRecords = useWakeRecordStore((s) => s.loadRecords);
+  const updateRecord = useWakeRecordStore((s) => s.updateRecord);
+  const loadSession = useMorningSessionStore((s) => s.loadSession);
+  const clearSession = useMorningSessionStore((s) => s.clearSession);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     loadTarget();
     loadRecords();
+    loadSession();
     requestNotificationPermissions();
     AsyncStorage.getItem('onboarding-completed').then((val) => {
       setOnboardingDone(val === 'true');
     });
-  }, [loadTarget, loadRecords]);
+  }, [loadTarget, loadRecords, loadSession]);
 
   useEffect(() => {
     if (onboardingDone === false) {
@@ -38,6 +43,26 @@ export default function RootLayout() {
 
   useEffect(() => {
     const handleAlarmTrigger = () => {
+      // If there's an active session, finalize it as incomplete before starting new alarm
+      const session = useMorningSessionStore.getState().session;
+      if (session !== null) {
+        const now = new Date().toISOString();
+        const todoCompletionSeconds = Math.round(
+          (new Date(now).getTime() - new Date(session.startedAt).getTime()) / 1000,
+        );
+        updateRecord(session.recordId, {
+          todosCompleted: false,
+          todosCompletedAt: now,
+          todoCompletionSeconds,
+          todos: session.todos.map((todo, index) => ({
+            id: todo.id,
+            title: todo.title,
+            completedAt: todo.completedAt,
+            orderCompleted: todo.completed ? index + 1 : null,
+          })),
+        }).then(() => clearSession());
+      }
+
       resetTodos();
       router.push('/wakeup');
     };
@@ -49,7 +74,7 @@ export default function RootLayout() {
       responseSub.remove();
       receivedSub.remove();
     };
-  }, [router, resetTodos]);
+  }, [router, resetTodos, updateRecord, clearSession]);
 
   return (
     <Stack

@@ -10,6 +10,11 @@
     "placeholder": "新しいタスク",
     "empty": "アラームが鳴ったときに完了するタスクを追加しましょう"
   },
+  "morningRoutine": {
+    "title": "今朝のルーティン",
+    "progress": "{{completed}} / {{total}} 完了",
+    "banner": "朝のルーティン: {{completed}}/{{total}} 完了"
+  },
   "week": {
     "title": "今週",
     "success": "{{count}}/{{total}} 成功"

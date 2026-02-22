@@ -12,7 +12,18 @@ interface WakeRecordState {
   addRecord: (data: Omit<WakeRecord, 'id'>) => Promise<WakeRecord>;
   updateRecord: (
     id: string,
-    data: Partial<Pick<WakeRecord, 'healthKitWakeTime' | 'diffMinutes' | 'result'>>,
+    data: Partial<
+      Pick<
+        WakeRecord,
+        | 'healthKitWakeTime'
+        | 'diffMinutes'
+        | 'result'
+        | 'todos'
+        | 'todoCompletionSeconds'
+        | 'todosCompleted'
+        | 'todosCompletedAt'
+      >
+    >,
   ) => Promise<void>;
   getRecordsForPeriod: (start: Date, end: Date) => readonly WakeRecord[];
   getWeekStats: (weekStart: Date) => WakeStats;
@@ -55,7 +66,18 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
 
   updateRecord: async (
     id: string,
-    data: Partial<Pick<WakeRecord, 'healthKitWakeTime' | 'diffMinutes' | 'result'>>,
+    data: Partial<
+      Pick<
+        WakeRecord,
+        | 'healthKitWakeTime'
+        | 'diffMinutes'
+        | 'result'
+        | 'todos'
+        | 'todoCompletionSeconds'
+        | 'todosCompleted'
+        | 'todosCompletedAt'
+      >
+    >,
   ): Promise<void> => {
     const updated = get().records.map((r) => (r.id === id ? { ...r, ...data } : r));
     set({ records: updated });

@@ -25,3 +25,17 @@ export function getWeekDates(baseDate: Date = new Date()): readonly Date[] {
   }
   return dates;
 }
+
+/**
+ * 今日から過去6日分 + 今日の計7日分の Date 配列を返す。
+ * 常に直近の履歴が見えるため、曜日に関わらず過去データを表示できる。
+ */
+export function getRecentDates(baseDate: Date = new Date()): readonly Date[] {
+  const dates: Date[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() - i);
+    dates.push(d);
+  }
+  return dates;
+}
