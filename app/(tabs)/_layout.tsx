@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 import { colors } from '../../src/constants/theme';
 
@@ -11,6 +12,9 @@ function TabIcon({ label, focused }: { readonly label: string; readonly focused:
 }
 
 export default function TabLayout() {
+  const { t } = useTranslation('alarm');
+  const { t: tCommon } = useTranslation('common');
+
   return (
     <Tabs
       screenOptions={{
@@ -27,14 +31,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Alarms',
+          title: t('title'),
           tabBarIcon: ({ focused }) => <TabIcon label="⏰" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: tCommon('settings.title'),
           tabBarIcon: ({ focused }) => <TabIcon label="⚙" focused={focused} />,
         }}
       />

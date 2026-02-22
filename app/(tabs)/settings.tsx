@@ -1,14 +1,17 @@
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, spacing } from '../../src/constants/theme';
 
 export default function SettingsScreen() {
+  const { t } = useTranslation('common');
+
   return (
     <View style={styles.container}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <Text style={styles.text}>Good Morning v1.0.0</Text>
+        <Text style={styles.sectionTitle}>{t('settings.about')}</Text>
+        <Text style={styles.text}>{t('settings.version', { version: '1.0.0' })}</Text>
         <Text style={styles.description}>
-          Wake up better by completing tasks before dismissing your alarm.
+          {t('settings.description')}
         </Text>
       </View>
     </View>

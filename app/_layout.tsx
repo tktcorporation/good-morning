@@ -1,6 +1,7 @@
 import '../src/i18n';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../src/constants/theme';
 import {
   addNotificationReceivedListener,
@@ -10,6 +11,7 @@ import {
 import { useAlarmStore } from '../src/stores/alarm-store';
 
 export default function RootLayout() {
+  const { t } = useTranslation('alarm');
   const router = useRouter();
   const loadAlarms = useAlarmStore((s) => s.loadAlarms);
   const setActiveAlarm = useAlarmStore((s) => s.setActiveAlarm);
@@ -48,14 +50,14 @@ export default function RootLayout() {
       <Stack.Screen
         name="alarm/create"
         options={{
-          title: 'New Alarm',
+          title: t('newAlarm'),
           presentation: 'modal',
         }}
       />
       <Stack.Screen
         name="alarm/[id]"
         options={{
-          title: 'Edit Alarm',
+          title: t('editAlarm'),
           presentation: 'modal',
         }}
       />
