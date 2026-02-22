@@ -5,7 +5,8 @@ import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
-import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
+import { cancelAlarmNotifications } from '../src/services/notifications';
+import { isPlaying, playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
@@ -32,6 +33,8 @@ export default function WakeUpScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const clearNextOverride = useWakeTargetStore((s) => s.clearNextOverride);
+  const notificationIds = useWakeTargetStore((s) => s.notificationIds);
+  const setNotificationIds = useWakeTargetStore((s) => s.setNotificationIds);
 
   const addRecord = useWakeRecordStore((s) => s.addRecord);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
@@ -58,7 +61,9 @@ export default function WakeUpScreen() {
       };
     }
 
-    playAlarmSound();
+    if (!isPlaying()) {
+      playAlarmSound();
+    }
     Vibration.vibrate(VIBRATION_PATTERN, true);
 
     return () => {
@@ -78,6 +83,13 @@ export default function WakeUpScreen() {
   const handleDismiss = useCallback(() => {
     stopAlarmSound();
     Vibration.cancel();
+
+    // Cancel remaining scheduled notifications
+    if (notificationIds.length > 0) {
+      cancelAlarmNotifications(notificationIds).then(() => {
+        setNotificationIds([]);
+      });
+    }
 
     if (isDemo) {
       router.back();
@@ -149,6 +161,8 @@ export default function WakeUpScreen() {
     resolvedTime,
     todos,
     isDemo,
+    notificationIds,
+    setNotificationIds,
     addRecord,
     updateRecord,
     startSession,

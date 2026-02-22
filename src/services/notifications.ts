@@ -4,6 +4,11 @@ import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { resolveTimeForDate } from '../types/wake-target';
 
+/** Number of repeated notifications per alarm trigger */
+export const REPEAT_COUNT = 5;
+/** Interval between repeated notifications in seconds */
+export const REPEAT_INTERVAL_SECONDS = 30;
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -26,12 +31,13 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 function buildCalendarTrigger(
   time: AlarmTime,
   weekday?: number,
+  second?: number,
 ): Notifications.NotificationTriggerInput {
   const trigger: Record<string, unknown> = {
     type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
     hour: time.hour,
     minute: time.minute,
-    second: 0,
+    second: second ?? 0,
     repeats: weekday !== undefined,
   };
   if (weekday !== undefined) {
@@ -65,7 +71,7 @@ export async function scheduleWakeTargetNotifications(
   const content: Notifications.NotificationContentInput = {
     title: i18n.t('alarm:notification.title'),
     body: i18n.t('alarm:notification.defaultBody'),
-    sound: 'alarm.wav',
+    sound: 'alarm-notification.wav',
     data: { wakeTarget: true },
   };
 
@@ -79,21 +85,47 @@ export async function scheduleWakeTargetNotifications(
 
     if (time === null) continue; // Day is OFF
 
-    const calendarWeekday = dayOfWeekToCalendarWeekday(dayOfWeek);
-    const id = await Notifications.scheduleNotificationAsync({
-      content,
-      trigger: buildCalendarTrigger(time, calendarWeekday),
-    });
-    ids.push(id);
+    const baseCalendarWeekday = dayOfWeekToCalendarWeekday(dayOfWeek);
+    for (let i = 0; i < REPEAT_COUNT; i++) {
+      const baseSeconds = time.hour * 3600 + time.minute * 60;
+      const offsetSeconds = baseSeconds + i * REPEAT_INTERVAL_SECONDS;
+      const triggerHour = Math.floor(offsetSeconds / 3600) % 24;
+      const triggerMinute = Math.floor((offsetSeconds % 3600) / 60);
+      const triggerSecond = offsetSeconds % 60;
+      // Adjust weekday if offset crosses midnight
+      const dayOverflow = Math.floor(offsetSeconds / 86400);
+      const adjustedWeekday = ((baseCalendarWeekday - 1 + dayOverflow) % 7) + 1;
+      const id = await Notifications.scheduleNotificationAsync({
+        content,
+        trigger: buildCalendarTrigger(
+          { hour: triggerHour, minute: triggerMinute },
+          adjustedWeekday,
+          triggerSecond,
+        ),
+      });
+      ids.push(id);
+    }
   }
 
-  // If nextOverride exists, also schedule a one-time notification for tomorrow
+  // If nextOverride exists, also schedule one-time notifications
   if (target.nextOverride !== null) {
-    const id = await Notifications.scheduleNotificationAsync({
-      content,
-      trigger: buildCalendarTrigger(target.nextOverride.time),
-    });
-    ids.push(id);
+    const overrideTime = target.nextOverride.time;
+    for (let i = 0; i < REPEAT_COUNT; i++) {
+      const baseSeconds = overrideTime.hour * 3600 + overrideTime.minute * 60;
+      const offsetSeconds = baseSeconds + i * REPEAT_INTERVAL_SECONDS;
+      const triggerHour = Math.floor(offsetSeconds / 3600) % 24;
+      const triggerMinute = Math.floor((offsetSeconds % 3600) / 60);
+      const triggerSecond = offsetSeconds % 60;
+      const id = await Notifications.scheduleNotificationAsync({
+        content,
+        trigger: buildCalendarTrigger(
+          { hour: triggerHour, minute: triggerMinute },
+          undefined,
+          triggerSecond,
+        ),
+      });
+      ids.push(id);
+    }
   }
 
   return ids;

@@ -3,12 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Vibration } from 'react-native';
 import { colors } from '../src/constants/theme';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
+  cancelAlarmNotifications,
   requestNotificationPermissions,
+  scheduleWakeTargetNotifications,
 } from '../src/services/notifications';
+import { playAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
@@ -17,6 +21,9 @@ export default function RootLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();
+  const target = useWakeTargetStore((s) => s.target);
+  const notificationIds = useWakeTargetStore((s) => s.notificationIds);
+  const setNotificationIds = useWakeTargetStore((s) => s.setNotificationIds);
   const loadTarget = useWakeTargetStore((s) => s.loadTarget);
   const resetTodos = useWakeTargetStore((s) => s.resetTodos);
   const loadRecords = useWakeRecordStore((s) => s.loadRecords);
@@ -41,7 +48,26 @@ export default function RootLayout() {
     }
   }, [onboardingDone, router]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only reacting to target changes to avoid infinite loop
   useEffect(() => {
+    if (target === null) return;
+
+    if (target.enabled) {
+      scheduleWakeTargetNotifications(target, notificationIds).then((newIds) => {
+        setNotificationIds(newIds);
+      });
+    } else {
+      if (notificationIds.length > 0) {
+        cancelAlarmNotifications(notificationIds).then(() => {
+          setNotificationIds([]);
+        });
+      }
+    }
+  }, [target]);
+
+  useEffect(() => {
+    const VIBRATION_PATTERN = [500, 1000, 500, 1000];
+
     const handleAlarmTrigger = () => {
       // If there's an active session, finalize it as incomplete before starting new alarm
       const session = useMorningSessionStore.getState().session;
@@ -64,6 +90,8 @@ export default function RootLayout() {
       }
 
       resetTodos();
+      playAlarmSound();
+      Vibration.vibrate(VIBRATION_PATTERN, true);
       router.push('/wakeup');
     };
 
