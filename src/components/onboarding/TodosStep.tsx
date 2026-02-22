@@ -77,12 +77,12 @@ export function TodosStep({ onNext, onBack, todos, setTodos }: TodosStepProps) {
       </View>
 
       <ScrollView style={styles.todoList}>
-        {todos.map((todo, index) => (
-          <View key={`${todo}-${index}`} style={styles.todoItem}>
+        {todos.map((todo) => (
+          <View key={todo} style={styles.todoItem}>
             <Text style={styles.todoText}>{todo}</Text>
             <Pressable
               style={styles.removeButton}
-              onPress={() => handleRemoveTodo(index)}
+              onPress={() => handleRemoveTodo(todos.indexOf(todo))}
               accessibilityRole="button"
             >
               <Text style={styles.removeText}>{'x'}</Text>

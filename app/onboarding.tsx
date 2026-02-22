@@ -13,7 +13,8 @@ import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
 import { DEFAULT_WAKE_TARGET } from '../src/types/wake-target';
 
-const TOTAL_STEPS = 5;
+const STEP_KEYS = ['welcome', 'time', 'todos', 'permission', 'demo'] as const;
+const TOTAL_STEPS = STEP_KEYS.length;
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -55,8 +56,8 @@ export default function OnboardingScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.dots}>
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
+        {STEP_KEYS.map((key, i) => (
+          <View key={key} style={[styles.dot, i === step && styles.dotActive]} />
         ))}
       </View>
 
