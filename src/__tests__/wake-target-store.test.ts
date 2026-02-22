@@ -16,12 +16,12 @@ describe('useWakeTargetStore', () => {
     });
   });
 
-  test('loadTarget returns default when no stored data', async () => {
+  test('loadTarget returns disabled fallback when no stored data', async () => {
     mockGetItem.mockResolvedValue(null);
     await useWakeTargetStore.getState().loadTarget();
     const state = useWakeTargetStore.getState();
     expect(state.loaded).toBe(true);
-    expect(state.target).toBeNull();
+    expect(state.target).toEqual({ ...DEFAULT_WAKE_TARGET, enabled: false });
   });
 
   test('loadTarget restores stored target', async () => {
