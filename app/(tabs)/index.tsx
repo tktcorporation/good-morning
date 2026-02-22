@@ -2,20 +2,13 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import { RESULT_COLORS, borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import { formatTime } from '../../src/types/alarm';
-import type { WakeRecord, WakeResult } from '../../src/types/wake-record';
+import type { WakeRecord } from '../../src/types/wake-record';
 import { formatDateString } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
-
-const RESULT_COLORS: Readonly<Record<WakeResult, string>> = {
-  great: colors.success,
-  ok: colors.success,
-  late: colors.warning,
-  missed: colors.primary,
-};
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 

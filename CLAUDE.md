@@ -33,11 +33,9 @@
 
 ## Conventions
 - pnpm を使用 (npm, yarn は使わない)
-- Biome でリント・フォーマット (ESLint/Prettier は使わない)
+- Biome でリント・フォーマット (ESLint/Prettier は使わない) — 設定は biome.json を参照
 - パスエイリアス: `@/*` は `./src/*` にマッピング
-- Strict TypeScript: noUnusedLocals, noUnusedParameters, noImplicitReturns, noUncheckedIndexedAccess
-- Biome ルール: no explicit any, no non-null assertions, use const, organize imports
-- シングルクォート、セミコロンあり、2スペースインデント、100文字行幅
+- Strict TypeScript — 設定は tsconfig.json を参照
 
 ## Version Control
 - jj (Jujutsu) を使用（Git の代わりに）
