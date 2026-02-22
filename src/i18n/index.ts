@@ -4,10 +4,14 @@ import { initReactI18next } from 'react-i18next';
 
 import alarmEn from './locales/en/alarm.json';
 import commonEn from './locales/en/common.json';
+import dashboardEn from './locales/en/dashboard.json';
+import onboardingEn from './locales/en/onboarding.json';
 import statsEn from './locales/en/stats.json';
 import wakeupEn from './locales/en/wakeup.json';
 import alarmJa from './locales/ja/alarm.json';
 import commonJa from './locales/ja/common.json';
+import dashboardJa from './locales/ja/dashboard.json';
+import onboardingJa from './locales/ja/onboarding.json';
 import statsJa from './locales/ja/stats.json';
 import wakeupJa from './locales/ja/wakeup.json';
 
