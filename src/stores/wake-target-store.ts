@@ -6,6 +6,7 @@ import type { DayOverride, WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 
 const STORAGE_KEY = 'wake-target';
+const NOTIFICATION_IDS_KEY = 'notification-ids';
 
 interface WakeTargetState {
   readonly target: WakeTarget | null;
@@ -25,6 +26,7 @@ interface WakeTargetState {
   toggleTodoCompleted: (todoId: string) => void;
   resetTodos: () => void;
   areAllTodosCompleted: () => boolean;
+  setNotificationIds: (ids: readonly string[]) => Promise<void>;
 }
 
 async function persist(target: WakeTarget): Promise<void> {
@@ -37,13 +39,18 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   notificationIds: [],
 
   loadTarget: async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const [raw, rawIds] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(NOTIFICATION_IDS_KEY),
+    ]);
+    const notificationIds: readonly string[] =
+      rawIds !== null ? (JSON.parse(rawIds) as string[]) : [];
     if (raw !== null) {
       const parsed = JSON.parse(raw) as WakeTarget;
-      set({ target: parsed, loaded: true });
+      set({ target: parsed, loaded: true, notificationIds });
     } else {
       const fallback: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
-      set({ target: fallback, loaded: true });
+      set({ target: fallback, loaded: true, notificationIds });
     }
   },
 
@@ -156,6 +163,11 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const { target } = get();
     if (target === null || target.todos.length === 0) return true;
     return target.todos.every((t) => t.completed);
+  },
+
+  setNotificationIds: async (ids: readonly string[]) => {
+    set({ notificationIds: ids });
+    await AsyncStorage.setItem(NOTIFICATION_IDS_KEY, JSON.stringify(ids));
   },
 }));
 

@@ -136,4 +136,22 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.todos[0]?.id).toBe('todo-2');
     expect(useWakeTargetStore.getState().target?.todos[1]?.id).toBe('todo-1');
   });
+
+  test('setNotificationIds persists to AsyncStorage', async () => {
+    const ids = ['notif-1', 'notif-2', 'notif-3'];
+    await useWakeTargetStore.getState().setNotificationIds(ids);
+    expect(useWakeTargetStore.getState().notificationIds).toEqual(ids);
+    expect(mockSetItem).toHaveBeenCalledWith('notification-ids', JSON.stringify(ids));
+  });
+
+  test('loadTarget restores notificationIds from AsyncStorage', async () => {
+    const ids = ['notif-a', 'notif-b'];
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(null);
+      if (key === 'notification-ids') return Promise.resolve(JSON.stringify(ids));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().notificationIds).toEqual(ids);
+  });
 });
