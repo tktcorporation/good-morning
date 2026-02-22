@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StreakDisplay } from '../../src/components/stats/StreakDisplay';
 import { SummaryCards } from '../../src/components/stats/SummaryCards';
 import { WeeklyCalendar } from '../../src/components/stats/WeeklyCalendar';
-import { colors, fontSize, spacing } from '../../src/constants/theme';
+import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import { initHealthKit, isHealthKitInitialized } from '../../src/services/health';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 
 function getMonday(date: Date): Date {
@@ -25,6 +26,15 @@ export default function StatsScreen() {
   const getRecordsForPeriod = useWakeRecordStore((s) => s.getRecordsForPeriod);
 
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [healthKitConnected, setHealthKitConnected] = useState(() => isHealthKitInitialized());
+  const [healthKitConnecting, setHealthKitConnecting] = useState(false);
+
+  const handleConnectHealthKit = useCallback(async () => {
+    setHealthKitConnecting(true);
+    const success = await initHealthKit();
+    setHealthKitConnected(success);
+    setHealthKitConnecting(false);
+  }, []);
 
   const weekStats = useMemo(() => getWeekStats(weekStart), [getWeekStats, weekStart]);
   const currentStreak = useMemo(() => getCurrentStreak(), [getCurrentStreak]);
@@ -76,6 +86,25 @@ export default function StatsScreen() {
         onNextWeek={handleNextWeek}
       />
       <StreakDisplay currentStreak={currentStreak} longestStreak={weekStats.longestStreak} />
+
+      {/* HealthKit connection banner */}
+      {healthKitConnected ? (
+        <View style={styles.healthKitBanner}>
+          <Text style={styles.healthKitConnectedText}>{t('healthKit.connected')}</Text>
+        </View>
+      ) : (
+        <View style={styles.healthKitBanner}>
+          <Text style={styles.healthKitBannerText}>{t('healthKit.noData')}</Text>
+          <Text style={styles.healthKitBannerHint}>{t('healthKit.noDataHint')}</Text>
+          <Pressable
+            style={[styles.healthKitButton, healthKitConnecting && styles.healthKitButtonDisabled]}
+            onPress={handleConnectHealthKit}
+            disabled={healthKitConnecting}
+          >
+            <Text style={styles.healthKitButtonText}>{t('healthKit.connect')}</Text>
+          </Pressable>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -112,5 +141,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.md,
+  },
+  healthKitBanner: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  healthKitBannerText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+    marginBottom: spacing.xs,
+  },
+  healthKitBannerHint: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  healthKitConnectedText: {
+    fontSize: fontSize.sm,
+    color: colors.success,
+    fontWeight: '500',
+  },
+  healthKitButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  healthKitButtonDisabled: {
+    opacity: 0.5,
+  },
+  healthKitButtonText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: '600',
   },
 });
