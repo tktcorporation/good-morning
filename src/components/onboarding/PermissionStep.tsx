@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, fontSize, spacing } from '../../constants/theme';
 import { requestNotificationPermissions } from '../../services/notifications';
+import { StepButton } from './StepButton';
 
 interface PermissionStepProps {
   readonly onNext: () => void;
@@ -29,16 +30,14 @@ export function PermissionStep({ onNext, onBack }: PermissionStepProps) {
       </View>
 
       <View style={styles.buttons}>
-        <Pressable style={styles.backButton} onPress={onBack} accessibilityRole="button">
-          <Text style={styles.backButtonText}>{t('back')}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.allowButton, granted && styles.allowButtonGranted]}
+        <StepButton label={t('back')} onPress={onBack} variant="secondary" flex={1} />
+        <StepButton
+          label={granted ? t('next') : t('permission.allow')}
           onPress={granted ? onNext : handleAllow}
-          accessibilityRole="button"
-        >
-          <Text style={styles.allowButtonText}>{granted ? t('next') : t('permission.allow')}</Text>
-        </Pressable>
+          variant="primary"
+          flex={2}
+          style={granted ? { backgroundColor: colors.success } : undefined}
+        />
       </View>
     </View>
   );
@@ -73,33 +72,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-  },
-  backButton: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  backButtonText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-  },
-  allowButton: {
-    flex: 2,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  allowButtonGranted: {
-    backgroundColor: colors.success,
-  },
-  allowButtonText: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
   },
 });
