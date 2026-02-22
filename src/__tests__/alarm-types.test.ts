@@ -1,5 +1,28 @@
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
-import { createAlarmId, createTodoId, formatRepeatDays, formatTime } from '../types/alarm';
+import {
+  createAlarmId,
+  createTodoId,
+  formatRepeatDays,
+  formatTime,
+  getDayLabel,
+} from '../types/alarm';
+
+const mockT = (key: string): string => {
+  const translations: Record<string, string> = {
+    'repeat.once': 'Once',
+    'repeat.everyDay': 'Every day',
+    'repeat.weekdays': 'Weekdays',
+    'repeat.weekends': 'Weekends',
+    'dayLabelsShort.0': 'Sun',
+    'dayLabelsShort.1': 'Mon',
+    'dayLabelsShort.2': 'Tue',
+    'dayLabelsShort.3': 'Wed',
+    'dayLabelsShort.4': 'Thu',
+    'dayLabelsShort.5': 'Fri',
+    'dayLabelsShort.6': 'Sat',
+  };
+  return translations[key] ?? key;
+};
 
 describe('formatTime', () => {
   it('formats single-digit hours and minutes with leading zeros', () => {
@@ -23,29 +46,37 @@ describe('formatTime', () => {
   });
 });
 
+describe('getDayLabel', () => {
+  it('returns translated day label', () => {
+    expect(getDayLabel(0, mockT)).toBe('Sun');
+    expect(getDayLabel(1, mockT)).toBe('Mon');
+    expect(getDayLabel(6, mockT)).toBe('Sat');
+  });
+});
+
 describe('formatRepeatDays', () => {
   it('returns "Once" for empty days', () => {
-    expect(formatRepeatDays([])).toBe('Once');
+    expect(formatRepeatDays([], mockT)).toBe('Once');
   });
 
   it('returns "Every day" for all 7 days', () => {
     const days: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
-    expect(formatRepeatDays(days)).toBe('Every day');
+    expect(formatRepeatDays(days, mockT)).toBe('Every day');
   });
 
   it('returns "Weekdays" for Mon-Fri', () => {
     const days: DayOfWeek[] = [1, 2, 3, 4, 5];
-    expect(formatRepeatDays(days)).toBe('Weekdays');
+    expect(formatRepeatDays(days, mockT)).toBe('Weekdays');
   });
 
   it('returns "Weekends" for Sat-Sun', () => {
     const days: DayOfWeek[] = [0, 6];
-    expect(formatRepeatDays(days)).toBe('Weekends');
+    expect(formatRepeatDays(days, mockT)).toBe('Weekends');
   });
 
   it('returns individual day labels for custom days', () => {
     const days: DayOfWeek[] = [1, 3, 5];
-    expect(formatRepeatDays(days)).toBe('Mon, Wed, Fri');
+    expect(formatRepeatDays(days, mockT)).toBe('Mon, Wed, Fri');
   });
 });
 

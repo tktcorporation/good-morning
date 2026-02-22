@@ -1,6 +1,7 @@
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize } from '../constants/theme';
-import { DAY_LABELS, type DayOfWeek } from '../types/alarm';
+import { type DayOfWeek, getDayLabel } from '../types/alarm';
 
 interface DaySelectorProps {
   readonly selectedDays: readonly DayOfWeek[];
@@ -10,6 +11,8 @@ interface DaySelectorProps {
 const ALL_DAYS: readonly DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
 
 export function DaySelector({ selectedDays, onToggle }: DaySelectorProps) {
+  const { t } = useTranslation('common');
+
   return (
     <View style={styles.container}>
       {ALL_DAYS.map((day) => {
@@ -21,10 +24,10 @@ export function DaySelector({ selectedDays, onToggle }: DaySelectorProps) {
             onPress={() => onToggle(day)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: isSelected }}
-            accessibilityLabel={DAY_LABELS[day]}
+            accessibilityLabel={getDayLabel(day, t as (key: string) => string)}
           >
             <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
-              {DAY_LABELS[day]}
+              {getDayLabel(day, t as (key: string) => string)}
             </Text>
           </Pressable>
         );

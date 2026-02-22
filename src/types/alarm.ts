@@ -1,14 +1,18 @@
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-export const DAY_LABELS: Readonly<Record<DayOfWeek, string>> = {
-  0: 'Sun',
-  1: 'Mon',
-  2: 'Tue',
-  3: 'Wed',
-  4: 'Thu',
-  5: 'Fri',
-  6: 'Sat',
+export const DAY_KEYS: Readonly<Record<DayOfWeek, string>> = {
+  0: '0',
+  1: '1',
+  2: '2',
+  3: '3',
+  4: '4',
+  5: '5',
+  6: '6',
 } as const;
+
+export function getDayLabel(day: DayOfWeek, t: (key: string) => string): string {
+  return t(`dayLabelsShort.${DAY_KEYS[day]}`);
+}
 
 export interface TodoItem {
   readonly id: string;
@@ -52,20 +56,20 @@ export function formatTime(time: AlarmTime): string {
   return `${h}:${m}`;
 }
 
-export function formatRepeatDays(days: readonly DayOfWeek[]): string {
+export function formatRepeatDays(days: readonly DayOfWeek[], t: (key: string) => string): string {
   if (days.length === 0) {
-    return 'Once';
+    return t('repeat.once');
   }
   if (days.length === 7) {
-    return 'Every day';
+    return t('repeat.everyDay');
   }
   const weekdays: readonly DayOfWeek[] = [1, 2, 3, 4, 5];
   const weekend: readonly DayOfWeek[] = [0, 6];
   if (weekdays.every((d) => days.includes(d)) && !weekend.some((d) => days.includes(d))) {
-    return 'Weekdays';
+    return t('repeat.weekdays');
   }
   if (weekend.every((d) => days.includes(d)) && !weekdays.some((d) => days.includes(d))) {
-    return 'Weekends';
+    return t('repeat.weekends');
   }
-  return days.map((d) => DAY_LABELS[d]).join(', ');
+  return days.map((d) => getDayLabel(d, t)).join(', ');
 }
