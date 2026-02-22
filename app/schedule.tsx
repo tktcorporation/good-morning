@@ -29,12 +29,12 @@ function InlineTimePicker({
   readonly onChange: (time: AlarmTime) => void;
 }) {
   const adjustHour = (delta: number) => {
-    const hour = ((time.hour + delta + 24) % 24);
+    const hour = (time.hour + delta + 24) % 24;
     onChange({ ...time, hour });
   };
 
   const adjustMinute = (delta: number) => {
-    const minute = ((time.minute + delta * 5 + 60) % 60);
+    const minute = (time.minute + delta * 5 + 60) % 60;
     onChange({ ...time, minute });
   };
 
@@ -118,17 +118,12 @@ export default function ScheduleScreen() {
           const state = getDayState(day, target.dayOverrides);
           const testDate = new Date();
           testDate.setDate(testDate.getDate() + ((day - testDate.getDay() + 7) % 7));
-          const resolvedTime = resolveTimeForDate(
-            { ...target, nextOverride: null },
-            testDate,
-          );
+          const resolvedTime = resolveTimeForDate({ ...target, nextOverride: null }, testDate);
           const hasOverride = state !== 'default';
           const isEditing = editingDay === day && state === 'custom';
           const override = target.dayOverrides[day];
           const customTime =
-            override !== undefined && override.type === 'custom'
-              ? override.time
-              : defaultTime;
+            override !== undefined && override.type === 'custom' ? override.time : defaultTime;
 
           return (
             <View key={day}>

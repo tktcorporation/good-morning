@@ -63,7 +63,12 @@ export default function OnboardingScreen() {
       <View style={styles.content}>
         {step === 0 && <WelcomeStep onNext={handleNext} />}
         {step === 1 && (
-          <TimeStep onNext={handleNext} onBack={handleBack} time={defaultTime} setTime={setDefaultTime} />
+          <TimeStep
+            onNext={handleNext}
+            onBack={handleBack}
+            time={defaultTime}
+            setTime={setDefaultTime}
+          />
         )}
         {step === 2 && (
           <TodosStep onNext={handleNext} onBack={handleBack} todos={todos} setTodos={setTodos} />

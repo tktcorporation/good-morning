@@ -26,10 +26,7 @@ export default function DayReviewScreen() {
   const { date } = useLocalSearchParams<{ readonly date: string }>();
   const records = useWakeRecordStore((s) => s.records);
 
-  const record = useMemo(
-    () => records.find((r) => r.date === date),
-    [records, date],
-  );
+  const record = useMemo(() => records.find((r) => r.date === date), [records, date]);
 
   if (record === undefined) {
     return (
@@ -45,13 +42,8 @@ export default function DayReviewScreen() {
   const resultLabel = RESULT_LABELS[record.result];
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={styles.dateTitle}>
-        {t('review.title', { date: date ?? '' })}
-      </Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.dateTitle}>{t('review.title', { date: date ?? '' })}</Text>
 
       {/* Result Badge */}
       <View style={[styles.resultBadge, { backgroundColor: resultColor }]}>
@@ -90,15 +82,8 @@ export default function DayReviewScreen() {
           <Text style={styles.sectionTitle}>{t('review.todos')}</Text>
           {record.todos.map((todo) => (
             <View key={todo.id} style={styles.todoRow}>
-              <Text style={styles.todoCheckmark}>
-                {todo.completedAt !== null ? '✓' : '○'}
-              </Text>
-              <Text
-                style={[
-                  styles.todoText,
-                  todo.completedAt !== null && styles.todoCompleted,
-                ]}
-              >
+              <Text style={styles.todoCheckmark}>{todo.completedAt !== null ? '✓' : '○'}</Text>
+              <Text style={[styles.todoText, todo.completedAt !== null && styles.todoCompleted]}>
                 {todo.title}
               </Text>
             </View>

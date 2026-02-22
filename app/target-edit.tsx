@@ -56,9 +56,7 @@ export default function TargetEditScreen() {
           <Pressable style={styles.pickerButton} onPress={() => adjustHour(1)}>
             <Text style={styles.pickerArrow}>{'▲'}</Text>
           </Pressable>
-          <Text style={styles.pickerValue}>
-            {hour.toString().padStart(2, '0')}
-          </Text>
+          <Text style={styles.pickerValue}>{hour.toString().padStart(2, '0')}</Text>
           <Pressable style={styles.pickerButton} onPress={() => adjustHour(-1)}>
             <Text style={styles.pickerArrow}>{'▼'}</Text>
           </Pressable>
@@ -70,9 +68,7 @@ export default function TargetEditScreen() {
           <Pressable style={styles.pickerButton} onPress={() => adjustMinute(1)}>
             <Text style={styles.pickerArrow}>{'▲'}</Text>
           </Pressable>
-          <Text style={styles.pickerValue}>
-            {minute.toString().padStart(2, '0')}
-          </Text>
+          <Text style={styles.pickerValue}>{minute.toString().padStart(2, '0')}</Text>
           <Pressable style={styles.pickerButton} onPress={() => adjustMinute(-1)}>
             <Text style={styles.pickerArrow}>{'▼'}</Text>
           </Pressable>
@@ -81,31 +77,15 @@ export default function TargetEditScreen() {
 
       {/* Mode Selection */}
       <View style={styles.modeSection}>
-        <Pressable
-          style={styles.modeRow}
-          onPress={() => setMode('tomorrowOnly')}
-        >
-          <View
-            style={[
-              styles.radio,
-              mode === 'tomorrowOnly' && styles.radioSelected,
-            ]}
-          >
+        <Pressable style={styles.modeRow} onPress={() => setMode('tomorrowOnly')}>
+          <View style={[styles.radio, mode === 'tomorrowOnly' && styles.radioSelected]}>
             {mode === 'tomorrowOnly' && <View style={styles.radioInner} />}
           </View>
           <Text style={styles.modeLabel}>{t('targetEdit.tomorrowOnly')}</Text>
         </Pressable>
 
-        <Pressable
-          style={styles.modeRow}
-          onPress={() => setMode('changeDefault')}
-        >
-          <View
-            style={[
-              styles.radio,
-              mode === 'changeDefault' && styles.radioSelected,
-            ]}
-          >
+        <Pressable style={styles.modeRow} onPress={() => setMode('changeDefault')}>
+          <View style={[styles.radio, mode === 'changeDefault' && styles.radioSelected]}>
             {mode === 'changeDefault' && <View style={styles.radioInner} />}
           </View>
           <Text style={styles.modeLabel}>{t('targetEdit.changeDefault')}</Text>

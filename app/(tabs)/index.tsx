@@ -1,14 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
@@ -54,10 +47,7 @@ function getWeekDates(): readonly Date[] {
   return dates;
 }
 
-function getRecordForDate(
-  records: readonly WakeRecord[],
-  date: Date,
-): WakeRecord | undefined {
+function getRecordForDate(records: readonly WakeRecord[], date: Date): WakeRecord | undefined {
   const dateStr = formatDateString(date);
   return records.find((r) => r.date === dateStr);
 }
@@ -83,10 +73,7 @@ export default function DashboardScreen() {
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),
     [target, tomorrow],
   );
-  const tomorrowLabel = useMemo(
-    () => `Tomorrow, ${getDayLabel(tomorrow)}`,
-    [tomorrow],
-  );
+  const tomorrowLabel = useMemo(() => `Tomorrow, ${getDayLabel(tomorrow)}`, [tomorrow]);
 
   const weekDates = useMemo(() => getWeekDates(), []);
   const weekStart = weekDates[0];
@@ -139,16 +126,12 @@ export default function DashboardScreen() {
     );
   }
 
-  const successCount = weekStats !== null
-    ? weekStats.resultCounts.great + weekStats.resultCounts.ok
-    : 0;
+  const successCount =
+    weekStats !== null ? weekStats.resultCounts.great + weekStats.resultCounts.ok : 0;
   const totalCount = weekStats?.totalRecords ?? 0;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-    >
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Target Time Display */}
       <Pressable style={styles.targetSection} onPress={handleTargetPress}>
         <Text style={styles.targetLabel}>{tomorrowLabel}</Text>
@@ -170,10 +153,7 @@ export default function DashboardScreen() {
             <View key={todo.id} style={styles.todoRow}>
               <View style={styles.todoBullet} />
               <Text style={styles.todoText}>{todo.title}</Text>
-              <Pressable
-                style={styles.todoDeleteButton}
-                onPress={() => handleRemoveTodo(todo.id)}
-              >
+              <Pressable style={styles.todoDeleteButton} onPress={() => handleRemoveTodo(todo.id)}>
                 <Text style={styles.todoDeleteText}>{'x'}</Text>
               </Pressable>
             </View>
@@ -205,10 +185,7 @@ export default function DashboardScreen() {
             const record = getRecordForDate(weekRecords, date);
             const today = new Date();
             const isToday = formatDateString(date) === formatDateString(today);
-            const dotColor =
-              record !== undefined
-                ? RESULT_COLORS[record.result]
-                : colors.disabled;
+            const dotColor = record !== undefined ? RESULT_COLORS[record.result] : colors.disabled;
 
             return (
               <Pressable
@@ -216,17 +193,10 @@ export default function DashboardScreen() {
                 style={styles.dayColumn}
                 onPress={() => handleDayPress(date)}
               >
-                <Text
-                  style={[
-                    styles.dayLabel,
-                    isToday && styles.dayLabelToday,
-                  ]}
-                >
+                <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
                   {DAY_NAMES[date.getDay()]}
                 </Text>
-                <View
-                  style={[styles.dayDot, { backgroundColor: dotColor }]}
-                />
+                <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
                 <Text style={styles.dayNumber}>{`${date.getDate()}`}</Text>
               </Pressable>
             );
@@ -240,9 +210,7 @@ export default function DashboardScreen() {
           <View style={styles.statCard}>
             <Text style={styles.statEmoji}>{'🔥'}</Text>
             <Text style={styles.statValue}>{`${currentStreak}`}</Text>
-            <Text style={styles.statLabel}>
-              {t('streak.current', { count: currentStreak })}
-            </Text>
+            <Text style={styles.statLabel}>{t('streak.current', { count: currentStreak })}</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>

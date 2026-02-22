@@ -37,9 +37,7 @@ export function PermissionStep({ onNext, onBack }: PermissionStepProps) {
           onPress={granted ? onNext : handleAllow}
           accessibilityRole="button"
         >
-          <Text style={styles.allowButtonText}>
-            {granted ? t('next') : t('permission.allow')}
-          </Text>
+          <Text style={styles.allowButtonText}>{granted ? t('next') : t('permission.allow')}</Text>
         </Pressable>
       </View>
     </View>

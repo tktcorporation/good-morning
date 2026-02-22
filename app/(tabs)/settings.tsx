@@ -44,9 +44,7 @@ export default function SettingsScreen() {
       {/* Alarm Toggle */}
       <View style={styles.section}>
         <View style={styles.row}>
-          <Text style={styles.rowTitle}>
-            {isEnabled ? tDash('enabled') : tDash('disabled')}
-          </Text>
+          <Text style={styles.rowTitle}>{isEnabled ? tDash('enabled') : tDash('disabled')}</Text>
           <Switch
             value={isEnabled}
             onValueChange={handleToggleEnabled}
@@ -63,9 +61,7 @@ export default function SettingsScreen() {
           <Text
             style={[
               styles.statusBadge,
-              notificationStatus === 'granted'
-                ? styles.statusGranted
-                : styles.statusDenied,
+              notificationStatus === 'granted' ? styles.statusGranted : styles.statusDenied,
             ]}
           >
             {notificationStatus === 'granted'

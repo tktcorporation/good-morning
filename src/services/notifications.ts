@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import i18n from '@/i18n';
-import type { Alarm, AlarmTime, DayOfWeek } from '../types/alarm';
+import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { resolveTimeForDate } from '../types/wake-target';
 
@@ -43,45 +43,6 @@ function buildCalendarTrigger(
 function dayOfWeekToCalendarWeekday(day: DayOfWeek): number {
   // iOS calendar: 1=Sunday, 2=Monday, ..., 7=Saturday
   return day + 1;
-}
-
-export async function scheduleAlarmNotifications(alarm: Alarm): Promise<readonly string[]> {
-  const hasPermission = await requestNotificationPermissions();
-  if (!hasPermission) {
-    return [];
-  }
-
-  // Cancel existing notifications for this alarm
-  await cancelAlarmNotifications(alarm.notificationIds);
-
-  const notificationContent: Notifications.NotificationContentInput = {
-    title: i18n.t('alarm:notification.title'),
-    body: alarm.label || i18n.t('alarm:notification.defaultBody'),
-    sound: 'alarm.wav',
-    data: { alarmId: alarm.id },
-  };
-
-  const ids: string[] = [];
-
-  if (alarm.repeatDays.length === 0) {
-    // One-time alarm
-    const id = await Notifications.scheduleNotificationAsync({
-      content: notificationContent,
-      trigger: buildCalendarTrigger(alarm.time),
-    });
-    ids.push(id);
-  } else {
-    // Repeating alarm for each day
-    for (const day of alarm.repeatDays) {
-      const id = await Notifications.scheduleNotificationAsync({
-        content: notificationContent,
-        trigger: buildCalendarTrigger(alarm.time, dayOfWeekToCalendarWeekday(day)),
-      });
-      ids.push(id);
-    }
-  }
-
-  return ids;
 }
 
 export async function cancelAlarmNotifications(notificationIds: readonly string[]): Promise<void> {
