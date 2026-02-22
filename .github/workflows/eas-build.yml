@@ -26,6 +26,9 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  NODE_VERSION: '22'
+
 jobs:
   build:
     name: EAS Build
@@ -40,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
