@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../src/constants/theme';
+import { borderRadius, colors, fontSize, semanticColors, spacing } from '../../src/constants/theme';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 
 export default function SettingsScreen() {
@@ -130,11 +130,11 @@ const styles = StyleSheet.create({
   },
   statusGranted: {
     color: colors.success,
-    backgroundColor: 'rgba(46, 213, 115, 0.15)',
+    backgroundColor: semanticColors.successLight,
   },
   statusDenied: {
     color: colors.warning,
-    backgroundColor: 'rgba(255, 165, 2, 0.15)',
+    backgroundColor: semanticColors.warningLight,
   },
   text: {
     fontSize: fontSize.md,
