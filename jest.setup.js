@@ -54,7 +54,7 @@ jest.mock('./src/i18n', () => ({
 
 // Mock react-i18next
 jest.mock('react-i18next', () => ({
-  useTranslation: (ns) => ({
+  useTranslation: (_ns) => ({
     t: (key, params) => {
       if (params) return `${key}:${JSON.stringify(params)}`;
       return key;

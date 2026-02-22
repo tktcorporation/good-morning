@@ -29,7 +29,7 @@ export function TodoListItem({
         accessibilityState={{ checked: item.completed }}
         accessibilityLabel={t('accessibilityTask', { title: item.title })}
       >
-        {item.completed && <Text style={styles.checkmark}>✓</Text>}
+        {item.completed && <Text style={styles.checkmark}>{'✓'}</Text>}
       </Pressable>
 
       {editable ? (
@@ -51,7 +51,7 @@ export function TodoListItem({
           accessibilityRole="button"
           accessibilityLabel={t('accessibilityDeleteTask', { title: item.title })}
         >
-          <Text style={styles.deleteText}>×</Text>
+          <Text style={styles.deleteText}>{'×'}</Text>
         </Pressable>
       )}
     </View>

@@ -89,7 +89,8 @@ export default function WakeUpScreen() {
     <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
       {/* Current time */}
       <Text style={styles.currentTime}>
-        {currentTime.getHours().toString().padStart(2, '0')}:
+        {currentTime.getHours().toString().padStart(2, '0')}
+        {':'}
         {currentTime.getMinutes().toString().padStart(2, '0')}
       </Text>
 

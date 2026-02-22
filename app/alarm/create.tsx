@@ -88,21 +88,21 @@ export default function CreateAlarmScreen() {
         <View style={styles.timePicker}>
           <View style={styles.timeColumn}>
             <Pressable style={styles.timeButton} onPress={() => handleTimeChange('hour', 1)}>
-              <Text style={styles.timeButtonText}>▲</Text>
+              <Text style={styles.timeButtonText}>{'▲'}</Text>
             </Pressable>
             <Text style={styles.timeDisplay}>{hour.toString().padStart(2, '0')}</Text>
             <Pressable style={styles.timeButton} onPress={() => handleTimeChange('hour', -1)}>
-              <Text style={styles.timeButtonText}>▼</Text>
+              <Text style={styles.timeButtonText}>{'▼'}</Text>
             </Pressable>
           </View>
-          <Text style={styles.timeSeparator}>:</Text>
+          <Text style={styles.timeSeparator}>{':'}</Text>
           <View style={styles.timeColumn}>
             <Pressable style={styles.timeButton} onPress={() => handleTimeChange('minute', 1)}>
-              <Text style={styles.timeButtonText}>▲</Text>
+              <Text style={styles.timeButtonText}>{'▲'}</Text>
             </Pressable>
             <Text style={styles.timeDisplay}>{minute.toString().padStart(2, '0')}</Text>
             <Pressable style={styles.timeButton} onPress={() => handleTimeChange('minute', -1)}>
-              <Text style={styles.timeButtonText}>▼</Text>
+              <Text style={styles.timeButtonText}>{'▼'}</Text>
             </Pressable>
           </View>
         </View>

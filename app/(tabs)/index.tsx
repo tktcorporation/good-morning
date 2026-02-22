@@ -70,7 +70,7 @@ export default function AlarmsScreen() {
         accessibilityRole="button"
         accessibilityLabel={t('createNewAlarm')}
       >
-        <Text style={styles.fabText}>+</Text>
+        <Text style={styles.fabText}>{'+'}</Text>
       </Pressable>
     </View>
   );

@@ -15,6 +15,7 @@
         "useExhaustiveDependencies": "warn"
       },
       "style": {
+        "noJsxLiterals": "error",
         "noNonNullAssertion": "error",
         "useConst": "error",
         "useExportType": "error",
