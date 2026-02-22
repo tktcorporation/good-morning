@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../constants/theme';
-import type { Alarm } from '../types/alarm';
+import type { Alarm, TranslateFn } from '../types/alarm';
 import { formatRepeatDays, formatTime } from '../types/alarm';
 
 interface AlarmCardProps {
@@ -30,7 +30,7 @@ export function AlarmCard({ alarm, onPress, onToggle }: AlarmCardProps) {
             <Text style={[styles.label, { color: textColor }]}>{alarm.label}</Text>
           )}
           <Text style={styles.repeat}>
-            {formatRepeatDays(alarm.repeatDays, t as (key: string) => string)}
+            {formatRepeatDays(alarm.repeatDays, t as TranslateFn)}
           </Text>
           {todoCount > 0 && (
             <Text style={styles.todoCount}>{tAlarm('tasksToComplete', { count: todoCount })}</Text>

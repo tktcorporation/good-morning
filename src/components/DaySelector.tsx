@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize } from '../constants/theme';
-import { type DayOfWeek, getDayLabel } from '../types/alarm';
+import { type DayOfWeek, type TranslateFn, getDayLabel } from '../types/alarm';
 
 interface DaySelectorProps {
   readonly selectedDays: readonly DayOfWeek[];
@@ -24,10 +24,10 @@ export function DaySelector({ selectedDays, onToggle }: DaySelectorProps) {
             onPress={() => onToggle(day)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: isSelected }}
-            accessibilityLabel={getDayLabel(day, t as (key: string) => string)}
+            accessibilityLabel={getDayLabel(day, t as TranslateFn)}
           >
             <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
-              {getDayLabel(day, t as (key: string) => string)}
+              {getDayLabel(day, t as TranslateFn)}
             </Text>
           </Pressable>
         );

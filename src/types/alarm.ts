@@ -1,3 +1,5 @@
+export type TranslateFn = (key: string) => string;
+
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export const DAY_KEYS: Readonly<Record<DayOfWeek, string>> = {
@@ -10,7 +12,7 @@ export const DAY_KEYS: Readonly<Record<DayOfWeek, string>> = {
   6: '6',
 } as const;
 
-export function getDayLabel(day: DayOfWeek, t: (key: string) => string): string {
+export function getDayLabel(day: DayOfWeek, t: TranslateFn): string {
   return t(`dayLabelsShort.${DAY_KEYS[day]}`);
 }
 
@@ -56,7 +58,7 @@ export function formatTime(time: AlarmTime): string {
   return `${h}:${m}`;
 }
 
-export function formatRepeatDays(days: readonly DayOfWeek[], t: (key: string) => string): string {
+export function formatRepeatDays(days: readonly DayOfWeek[], t: TranslateFn): string {
   if (days.length === 0) {
     return t('repeat.once');
   }
