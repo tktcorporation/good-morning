@@ -58,7 +58,7 @@ jobs:
           EXPO_ASC_API_KEY_P8_BASE64: ${{ secrets.EXPO_ASC_API_KEY_P8_BASE64 }}
 
       - name: Build iOS (internal distribution)
-        run: eas build --platform ios --profile preview --non-interactive --clear-cache
+        run: eas build --platform ios --profile preview --non-interactive
         env:
           EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
           EXPO_ASC_ISSUER_ID: ${{ secrets.EXPO_ASC_ISSUER_ID }}
