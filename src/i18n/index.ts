@@ -31,8 +31,8 @@ i18n.use(initReactI18next).init({
   fallbackLng: DEFAULT_LANGUAGE,
   defaultNS: 'common',
   resources: {
-    ja: { common: commonJa, alarm: alarmJa, wakeup: wakeupJa, stats: statsJa },
-    en: { common: commonEn, alarm: alarmEn, wakeup: wakeupEn, stats: statsEn },
+    ja: { common: commonJa, alarm: alarmJa, wakeup: wakeupJa, stats: statsJa, onboarding: onboardingJa, dashboard: dashboardJa },
+    en: { common: commonEn, alarm: alarmEn, wakeup: wakeupEn, stats: statsEn, onboarding: onboardingEn, dashboard: dashboardEn },
   },
   interpolation: { escapeValue: false },
 });
