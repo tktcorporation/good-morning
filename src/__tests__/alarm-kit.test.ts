@@ -1,29 +1,5 @@
 // src/__tests__/alarm-kit.test.ts
-
-// Mock expo-alarm-kit before imports
-const mockConfigure = jest.fn().mockReturnValue(true);
-const mockRequestAuthorization = jest.fn().mockResolvedValue('authorized');
-const mockScheduleRepeatingAlarm = jest.fn().mockResolvedValue(true);
-const mockScheduleAlarm = jest.fn().mockResolvedValue(true);
-const mockCancelAlarm = jest.fn().mockResolvedValue(true);
-const mockGetAllAlarms = jest.fn().mockReturnValue([]);
-const mockGenerateUUID = jest.fn().mockReturnValue('test-uuid-1');
-const mockGetLaunchPayload = jest.fn().mockReturnValue(null);
-
-jest.mock('expo-alarm-kit', () => ({
-  configure: mockConfigure,
-  requestAuthorization: mockRequestAuthorization,
-  scheduleRepeatingAlarm: mockScheduleRepeatingAlarm,
-  scheduleAlarm: mockScheduleAlarm,
-  cancelAlarm: mockCancelAlarm,
-  getAllAlarms: mockGetAllAlarms,
-  generateUUID: mockGenerateUUID,
-  getLaunchPayload: mockGetLaunchPayload,
-}));
-
-import type { DayOfWeek } from '../types/alarm';
-import type { WakeTarget } from '../types/wake-target';
-import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
+import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
   cancelAllAlarms,
@@ -31,10 +7,30 @@ import {
   initializeAlarmKit,
   scheduleWakeTargetAlarm,
 } from '../services/alarm-kit';
+import type { WakeTarget } from '../types/wake-target';
+import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
+
+const mockConfigure = AlarmKit.configure as jest.Mock;
+const mockRequestAuthorization = AlarmKit.requestAuthorization as jest.Mock;
+const mockScheduleRepeatingAlarm = AlarmKit.scheduleRepeatingAlarm as jest.Mock;
+const mockScheduleAlarm = AlarmKit.scheduleAlarm as jest.Mock;
+const mockCancelAlarm = AlarmKit.cancelAlarm as jest.Mock;
+const mockGetAllAlarms = AlarmKit.getAllAlarms as jest.Mock;
+const mockGenerateUUID = AlarmKit.generateUUID as jest.Mock;
+const mockGetLaunchPayload = AlarmKit.getLaunchPayload as jest.Mock;
 
 describe('alarm-kit service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset defaults
+    mockConfigure.mockReturnValue(true);
+    mockRequestAuthorization.mockResolvedValue('authorized');
+    mockScheduleRepeatingAlarm.mockResolvedValue(true);
+    mockScheduleAlarm.mockResolvedValue(true);
+    mockCancelAlarm.mockResolvedValue(true);
+    mockGetAllAlarms.mockReturnValue([]);
+    mockGenerateUUID.mockReturnValue('test-uuid-1');
+    mockGetLaunchPayload.mockReturnValue(null);
   });
 
   describe('initializeAlarmKit', () => {
@@ -56,7 +52,6 @@ describe('alarm-kit service', () => {
   describe('scheduleWakeTargetAlarm', () => {
     test('cancels existing alarms and schedules repeating alarm for enabled days', async () => {
       mockGetAllAlarms.mockReturnValue(['old-alarm-1']);
-      // Generate unique UUIDs for each call
       let uuidCounter = 0;
       mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
 
@@ -92,8 +87,8 @@ describe('alarm-kit service', () => {
         ...DEFAULT_WAKE_TARGET,
         defaultTime: { hour: 7, minute: 0 },
         dayOverrides: {
-          0: { type: 'off' },  // Sunday off
-          6: { type: 'off' },  // Saturday off
+          0: { type: 'off' }, // Sunday off
+          6: { type: 'off' }, // Saturday off
         },
         enabled: true,
       };
@@ -118,7 +113,7 @@ describe('alarm-kit service', () => {
         ...DEFAULT_WAKE_TARGET,
         defaultTime: { hour: 7, minute: 0 },
         dayOverrides: {
-          6: { type: 'custom', time: { hour: 8, minute: 30 } },  // Saturday custom
+          6: { type: 'custom', time: { hour: 8, minute: 30 } }, // Saturday custom
         },
         enabled: true,
       };

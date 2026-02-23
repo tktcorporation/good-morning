@@ -64,6 +64,20 @@ jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
+// Mock expo-alarm-kit
+jest.mock('expo-alarm-kit', () => ({
+  configure: jest.fn(() => true),
+  requestAuthorization: jest.fn().mockResolvedValue('authorized'),
+  generateUUID: jest.fn(() => 'mock-uuid'),
+  scheduleAlarm: jest.fn().mockResolvedValue(true),
+  scheduleRepeatingAlarm: jest.fn().mockResolvedValue(true),
+  cancelAlarm: jest.fn().mockResolvedValue(true),
+  getAllAlarms: jest.fn(() => []),
+  clearAllAlarms: jest.fn(),
+  removeAlarm: jest.fn(),
+  getLaunchPayload: jest.fn(() => null),
+}));
+
 // Mock expo-router
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
@@ -79,4 +93,16 @@ jest.mock('expo-router', () => ({
   Tabs: {
     Screen: 'Screen',
   },
+}));
+
+// Mock expo-alarm-kit
+jest.mock('expo-alarm-kit', () => ({
+  configure: jest.fn().mockReturnValue(true),
+  requestAuthorization: jest.fn().mockResolvedValue('authorized'),
+  scheduleRepeatingAlarm: jest.fn().mockResolvedValue(true),
+  scheduleAlarm: jest.fn().mockResolvedValue(true),
+  cancelAlarm: jest.fn().mockResolvedValue(true),
+  getAllAlarms: jest.fn().mockReturnValue([]),
+  generateUUID: jest.fn().mockReturnValue('test-uuid-1'),
+  getLaunchPayload: jest.fn().mockReturnValue(null),
 }));

@@ -1,3 +1,4 @@
+import type { LaunchPayload } from 'expo-alarm-kit';
 import {
   cancelAlarm,
   configure,
@@ -8,7 +9,6 @@ import {
   scheduleAlarm,
   scheduleRepeatingAlarm,
 } from 'expo-alarm-kit';
-import type { LaunchPayload } from 'expo-alarm-kit';
 
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
@@ -72,9 +72,7 @@ function groupDaysByTime(
   return groups;
 }
 
-export async function scheduleWakeTargetAlarm(
-  target: WakeTarget,
-): Promise<readonly string[]> {
+export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<readonly string[]> {
   // Cancel all existing alarms first
   await cancelAllAlarms();
 
