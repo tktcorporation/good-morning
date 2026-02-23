@@ -6,11 +6,15 @@ import { useTranslation } from 'react-i18next';
 import { Vibration } from 'react-native';
 import { colors } from '../src/constants/theme';
 import {
+  cancelAllAlarms,
+  checkLaunchPayload,
+  initializeAlarmKit,
+  scheduleWakeTargetAlarm,
+} from '../src/services/alarm-kit';
+import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
-  cancelAlarmNotifications,
   requestNotificationPermissions,
-  scheduleWakeTargetNotifications,
 } from '../src/services/notifications';
 import { playAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -23,8 +27,7 @@ export default function RootLayout() {
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();
   const target = useWakeTargetStore((s) => s.target);
-  const notificationIds = useWakeTargetStore((s) => s.notificationIds);
-  const setNotificationIds = useWakeTargetStore((s) => s.setNotificationIds);
+  const setAlarmIds = useWakeTargetStore((s) => s.setAlarmIds);
   const loadTarget = useWakeTargetStore((s) => s.loadTarget);
   const resetTodos = useWakeTargetStore((s) => s.resetTodos);
   const loadRecords = useWakeRecordStore((s) => s.loadRecords);
@@ -34,12 +37,21 @@ export default function RootLayout() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initialization effect — runs once on mount
   useEffect(() => {
     loadTarget();
     loadRecords();
     loadSession();
     loadSettings();
     requestNotificationPermissions();
+    initializeAlarmKit();
+
+    // Check if launched from alarm dismiss
+    const payload = checkLaunchPayload();
+    if (payload !== null) {
+      router.push('/wakeup');
+    }
+
     AsyncStorage.getItem('onboarding-completed').then((val) => {
       setOnboardingDone(val === 'true');
     });
@@ -56,15 +68,13 @@ export default function RootLayout() {
     if (target === null) return;
 
     if (target.enabled) {
-      scheduleWakeTargetNotifications(target, notificationIds).then((newIds) => {
-        setNotificationIds(newIds);
+      scheduleWakeTargetAlarm(target).then((newIds) => {
+        setAlarmIds(newIds);
       });
     } else {
-      if (notificationIds.length > 0) {
-        cancelAlarmNotifications(notificationIds).then(() => {
-          setNotificationIds([]);
-        });
-      }
+      cancelAllAlarms().then(() => {
+        setAlarmIds([]);
+      });
     }
   }, [target]);
 
