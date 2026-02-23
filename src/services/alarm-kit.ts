@@ -1,15 +1,3 @@
-import type { LaunchPayload } from 'expo-alarm-kit';
-import {
-  cancelAlarm,
-  configure,
-  generateUUID,
-  getAllAlarms,
-  getLaunchPayload,
-  requestAuthorization,
-  scheduleAlarm,
-  scheduleRepeatingAlarm,
-} from 'expo-alarm-kit';
-
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 
@@ -17,14 +5,45 @@ export const APP_GROUP_ID = 'group.com.tktcorporation.goodmorning';
 
 // biome-ignore lint/suspicious/noConsole: AlarmKit errors need logging for debugging
 const logError = console.error;
+// biome-ignore lint/suspicious/noConsole: AlarmKit availability needs logging
+const logWarn = console.warn;
+
+// Lazy-load expo-alarm-kit to avoid crash when native module is unavailable
+type AlarmKitModule = typeof import('expo-alarm-kit');
+let alarmKit: AlarmKitModule | null = null;
+let alarmKitChecked = false;
+
+function getAlarmKit(): AlarmKitModule | null {
+  if (alarmKitChecked) return alarmKit;
+  alarmKitChecked = true;
+  try {
+    alarmKit = require('expo-alarm-kit') as AlarmKitModule;
+    return alarmKit;
+  } catch {
+    logWarn('[AlarmKit] Native module not available — alarm scheduling disabled');
+    return null;
+  }
+}
+
+export function isAlarmKitAvailable(): boolean {
+  return getAlarmKit() !== null;
+}
+
+export interface LaunchPayload {
+  alarmId: string;
+  payload: string | null;
+}
 
 export async function initializeAlarmKit(): Promise<'authorized' | 'denied'> {
-  const configured = configure(APP_GROUP_ID);
+  const kit = getAlarmKit();
+  if (kit === null) return 'denied';
+
+  const configured = kit.configure(APP_GROUP_ID);
   if (!configured) {
     logError('[AlarmKit] Failed to configure App Group');
     return 'denied';
   }
-  const status = await requestAuthorization();
+  const status = await kit.requestAuthorization();
   return status === 'authorized' ? 'authorized' : 'denied';
 }
 
@@ -76,7 +95,8 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
   // Cancel all existing alarms first
   await cancelAllAlarms();
 
-  if (!target.enabled) return [];
+  const kit = getAlarmKit();
+  if (kit === null || !target.enabled) return [];
 
   const ids: string[] = [];
   const alarmTitle = 'Good Morning';
@@ -84,8 +104,8 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
   // Schedule repeating alarms grouped by time
   const groups = groupDaysByTime(target);
   for (const [, { time, weekdays }] of groups) {
-    const id = generateUUID();
-    const success = await scheduleRepeatingAlarm({
+    const id = kit.generateUUID();
+    const success = await kit.scheduleRepeatingAlarm({
       id,
       hour: time.hour,
       minute: time.minute,
@@ -99,7 +119,7 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
 
   // Schedule one-time alarm for nextOverride
   if (target.nextOverride !== null) {
-    const id = generateUUID();
+    const id = kit.generateUUID();
     const now = new Date();
     const alarmDate = new Date(now);
     alarmDate.setHours(target.nextOverride.time.hour, target.nextOverride.time.minute, 0, 0);
@@ -109,7 +129,7 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
     }
     const epochSeconds = Math.floor(alarmDate.getTime() / 1000);
 
-    const success = await scheduleAlarm({
+    const success = await kit.scheduleAlarm({
       id,
       epochSeconds,
       title: alarmTitle,
@@ -123,11 +143,16 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
 }
 
 export async function cancelAllAlarms(): Promise<void> {
-  const existing = getAllAlarms();
-  const cancellations = existing.map((id) => cancelAlarm(id));
+  const kit = getAlarmKit();
+  if (kit === null) return;
+
+  const existing = kit.getAllAlarms();
+  const cancellations = existing.map((id) => kit.cancelAlarm(id));
   await Promise.all(cancellations);
 }
 
 export function checkLaunchPayload(): LaunchPayload | null {
-  return getLaunchPayload();
+  const kit = getAlarmKit();
+  if (kit === null) return null;
+  return kit.getLaunchPayload();
 }

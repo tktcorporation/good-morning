@@ -37,6 +37,7 @@
     "changeDefault": "Change default",
     "save": "Save"
   },
+  "alarmKitUnavailable": "Alarm features unavailable. Please rebuild the Development Build.",
   "enabled": "Alarm on",
   "disabled": "Alarm off"
 }

@@ -37,6 +37,7 @@
     "changeDefault": "デフォルトを変更",
     "save": "保存"
   },
+  "alarmKitUnavailable": "アラーム機能が利用できません。Development Buildを再ビルドしてください。",
   "enabled": "アラームON",
   "disabled": "アラームOFF"
 }
