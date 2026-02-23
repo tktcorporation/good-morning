@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
+import { cancelAllAlarms } from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
-import { cancelAlarmNotifications } from '../src/services/notifications';
-import { isPlaying, playAlarmSound, stopAlarmSound } from '../src/services/sound';
+import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
@@ -31,8 +31,8 @@ export default function WakeUpScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const clearNextOverride = useWakeTargetStore((s) => s.clearNextOverride);
-  const notificationIds = useWakeTargetStore((s) => s.notificationIds);
-  const setNotificationIds = useWakeTargetStore((s) => s.setNotificationIds);
+  const alarmIds = useWakeTargetStore((s) => s.alarmIds);
+  const setAlarmIds = useWakeTargetStore((s) => s.setAlarmIds);
 
   const addRecord = useWakeRecordStore((s) => s.addRecord);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
@@ -61,13 +61,11 @@ export default function WakeUpScreen() {
       };
     }
 
-    if (!isPlaying()) {
-      playAlarmSound(target?.soundId);
-    }
+    // In non-demo mode, AlarmKit already played the system alarm.
+    // Just start vibration as haptic feedback supplement.
     Vibration.vibrate(VIBRATION_PATTERN, true);
 
     return () => {
-      stopAlarmSound();
       Vibration.cancel();
     };
   }, [isDemo, target?.soundId]);
@@ -84,10 +82,10 @@ export default function WakeUpScreen() {
     stopAlarmSound();
     Vibration.cancel();
 
-    // Cancel remaining scheduled notifications
-    if (notificationIds.length > 0) {
-      cancelAlarmNotifications(notificationIds).then(() => {
-        setNotificationIds([]);
+    // Cancel remaining scheduled alarms
+    if (alarmIds.length > 0) {
+      cancelAllAlarms().then(() => {
+        setAlarmIds([]);
       });
     }
 
@@ -162,8 +160,8 @@ export default function WakeUpScreen() {
     todos,
     isDemo,
     dayBoundaryHour,
-    notificationIds,
-    setNotificationIds,
+    alarmIds,
+    setAlarmIds,
     addRecord,
     updateRecord,
     startSession,

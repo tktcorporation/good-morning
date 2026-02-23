@@ -13,7 +13,7 @@ describe('useWakeTargetStore', () => {
     useWakeTargetStore.setState({
       target: null,
       loaded: false,
-      notificationIds: [],
+      alarmIds: [],
     });
   });
 
@@ -138,22 +138,62 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.todos[1]?.id).toBe('todo-1');
   });
 
-  test('setNotificationIds persists to AsyncStorage', async () => {
-    const ids = ['notif-1', 'notif-2', 'notif-3'];
-    await useWakeTargetStore.getState().setNotificationIds(ids);
-    expect(useWakeTargetStore.getState().notificationIds).toEqual(ids);
-    expect(mockSetItem).toHaveBeenCalledWith('notification-ids', JSON.stringify(ids));
+  test('setAlarmIds persists to AsyncStorage', async () => {
+    const ids = ['alarm-1', 'alarm-2', 'alarm-3'];
+    await useWakeTargetStore.getState().setAlarmIds(ids);
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(ids);
+    expect(mockSetItem).toHaveBeenCalledWith('alarm-ids', JSON.stringify(ids));
   });
 
-  test('loadTarget restores notificationIds from AsyncStorage', async () => {
-    const ids = ['notif-a', 'notif-b'];
+  test('loadTarget restores alarmIds from AsyncStorage', async () => {
+    const ids = ['alarm-a', 'alarm-b'];
     mockGetItem.mockImplementation((key: string) => {
       if (key === 'wake-target') return Promise.resolve(null);
+      if (key === 'alarm-ids') return Promise.resolve(JSON.stringify(ids));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(ids);
+  });
+
+  test('loadTarget falls back to legacy notification-ids key', async () => {
+    const ids = ['legacy-a', 'legacy-b'];
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(null);
+      if (key === 'alarm-ids') return Promise.resolve(null);
       if (key === 'notification-ids') return Promise.resolve(JSON.stringify(ids));
       return Promise.resolve(null);
     });
     await useWakeTargetStore.getState().loadTarget();
-    expect(useWakeTargetStore.getState().notificationIds).toEqual(ids);
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(ids);
+  });
+
+  test('setSoundId updates the sound and persists', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    mockSetItem.mockClear();
+    await useWakeTargetStore.getState().setSoundId('chime');
+    expect(useWakeTargetStore.getState().target?.soundId).toBe('chime');
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"soundId":"chime"'),
+    );
+  });
+
+  test('loadTarget migrates missing soundId to default', async () => {
+    // Simulate a stored target without soundId (pre-migration data)
+    const legacyTarget = {
+      defaultTime: { hour: 7, minute: 0 },
+      dayOverrides: {},
+      nextOverride: null,
+      todos: [],
+      enabled: true,
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.soundId).toBe(DEFAULT_SOUND_ID);
   });
 
   test('setSoundId updates the sound and persists', async () => {
