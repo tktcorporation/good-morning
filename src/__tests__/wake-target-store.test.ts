@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
@@ -153,5 +154,33 @@ describe('useWakeTargetStore', () => {
     });
     await useWakeTargetStore.getState().loadTarget();
     expect(useWakeTargetStore.getState().notificationIds).toEqual(ids);
+  });
+
+  test('setSoundId updates the sound and persists', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    mockSetItem.mockClear();
+    await useWakeTargetStore.getState().setSoundId('chime');
+    expect(useWakeTargetStore.getState().target?.soundId).toBe('chime');
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"soundId":"chime"'),
+    );
+  });
+
+  test('loadTarget migrates missing soundId to default', async () => {
+    // Simulate a stored target without soundId (pre-migration data)
+    const legacyTarget = {
+      defaultTime: { hour: 7, minute: 0 },
+      dayOverrides: {},
+      nextOverride: null,
+      todos: [],
+      enabled: true,
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.soundId).toBe(DEFAULT_SOUND_ID);
   });
 });

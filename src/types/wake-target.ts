@@ -1,3 +1,4 @@
+import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 export type DayOverride =
@@ -14,6 +15,7 @@ export interface WakeTarget {
   readonly nextOverride: NextOverride | null;
   readonly todos: readonly TodoItem[];
   readonly enabled: boolean;
+  readonly soundId: string;
 }
 
 /**
@@ -45,4 +47,5 @@ export const DEFAULT_WAKE_TARGET: WakeTarget = {
   nextOverride: null,
   todos: [],
   enabled: true,
+  soundId: DEFAULT_SOUND_ID,
 };

@@ -7,6 +7,7 @@ describe('resolveTimeForDate', () => {
     nextOverride: null,
     todos: [],
     enabled: true,
+    soundId: 'default',
   };
 
   test('returns defaultTime when no overrides', () => {

@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import i18n from '@/i18n';
+import { getAlarmSound } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { resolveTimeForDate } from '../types/wake-target';
@@ -71,7 +72,7 @@ export async function scheduleWakeTargetNotifications(
   const content: Notifications.NotificationContentInput = {
     title: i18n.t('alarm:notification.title'),
     body: i18n.t('alarm:notification.defaultBody'),
-    sound: 'alarm-notification.wav',
+    sound: getAlarmSound(target.soundId).notificationFile,
     data: { wakeTarget: true },
   };
 

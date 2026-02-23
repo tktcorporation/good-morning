@@ -14,20 +14,29 @@ export async function configureAudioSession(): Promise<void> {
   });
 }
 
-export async function playAlarmSound(): Promise<void> {
+function getAssetSource(soundId: string): number {
+  switch (soundId) {
+    case 'chime':
+      return require('../../assets/sounds/chime.mp3');
+    case 'birds':
+      return require('../../assets/sounds/birds.mp3');
+    case 'bell':
+      return require('../../assets/sounds/bell.mp3');
+    default:
+      return require('../../assets/sounds/alarm.wav');
+  }
+}
+
+export async function playAlarmSound(soundId?: string): Promise<void> {
   try {
     await stopAlarmSound();
     await configureAudioSession();
 
-    const { sound } = await Audio.Sound.createAsync(
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('../../assets/sounds/alarm.wav'),
-      {
-        isLooping: true,
-        volume: 1.0,
-        shouldPlay: true,
-      },
-    );
+    const { sound } = await Audio.Sound.createAsync(getAssetSource(soundId ?? 'default'), {
+      isLooping: true,
+      volume: 1.0,
+      shouldPlay: true,
+    });
 
     currentSound = sound;
   } catch (error) {
