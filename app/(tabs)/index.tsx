@@ -11,6 +11,7 @@ import {
   RESULT_COLORS,
   spacing,
 } from '../../src/constants/theme';
+import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
@@ -51,6 +52,7 @@ export default function DashboardScreen() {
   const getProgress = useMorningSessionStore((s) => s.getProgress);
 
   const [newTodoText, setNewTodoText] = useState('');
+  const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
 
   const tomorrow = useMemo(() => getTomorrowDate(), []);
   const resolvedTime = useMemo(
@@ -155,6 +157,13 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* AlarmKit Unavailable Error */}
+      {!alarmKitAvailable && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{t('alarmKitUnavailable')}</Text>
+        </View>
+      )}
+
       {/* Target Time Display */}
       <Pressable style={styles.targetSection} onPress={handleTargetPress}>
         <Text style={styles.targetLabel}>{tomorrowLabel}</Text>
@@ -301,6 +310,19 @@ const styles = StyleSheet.create({
   loadingText: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(233, 69, 96, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  errorBannerText: {
+    color: colors.primaryLight,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
   },
 
   // Target Time
