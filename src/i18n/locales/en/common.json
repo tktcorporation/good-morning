@@ -50,7 +50,8 @@
     "alarmSound": "Alarm Sound",
     "dayBoundary": "Day Boundary",
     "dayBoundaryDescription": "Hours before midnight count as the previous day",
-    "dayBoundaryHour": "{{hour}}:00"
+    "dayBoundaryHour": "{{hour}}:00",
+    "healthKit": "Health Integration"
   },
   "alarmSounds": {
     "default": "Default",

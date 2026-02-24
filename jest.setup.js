@@ -106,3 +106,26 @@ jest.mock('expo-alarm-kit', () => ({
   generateUUID: jest.fn().mockReturnValue('test-uuid-1'),
   getLaunchPayload: jest.fn().mockReturnValue(null),
 }));
+
+// Mock react-native-svg
+jest.mock('react-native-svg', () => {
+  const React = require('react');
+  const MockSvg = (props) => React.createElement('Svg', props);
+  MockSvg.displayName = 'Svg';
+  const createMockComponent = (name) => {
+    const Component = (props) => React.createElement(name, props);
+    Component.displayName = name;
+    return Component;
+  };
+  return {
+    __esModule: true,
+    default: MockSvg,
+    Svg: MockSvg,
+    Rect: createMockComponent('Rect'),
+    Line: createMockComponent('Line'),
+    Text: createMockComponent('SvgText'),
+    G: createMockComponent('G'),
+    Defs: createMockComponent('Defs'),
+    ClipPath: createMockComponent('ClipPath'),
+  };
+});

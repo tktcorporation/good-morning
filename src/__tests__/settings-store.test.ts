@@ -9,6 +9,7 @@ describe('useSettingsStore', () => {
     jest.clearAllMocks();
     useSettingsStore.setState({
       dayBoundaryHour: 3,
+      healthKitEnabled: false,
       loaded: false,
     });
   });
@@ -35,6 +36,28 @@ describe('useSettingsStore', () => {
       'app-settings',
       expect.stringContaining('"dayBoundaryHour":5'),
     );
+  });
+
+  test('healthKitEnabled defaults to false', async () => {
+    mockGetItem.mockResolvedValue(null);
+    await useSettingsStore.getState().loadSettings();
+    expect(useSettingsStore.getState().healthKitEnabled).toBe(false);
+  });
+
+  test('setHealthKitEnabled persists to AsyncStorage', async () => {
+    await useSettingsStore.getState().loadSettings();
+    await useSettingsStore.getState().setHealthKitEnabled(true);
+    expect(useSettingsStore.getState().healthKitEnabled).toBe(true);
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'app-settings',
+      expect.stringContaining('"healthKitEnabled":true'),
+    );
+  });
+
+  test('loadSettings restores healthKitEnabled', async () => {
+    mockGetItem.mockResolvedValue(JSON.stringify({ dayBoundaryHour: 3, healthKitEnabled: true }));
+    await useSettingsStore.getState().loadSettings();
+    expect(useSettingsStore.getState().healthKitEnabled).toBe(true);
   });
 
   test('setDayBoundaryHour clamps to 0-6 range', async () => {

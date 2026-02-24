@@ -22,6 +22,18 @@
     "connected": "Health Connected",
     "noData": "No sleep data found",
     "noDataHint": "Check permissions in the Health app",
-    "wakeTime": "HealthKit Wake Time"
+    "wakeTime": "HealthKit Wake Time",
+    "sleep": {
+      "title": "Sleep Data",
+      "lastNight": "Last Night's Sleep",
+      "bedtime": "Bedtime",
+      "wakeTime": "Wake Time",
+      "duration": "Duration",
+      "noData": "No Data",
+      "connect": "Connect to Health",
+      "targetTime": "Target Time",
+      "dismissedAt": "Dismissed At",
+      "hours": "{{h}}h {{m}}m"
+    }
   }
 }
