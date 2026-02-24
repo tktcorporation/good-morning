@@ -24,7 +24,7 @@ export function useDailySummary(date: Date): DailySummary {
   const record = records.find((r) => r.date === dateStr);
 
   useEffect(() => {
-    if (!healthKitEnabled || !isHealthKitInitialized()) {
+    if (!(healthKitEnabled && isHealthKitInitialized())) {
       setLoading(false);
       setSleep(null);
       return;

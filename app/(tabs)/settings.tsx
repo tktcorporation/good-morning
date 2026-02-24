@@ -69,16 +69,19 @@ export default function SettingsScreen() {
     [setDayBoundaryHour],
   );
 
-  const handleToggleHealthKit = useCallback(async (value: boolean) => {
-    if (value) {
-      const success = await initHealthKit();
-      if (success) {
-        await setHealthKitEnabled(true);
+  const handleToggleHealthKit = useCallback(
+    async (value: boolean) => {
+      if (value) {
+        const success = await initHealthKit();
+        if (success) {
+          await setHealthKitEnabled(true);
+        }
+      } else {
+        await setHealthKitEnabled(false);
       }
-    } else {
-      await setHealthKitEnabled(false);
-    }
-  }, [setHealthKitEnabled]);
+    },
+    [setHealthKitEnabled],
+  );
 
   const isEnabled = target?.enabled ?? false;
 

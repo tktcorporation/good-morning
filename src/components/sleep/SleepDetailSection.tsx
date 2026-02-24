@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../constants/theme';

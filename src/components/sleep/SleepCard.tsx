@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
@@ -68,7 +68,10 @@ export function SleepCard({ summary }: SleepCardProps) {
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <Text style={styles.durationText}>
-          {t('healthKit.sleep.hours', { h: Math.floor(sleep.totalMinutes / 60), m: sleep.totalMinutes % 60 })}
+          {t('healthKit.sleep.hours', {
+            h: Math.floor(sleep.totalMinutes / 60),
+            m: sleep.totalMinutes % 60,
+          })}
         </Text>
       </View>
 

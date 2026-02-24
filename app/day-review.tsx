@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SleepDetailSection } from '../src/components/sleep/SleepDetailSection';
 import {
   borderRadius,
   colors,
@@ -10,6 +11,7 @@ import {
   RESULT_COLORS,
   spacing,
 } from '../src/constants/theme';
+import { useDailySummary } from '../src/hooks/useDailySummary';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { formatTime } from '../src/types/alarm';
 import type { WakeResult } from '../src/types/wake-record';
@@ -27,6 +29,9 @@ export default function DayReviewScreen() {
   const records = useWakeRecordStore((s) => s.records);
 
   const record = useMemo(() => records.find((r) => r.date === date), [records, date]);
+
+  const reviewDate = useMemo(() => new Date(`${date}T00:00:00`), [date]);
+  const summary = useDailySummary(reviewDate);
 
   if (record === undefined) {
     return (
@@ -75,6 +80,9 @@ export default function DayReviewScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Sleep Data */}
+      <SleepDetailSection summary={summary} />
 
       {/* Todo Completion */}
       {record.todos.length > 0 && (
