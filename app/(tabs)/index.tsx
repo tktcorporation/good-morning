@@ -13,7 +13,7 @@ import {
   spacing,
 } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
-import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
+import { cancelSnooze, isAlarmKitAvailable } from '../../src/services/alarm-kit';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
@@ -90,6 +90,12 @@ export default function DashboardScreen() {
   // Complete session when all todos are done
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
+
+    // Cancel pending snooze alarm
+    const snoozeId = useMorningSessionStore.getState().snoozeAlarmId;
+    if (snoozeId !== null) {
+      cancelSnooze(snoozeId);
+    }
 
     const now = new Date();
     const todosCompletedAt = now.toISOString();
