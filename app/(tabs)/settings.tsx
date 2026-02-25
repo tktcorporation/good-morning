@@ -13,6 +13,7 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
+import { initHealthKit } from '../../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
@@ -28,6 +29,8 @@ export default function SettingsScreen() {
   const setSoundId = useWakeTargetStore((s) => s.setSoundId);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
+  const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
+  const setHealthKitEnabled = useSettingsStore((s) => s.setHealthKitEnabled);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
@@ -64,6 +67,20 @@ export default function SettingsScreen() {
       await setDayBoundaryHour(hour);
     },
     [setDayBoundaryHour],
+  );
+
+  const handleToggleHealthKit = useCallback(
+    async (value: boolean) => {
+      if (value) {
+        const success = await initHealthKit();
+        if (success) {
+          await setHealthKitEnabled(true);
+        }
+      } else {
+        await setHealthKitEnabled(false);
+      }
+    },
+    [setHealthKitEnabled],
   );
 
   const isEnabled = target?.enabled ?? false;
@@ -137,6 +154,19 @@ export default function SettingsScreen() {
               </Text>
             </Pressable>
           ))}
+        </View>
+      </View>
+
+      {/* HealthKit Integration */}
+      <View style={commonStyles.section}>
+        <View style={styles.row}>
+          <Text style={styles.rowTitle}>{t('settings.healthKit')}</Text>
+          <Switch
+            value={healthKitEnabled}
+            onValueChange={handleToggleHealthKit}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.text}
+          />
         </View>
       </View>
 

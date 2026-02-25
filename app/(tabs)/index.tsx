@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
 import {
   borderRadius,
@@ -11,6 +12,7 @@ import {
   RESULT_COLORS,
   spacing,
 } from '../../src/constants/theme';
+import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
@@ -53,6 +55,9 @@ export default function DashboardScreen() {
 
   const [newTodoText, setNewTodoText] = useState('');
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
+
+  const today = useMemo(() => new Date(), []);
+  const todaySummary = useDailySummary(today);
 
   const tomorrow = useMemo(() => getTomorrowDate(), []);
   const resolvedTime = useMemo(
@@ -268,6 +273,11 @@ export default function DashboardScreen() {
             );
           })}
         </View>
+      </View>
+
+      {/* Sleep Summary */}
+      <View style={commonStyles.section}>
+        <SleepCard summary={todaySummary} />
       </View>
 
       {/* Streak + Stats */}

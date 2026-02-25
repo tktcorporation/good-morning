@@ -22,6 +22,18 @@
     "connected": "ヘルスケア連携済み",
     "noData": "睡眠データが見つかりません",
     "noDataHint": "ヘルスケアアプリで権限を確認してください",
-    "wakeTime": "HealthKit起床時刻"
+    "wakeTime": "HealthKit起床時刻",
+    "sleep": {
+      "title": "睡眠データ",
+      "lastNight": "昨晩の睡眠",
+      "bedtime": "就寝時刻",
+      "wakeTime": "起床時刻",
+      "duration": "睡眠時間",
+      "noData": "データなし",
+      "connect": "ヘルスケアと連携する",
+      "targetTime": "目標時刻",
+      "dismissedAt": "解除時刻",
+      "hours": "{{h}}時間{{m}}分"
+    }
   }
 }

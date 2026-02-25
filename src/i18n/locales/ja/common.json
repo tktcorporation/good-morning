@@ -50,7 +50,8 @@
     "alarmSound": "アラーム音",
     "dayBoundary": "日付変更ライン",
     "dayBoundaryDescription": "この時刻より前は前日として扱います",
-    "dayBoundaryHour": "{{hour}}:00"
+    "dayBoundaryHour": "{{hour}}:00",
+    "healthKit": "ヘルスケア連携"
   },
   "alarmSounds": {
     "default": "デフォルト",
