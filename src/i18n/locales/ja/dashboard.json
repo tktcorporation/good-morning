@@ -13,7 +13,9 @@
   "morningRoutine": {
     "title": "今朝のルーティン",
     "progress": "{{completed}} / {{total}} 完了",
-    "banner": "朝のルーティン: {{completed}}/{{total}} 完了"
+    "banner": "朝のルーティン: {{completed}}/{{total}} 完了",
+    "snoozeCountdown": "次のスヌーズまで {{time}}",
+    "allDone": "全タスク完了!"
   },
   "week": {
     "title": "今週",
