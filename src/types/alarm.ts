@@ -27,27 +27,6 @@ export interface AlarmTime {
   readonly minute: number;
 }
 
-export interface Alarm {
-  readonly id: string;
-  readonly time: AlarmTime;
-  readonly enabled: boolean;
-  readonly label: string;
-  readonly todos: readonly TodoItem[];
-  readonly repeatDays: readonly DayOfWeek[];
-  readonly notificationIds: readonly string[];
-}
-
-export interface AlarmFormData {
-  readonly time: AlarmTime;
-  readonly label: string;
-  readonly todos: readonly TodoItem[];
-  readonly repeatDays: readonly DayOfWeek[];
-}
-
-export function createAlarmId(): string {
-  return `alarm_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
 export function createTodoId(): string {
   return `todo_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }

@@ -8,7 +8,6 @@ import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 
 const STORAGE_KEY = 'wake-target';
 const ALARM_IDS_KEY = 'alarm-ids';
-const LEGACY_NOTIFICATION_IDS_KEY = 'notification-ids';
 
 interface WakeTargetState {
   readonly target: WakeTarget | null;
@@ -42,17 +41,11 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   alarmIds: [],
 
   loadTarget: async () => {
-    const [raw, rawIds, rawLegacyIds] = await Promise.all([
+    const [raw, rawIds] = await Promise.all([
       AsyncStorage.getItem(STORAGE_KEY),
       AsyncStorage.getItem(ALARM_IDS_KEY),
-      AsyncStorage.getItem(LEGACY_NOTIFICATION_IDS_KEY),
     ]);
-    const alarmIds: readonly string[] =
-      rawIds !== null
-        ? (JSON.parse(rawIds) as string[])
-        : rawLegacyIds !== null
-          ? (JSON.parse(rawLegacyIds) as string[])
-          : [];
+    const alarmIds: readonly string[] = rawIds !== null ? (JSON.parse(rawIds) as string[]) : [];
     if (raw !== null) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       const migrated: WakeTarget = {
