@@ -27,7 +27,10 @@ import { getLogicalDateString } from '../src/utils/date';
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 const DEMO_SOUND_DURATION_MS = 3000;
 
-/** Re-schedule snooze if session has incomplete TODOs. */
+/**
+ * スヌーズ再発火時の処理。既存セッションに未完了TODOがあれば次のスヌーズを再スケジュールする。
+ * 新しいレコードやセッションは作成しない — 初回 dismiss 時に作成済みのものを継続利用する。
+ */
 function handleSnoozeRefire(): void {
   const sessionState = useMorningSessionStore.getState();
   if (sessionState.session !== null && !sessionState.areAllCompleted()) {
@@ -50,7 +53,10 @@ function handleSnoozeRefire(): void {
   }
 }
 
-/** Schedule a snooze alarm and store its ID/fire time in the session store. */
+/**
+ * スヌーズアラームをスケジュールし、ID と発火予定時刻をストアに保存する。
+ * ID は cancelSnooze() でのキャンセルに、発火時刻はダッシュボードのカウントダウン表示に使われる。
+ */
 function scheduleAndStoreSnooze(): void {
   scheduleSnooze().then((snoozeId) => {
     if (snoozeId !== null) {
@@ -66,6 +72,7 @@ export default function WakeUpScreen() {
   const { t: tCommon } = useTranslation('common');
   const { demo, snooze } = useLocalSearchParams<{ demo?: string; snooze?: string }>();
   const isDemo = demo === 'true';
+  // _layout.tsx が launch payload の isSnooze フラグを解析し、?snooze=true パラメータとして渡す
   const isSnooze = snooze === 'true';
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -181,10 +188,12 @@ export default function WakeUpScreen() {
             }));
             startSession(record.id, dateStr, sessionTodos);
 
-            // Schedule snooze (fires in 9 min if TODOs not completed)
+            // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
+            // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
             scheduleAndStoreSnooze();
 
-            // Start Live Activity
+            // セッション＋スヌーズの両方が確定してから Live Activity を開始する。
+            // スヌーズの発火時刻をカウントダウン表示に使うため、この順序が必要。
             const liveActivityTodos = todos.map((td) => ({
               id: td.id,
               title: td.title,

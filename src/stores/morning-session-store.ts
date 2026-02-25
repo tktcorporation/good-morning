@@ -7,8 +7,11 @@ const STORAGE_KEY = 'morning-session';
 interface MorningSessionState {
   readonly session: MorningSession | null;
   readonly loaded: boolean;
+  /** スケジュール済みスヌーズの AlarmKit ID。キャンセル時に使用。メモリのみ（永続化しない）。 */
   readonly snoozeAlarmId: string | null;
+  /** 次のスヌーズ発火予定時刻（ISO文字列）。ダッシュボードのカウントダウン表示に使用。メモリのみ。 */
   readonly snoozeFiresAt: string | null;
+  /** アクティブな Live Activity の ID。更新・終了時に使用。メモリのみ。 */
   readonly liveActivityId: string | null;
   loadSession: () => Promise<void>;
   startSession: (recordId: string, date: string, todos: readonly SessionTodo[]) => Promise<void>;
@@ -78,6 +81,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     await persistSession(updated);
   },
 
+  /** セッションと全てのエフェメラル状態（snooze, Live Activity）をクリアする。 */
   clearSession: async () => {
     set({ session: null, snoozeAlarmId: null, snoozeFiresAt: null, liveActivityId: null });
     await persistSession(null);

@@ -35,7 +35,9 @@ export default function RootLayout() {
     loadSettings();
     initializeAlarmKit();
 
-    // Check if launched from alarm dismiss
+    // AlarmKit の dismissPayload からスヌーズ経由かどうかを判定する。
+    // scheduleSnooze() が payload に { isSnooze: true } を埋め込んでおり、
+    // ここで解析して ?snooze=true パラメータとして wakeup 画面に渡す。
     const payload = checkLaunchPayload();
     if (payload !== null) {
       let isSnooze = false;

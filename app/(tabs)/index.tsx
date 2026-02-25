@@ -98,7 +98,9 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
 
-    // Cancel pending snooze alarm
+    // レコード更新前にスヌーズをキャンセルする。
+    // updateRecord → clearSession の順で処理するため、先にキャンセルしないと
+    // clearSession でストアの snoozeAlarmId が消えて参照できなくなる。
     const snoozeId = useMorningSessionStore.getState().snoozeAlarmId;
     if (snoozeId !== null) {
       cancelSnooze(snoozeId);
@@ -117,7 +119,7 @@ export default function DashboardScreen() {
       orderCompleted: todo.completed ? index + 1 : null,
     }));
 
-    // End Live Activity before clearing session
+    // clearSession でストアの liveActivityId が消える前に Live Activity を終了する
     const activityId = useMorningSessionStore.getState().liveActivityId;
     if (activityId !== null) {
       endLiveActivity(activityId);
@@ -131,7 +133,8 @@ export default function DashboardScreen() {
     }).then(() => clearSession());
   }, [session, areAllCompleted, updateRecord, clearSession]);
 
-  // Snooze countdown timer
+  // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。
+  // snoozeFiresAt が null になった時点（TODO全完了 or セッションクリア）でタイマーを停止。
   useEffect(() => {
     if (snoozeFiresAt === null) {
       setSnoozeRemaining(null);
@@ -156,7 +159,9 @@ export default function DashboardScreen() {
     (todoId: string) => {
       toggleTodo(todoId);
 
-      // Update Live Activity after state change
+      // setTimeout(0) で Zustand の state 更新を待つ。
+      // toggleTodo() は同期的に set() するが、直後に getState() すると
+      // 更新前の値が返る場合があるため、マイクロタスク境界を挟む。
       setTimeout(() => {
         const state = useMorningSessionStore.getState();
         const activityId = state.liveActivityId;
