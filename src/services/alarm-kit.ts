@@ -182,6 +182,72 @@ export async function cancelAllAlarms(): Promise<void> {
   await Promise.all(cancellations);
 }
 
+export interface LiveActivityTodo {
+  readonly id: string;
+  readonly title: string;
+  readonly completed: boolean;
+}
+
+export async function startLiveActivity(
+  todos: readonly LiveActivityTodo[],
+  snoozeFiresAt: string | null,
+): Promise<string | null> {
+  const kit = getAlarmKit();
+  if (kit === null) return null;
+
+  try {
+    const snoozeEpoch =
+      snoozeFiresAt !== null ? Math.floor(new Date(snoozeFiresAt).getTime() / 1000) : null;
+    const startFn = (kit as Record<string, unknown>).startLiveActivity;
+    if (typeof startFn !== 'function') return null;
+    const result = await (
+      startFn as (todos: object[], epoch: number | null) => Promise<string | null>
+    )(
+      todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+      snoozeEpoch,
+    );
+    return result ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateLiveActivity(
+  activityId: string,
+  todos: readonly LiveActivityTodo[],
+  snoozeFiresAt: string | null,
+): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+
+  try {
+    const updateFn = (kit as Record<string, unknown>).updateLiveActivity;
+    if (typeof updateFn !== 'function') return;
+    const snoozeEpoch =
+      snoozeFiresAt !== null ? Math.floor(new Date(snoozeFiresAt).getTime() / 1000) : null;
+    await (updateFn as (id: string, todos: object[], epoch: number | null) => Promise<boolean>)(
+      activityId,
+      todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+      snoozeEpoch,
+    );
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function endLiveActivity(activityId: string): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+
+  try {
+    const endFn = (kit as Record<string, unknown>).endLiveActivity;
+    if (typeof endFn !== 'function') return;
+    await (endFn as (id: string) => Promise<boolean>)(activityId);
+  } catch {
+    // Non-blocking
+  }
+}
+
 export function checkLaunchPayload(): LaunchPayload | null {
   const kit = getAlarmKit();
   if (kit === null) return null;

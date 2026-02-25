@@ -5,10 +5,13 @@ import {
   cancelAllAlarms,
   cancelSnooze,
   checkLaunchPayload,
+  endLiveActivity,
   initializeAlarmKit,
   SNOOZE_DURATION_SECONDS,
   scheduleSnooze,
   scheduleWakeTargetAlarm,
+  startLiveActivity,
+  updateLiveActivity,
 } from '../services/alarm-kit';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
@@ -218,6 +221,34 @@ describe('alarm-kit service', () => {
       mockCancelAlarm.mockResolvedValue(true);
       await cancelSnooze('snooze-uuid-1');
       expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-uuid-1');
+    });
+  });
+
+  describe('startLiveActivity', () => {
+    test('returns null when native function is unavailable', async () => {
+      const result = await startLiveActivity(
+        [{ id: '1', title: 'Test', completed: false }],
+        '2026-02-25T07:09:00.000Z',
+      );
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updateLiveActivity', () => {
+    test('does not throw when native function is unavailable', async () => {
+      await expect(
+        updateLiveActivity(
+          'activity-123',
+          [{ id: '1', title: 'Test', completed: false }],
+          '2026-02-25T07:09:00.000Z',
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('endLiveActivity', () => {
+    test('does not throw when native function is unavailable', async () => {
+      await expect(endLiveActivity('activity-123')).resolves.toBeUndefined();
     });
   });
 });
