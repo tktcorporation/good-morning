@@ -8,6 +8,8 @@ import {
   cancelAllAlarms,
   SNOOZE_DURATION_SECONDS,
   scheduleSnooze,
+  startLiveActivity,
+  updateLiveActivity,
 } from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
@@ -30,6 +32,21 @@ function handleSnoozeRefire(): void {
   const sessionState = useMorningSessionStore.getState();
   if (sessionState.session !== null && !sessionState.areAllCompleted()) {
     scheduleAndStoreSnooze();
+
+    // Update Live Activity with new snooze countdown
+    const activityId = sessionState.liveActivityId;
+    if (activityId !== null) {
+      const newSnoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+      updateLiveActivity(
+        activityId,
+        sessionState.session.todos.map((t) => ({
+          id: t.id,
+          title: t.title,
+          completed: t.completed,
+        })),
+        newSnoozeFiresAt,
+      );
+    }
   }
 }
 
@@ -166,6 +183,21 @@ export default function WakeUpScreen() {
 
             // Schedule snooze (fires in 9 min if TODOs not completed)
             scheduleAndStoreSnooze();
+
+            // Start Live Activity
+            const liveActivityTodos = todos.map((td) => ({
+              id: td.id,
+              title: td.title,
+              completed: false,
+            }));
+            const snoozeFiresAt = new Date(
+              Date.now() + SNOOZE_DURATION_SECONDS * 1000,
+            ).toISOString();
+            startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
+              if (activityId !== null) {
+                useMorningSessionStore.getState().setLiveActivityId(activityId);
+              }
+            });
             return;
           }
 

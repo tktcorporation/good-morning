@@ -13,7 +13,12 @@ import {
   spacing,
 } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
-import { cancelSnooze, isAlarmKitAvailable } from '../../src/services/alarm-kit';
+import {
+  cancelSnooze,
+  endLiveActivity,
+  isAlarmKitAvailable,
+  updateLiveActivity,
+} from '../../src/services/alarm-kit';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
@@ -112,6 +117,12 @@ export default function DashboardScreen() {
       orderCompleted: todo.completed ? index + 1 : null,
     }));
 
+    // End Live Activity before clearing session
+    const activityId = useMorningSessionStore.getState().liveActivityId;
+    if (activityId !== null) {
+      endLiveActivity(activityId);
+    }
+
     updateRecord(session.recordId, {
       todosCompleted: true,
       todosCompletedAt,
@@ -144,6 +155,19 @@ export default function DashboardScreen() {
   const handleToggleTodo = useCallback(
     (todoId: string) => {
       toggleTodo(todoId);
+
+      // Update Live Activity after state change
+      setTimeout(() => {
+        const state = useMorningSessionStore.getState();
+        const activityId = state.liveActivityId;
+        if (activityId !== null && state.session !== null) {
+          updateLiveActivity(
+            activityId,
+            state.session.todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+            state.snoozeFiresAt,
+          );
+        }
+      }, 0);
     },
     [toggleTodo],
   );
