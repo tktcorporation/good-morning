@@ -44,14 +44,24 @@
     "description": "Wake up better by completing tasks before dismissing your alarm.",
     "schedule": "Schedule",
     "alarm": "Alarm",
-    "notifications": "Notifications",
-    "notificationsGranted": "Enabled",
-    "notificationsDenied": "Disabled",
+    "permissions": "Permissions",
+    "permissionGranted": "Granted",
+    "permissionDenied": "Not Granted",
+    "permissionRequestFailed": "Permission request failed. Please enable it in the Settings app.",
+    "permissionItems": {
+      "alarmKit": {
+        "name": "Notifications",
+        "description": "Required to sound alarms"
+      },
+      "healthKit": {
+        "name": "Health",
+        "description": "Used to record sleep data"
+      }
+    },
     "alarmSound": "Alarm Sound",
     "dayBoundary": "Day Boundary",
     "dayBoundaryDescription": "Hours before midnight count as the previous day",
-    "dayBoundaryHour": "{{hour}}:00",
-    "healthKit": "Health Integration"
+    "dayBoundaryHour": "{{hour}}:00"
   },
   "alarmSounds": {
     "default": "Default",

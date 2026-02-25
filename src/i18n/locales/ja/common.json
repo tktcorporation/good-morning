@@ -44,14 +44,24 @@
     "description": "アラームを解除する前にタスクを完了して、より良い朝を。",
     "schedule": "スケジュール",
     "alarm": "アラーム",
-    "notifications": "通知",
-    "notificationsGranted": "許可済み",
-    "notificationsDenied": "未許可",
+    "permissions": "権限",
+    "permissionGranted": "許可済み",
+    "permissionDenied": "未許可",
+    "permissionRequestFailed": "権限の取得に失敗しました。「設定」アプリから許可してください。",
+    "permissionItems": {
+      "alarmKit": {
+        "name": "通知",
+        "description": "アラームを鳴らすために必要です"
+      },
+      "healthKit": {
+        "name": "ヘルスケア",
+        "description": "睡眠データの記録に使用します"
+      }
+    },
     "alarmSound": "アラーム音",
     "dayBoundary": "日付変更ライン",
     "dayBoundaryDescription": "この時刻より前は前日として扱います",
-    "dayBoundaryHour": "{{hour}}:00",
-    "healthKit": "ヘルスケア連携"
+    "dayBoundaryHour": "{{hour}}:00"
   },
   "alarmSounds": {
     "default": "デフォルト",

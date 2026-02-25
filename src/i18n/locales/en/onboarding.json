@@ -20,9 +20,23 @@
     }
   },
   "permission": {
-    "title": "Enable notifications",
-    "subtitle": "Required to sound your alarm",
-    "allow": "Allow Notifications"
+    "title": "Grant Permissions",
+    "subtitle": "Required for the app to function properly",
+    "allow": "Allow",
+    "granted": "Granted",
+    "denied": "Denied",
+    "required": "Required",
+    "optional": "Optional",
+    "items": {
+      "alarmKit": {
+        "name": "Notifications",
+        "description": "Required to sound your alarm"
+      },
+      "healthKit": {
+        "name": "Health",
+        "description": "Used to track your sleep data"
+      }
+    }
   },
   "confirm": {
     "title": "Turn on your alarm?",

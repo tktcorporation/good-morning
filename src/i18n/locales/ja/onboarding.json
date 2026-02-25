@@ -20,9 +20,23 @@
     }
   },
   "permission": {
-    "title": "通知を許可してください",
-    "subtitle": "アラームを鳴らすために必要です",
-    "allow": "通知を許可する"
+    "title": "権限を許可してください",
+    "subtitle": "アプリの機能を利用するために必要です",
+    "allow": "許可する",
+    "granted": "許可済み",
+    "denied": "拒否",
+    "required": "必須",
+    "optional": "オプション",
+    "items": {
+      "alarmKit": {
+        "name": "通知",
+        "description": "アラームを鳴らすために必要です"
+      },
+      "healthKit": {
+        "name": "ヘルスケア",
+        "description": "睡眠データの記録に使用します"
+      }
+    }
   },
   "confirm": {
     "title": "アラームをオンにしますか？",
