@@ -1,10 +1,14 @@
 import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
+import {
+  APP_PERMISSIONS,
+  type PermissionItem,
+  type PermissionStatus,
+} from '../../src/constants/permissions';
 import {
   borderRadius,
   colors,
@@ -13,7 +17,6 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
-import { initHealthKit } from '../../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
@@ -29,17 +32,24 @@ export default function SettingsScreen() {
   const setSoundId = useWakeTargetStore((s) => s.setSoundId);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
-  const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
-  const setHealthKitEnabled = useSettingsStore((s) => s.setHealthKitEnabled);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
-  const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
-
-  useEffect(() => {
-    Notifications.getPermissionsAsync().then(({ status }) => {
-      setNotificationStatus(status);
-    });
-  }, []);
+  /**
+   * 各権限の現在の状態を管理する。
+   * APP_PERMISSIONS の id をキーとして、PermissionStatus を保持。
+   * 初期値は 'pending' で、マウント時に各権限の request() を呼ばず
+   * ステータスだけを確認する方法がないため、pending のまま開始し
+   * ユーザーが許可操作をしたら granted/denied に更新する。
+   */
+  const [permissionStatuses, setPermissionStatuses] = useState<Record<string, PermissionStatus>>(
+    () => {
+      const initial: Record<string, PermissionStatus> = {};
+      for (const perm of APP_PERMISSIONS) {
+        initial[perm.id] = 'pending';
+      }
+      return initial;
+    },
+  );
 
   useEffect(() => {
     loadSettings();
@@ -69,24 +79,35 @@ export default function SettingsScreen() {
     [setDayBoundaryHour],
   );
 
-  const handleToggleHealthKit = useCallback(
-    async (value: boolean) => {
-      if (value) {
-        const success = await initHealthKit();
-        if (success) {
-          await setHealthKitEnabled(true);
-        }
+  /**
+   * 権限リクエストのハンドラ。
+   * すでに granted な権限はタップしても何もしない。
+   * request() が false を返した場合はiOS設定アプリへの誘導を表示する。
+   */
+  const handlePermissionRequest = useCallback(
+    async (perm: PermissionItem) => {
+      if (permissionStatuses[perm.id] === 'granted') return;
+
+      const success = await perm.request();
+      if (success) {
+        setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'granted' }));
       } else {
-        await setHealthKitEnabled(false);
+        setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'denied' }));
+        Alert.alert(
+          t(
+            `settings.permissionItems.${perm.i18nKey}.name` as 'settings.permissionItems.alarmKit.name',
+          ),
+          t('settings.permissionRequestFailed'),
+        );
       }
     },
-    [setHealthKitEnabled],
+    [permissionStatuses, t],
   );
 
   const isEnabled = target?.enabled ?? false;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Schedule */}
       <View style={commonStyles.section}>
         <Pressable style={styles.row} onPress={() => router.push('/schedule')}>
@@ -157,34 +178,35 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* HealthKit Integration */}
+      {/* Permissions - 通知やヘルスケアなど、アプリが必要とするOS権限を一覧表示 */}
       <View style={commonStyles.section}>
-        <View style={styles.row}>
-          <Text style={styles.rowTitle}>{t('settings.healthKit')}</Text>
-          <Switch
-            value={healthKitEnabled}
-            onValueChange={handleToggleHealthKit}
-            trackColor={{ false: colors.disabled, true: colors.primary }}
-            thumbColor={colors.text}
-          />
-        </View>
-      </View>
-
-      {/* Notification Status */}
-      <View style={commonStyles.section}>
-        <View style={styles.row}>
-          <Text style={styles.rowTitle}>{t('settings.notifications')}</Text>
-          <Text
-            style={[
-              styles.statusBadge,
-              notificationStatus === 'granted' ? styles.statusGranted : styles.statusDenied,
-            ]}
-          >
-            {notificationStatus === 'granted'
-              ? t('settings.notificationsGranted')
-              : t('settings.notificationsDenied')}
-          </Text>
-        </View>
+        <Text style={commonStyles.sectionTitle}>{t('settings.permissions')}</Text>
+        {APP_PERMISSIONS.map((perm) => {
+          const status = permissionStatuses[perm.id];
+          const isGranted = status === 'granted';
+          return (
+            <Pressable
+              key={perm.id}
+              style={styles.permissionRow}
+              onPress={() => handlePermissionRequest(perm)}
+              disabled={isGranted}
+            >
+              <View style={styles.permissionInfo}>
+                <Text style={styles.permissionIcon}>{perm.icon}</Text>
+                <Text style={styles.permissionName}>
+                  {t(
+                    `settings.permissionItems.${perm.i18nKey}.name` as 'settings.permissionItems.alarmKit.name',
+                  )}
+                </Text>
+              </View>
+              <Text
+                style={[styles.statusBadge, isGranted ? styles.statusGranted : styles.statusDenied]}
+              >
+                {isGranted ? t('settings.permissionGranted') : t('settings.permissionDenied')}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* About */}
@@ -195,7 +217,7 @@ export default function SettingsScreen() {
         </Text>
         <Text style={styles.description}>{t('settings.description')}</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -203,6 +225,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  contentContainer: {
     padding: spacing.md,
   },
   row: {
@@ -227,6 +251,29 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: fontSize.lg,
     color: colors.textMuted,
+  },
+  permissionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  permissionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  permissionIcon: {
+    fontSize: fontSize.lg,
+  },
+  permissionName: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
   },
   statusBadge: {
     fontSize: fontSize.sm,
