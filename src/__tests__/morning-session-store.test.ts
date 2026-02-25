@@ -2,7 +2,12 @@ import { useMorningSessionStore } from '../stores/morning-session-store';
 import type { SessionTodo } from '../types/morning-session';
 
 beforeEach(() => {
-  useMorningSessionStore.setState({ session: null, loaded: false, snoozeAlarmId: null, snoozeFiresAt: null });
+  useMorningSessionStore.setState({
+    session: null,
+    loaded: false,
+    snoozeAlarmId: null,
+    snoozeFiresAt: null,
+  });
 });
 
 const sampleTodos: readonly SessionTodo[] = [

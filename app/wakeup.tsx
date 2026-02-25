@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { cancelAllAlarms, scheduleSnooze, SNOOZE_DURATION_SECONDS } from '../src/services/alarm-kit';
+import {
+  cancelAllAlarms,
+  SNOOZE_DURATION_SECONDS,
+  scheduleSnooze,
+} from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -20,6 +24,25 @@ import { getLogicalDateString } from '../src/utils/date';
 
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 const DEMO_SOUND_DURATION_MS = 3000;
+
+/** Re-schedule snooze if session has incomplete TODOs. */
+function handleSnoozeRefire(): void {
+  const sessionState = useMorningSessionStore.getState();
+  if (sessionState.session !== null && !sessionState.areAllCompleted()) {
+    scheduleAndStoreSnooze();
+  }
+}
+
+/** Schedule a snooze alarm and store its ID/fire time in the session store. */
+function scheduleAndStoreSnooze(): void {
+  scheduleSnooze().then((snoozeId) => {
+    if (snoozeId !== null) {
+      const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+      useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
+      useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+    }
+  });
+}
 
 export default function WakeUpScreen() {
   const { t } = useTranslation('wakeup');
@@ -97,17 +120,7 @@ export default function WakeUpScreen() {
 
     // Handle snooze re-fire: don't create new record/session
     if (isSnooze) {
-      const sessionState = useMorningSessionStore.getState();
-      if (sessionState.session !== null && !sessionState.areAllCompleted()) {
-        // Re-schedule snooze since TODOs remain
-        scheduleSnooze().then((snoozeId) => {
-          if (snoozeId !== null) {
-            const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
-            useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
-            useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
-          }
-        });
-      }
+      handleSnoozeRefire();
       router.replace('/');
       return;
     }
@@ -152,13 +165,7 @@ export default function WakeUpScreen() {
             startSession(record.id, dateStr, sessionTodos);
 
             // Schedule snooze (fires in 9 min if TODOs not completed)
-            scheduleSnooze().then((snoozeId) => {
-              if (snoozeId !== null) {
-                const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
-                useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
-                useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
-              }
-            });
+            scheduleAndStoreSnooze();
             return;
           }
 

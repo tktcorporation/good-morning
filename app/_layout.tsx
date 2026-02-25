@@ -43,7 +43,9 @@ export default function RootLayout() {
         try {
           const parsed = JSON.parse(payload.payload) as { isSnooze?: boolean };
           isSnooze = parsed.isSnooze === true;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       router.push(isSnooze ? '/wakeup?snooze=true' : '/wakeup');
     }

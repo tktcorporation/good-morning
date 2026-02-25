@@ -2,11 +2,11 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
-  SNOOZE_DURATION_SECONDS,
   cancelAllAlarms,
   cancelSnooze,
   checkLaunchPayload,
   initializeAlarmKit,
+  SNOOZE_DURATION_SECONDS,
   scheduleSnooze,
   scheduleWakeTargetAlarm,
 } from '../services/alarm-kit';
