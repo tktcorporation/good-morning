@@ -142,6 +142,37 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
   return ids;
 }
 
+export const SNOOZE_DURATION_SECONDS = 540; // 9 minutes
+
+export async function scheduleSnooze(): Promise<string | null> {
+  const kit = getAlarmKit();
+  if (kit === null) return null;
+
+  const id = kit.generateUUID();
+  const now = new Date();
+  const snoozeDate = new Date(now.getTime() + SNOOZE_DURATION_SECONDS * 1000);
+  const epochSeconds = Math.floor(snoozeDate.getTime() / 1000);
+
+  try {
+    const success = await kit.scheduleAlarm({
+      id,
+      epochSeconds,
+      title: 'Good Morning',
+      launchAppOnDismiss: true,
+      dismissPayload: JSON.stringify({ isSnooze: true }),
+    });
+    return success ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelSnooze(alarmId: string): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  await kit.cancelAlarm(alarmId);
+}
+
 export async function cancelAllAlarms(): Promise<void> {
   const kit = getAlarmKit();
   if (kit === null) return;

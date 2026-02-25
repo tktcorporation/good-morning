@@ -2,9 +2,12 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
+  SNOOZE_DURATION_SECONDS,
   cancelAllAlarms,
+  cancelSnooze,
   checkLaunchPayload,
   initializeAlarmKit,
+  scheduleSnooze,
   scheduleWakeTargetAlarm,
 } from '../services/alarm-kit';
 import type { WakeTarget } from '../types/wake-target';
@@ -176,6 +179,39 @@ describe('alarm-kit service', () => {
     test('returns payload when launched from alarm', () => {
       mockGetLaunchPayload.mockReturnValue({ alarmId: 'abc', payload: null });
       expect(checkLaunchPayload()).toEqual({ alarmId: 'abc', payload: null });
+    });
+  });
+
+  describe('scheduleSnooze', () => {
+    test('schedules a one-time alarm with snooze payload', async () => {
+      mockGenerateUUID.mockReturnValue('snooze-uuid-1');
+      mockScheduleAlarm.mockResolvedValue(true);
+
+      const result = await scheduleSnooze();
+      expect(result).toBe('snooze-uuid-1');
+      expect(mockScheduleAlarm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'snooze-uuid-1',
+          title: 'Good Morning',
+          launchAppOnDismiss: true,
+          dismissPayload: '{"isSnooze":true}',
+        }),
+      );
+    });
+
+    test('returns null when scheduling fails', async () => {
+      mockGenerateUUID.mockReturnValue('snooze-uuid-2');
+      mockScheduleAlarm.mockResolvedValue(false);
+      const result = await scheduleSnooze();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('cancelSnooze', () => {
+    test('cancels the alarm by id', async () => {
+      mockCancelAlarm.mockResolvedValue(true);
+      await cancelSnooze('snooze-uuid-1');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-uuid-1');
     });
   });
 });
