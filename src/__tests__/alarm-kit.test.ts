@@ -182,6 +182,12 @@ describe('alarm-kit service', () => {
     });
   });
 
+  describe('SNOOZE_DURATION_SECONDS', () => {
+    test('is 540 seconds (9 minutes)', () => {
+      expect(SNOOZE_DURATION_SECONDS).toBe(540);
+    });
+  });
+
   describe('scheduleSnooze', () => {
     test('schedules a one-time alarm with snooze payload', async () => {
       mockGenerateUUID.mockReturnValue('snooze-uuid-1');

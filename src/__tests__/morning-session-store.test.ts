@@ -2,7 +2,7 @@ import { useMorningSessionStore } from '../stores/morning-session-store';
 import type { SessionTodo } from '../types/morning-session';
 
 beforeEach(() => {
-  useMorningSessionStore.setState({ session: null, loaded: false });
+  useMorningSessionStore.setState({ session: null, loaded: false, snoozeAlarmId: null, snoozeFiresAt: null });
 });
 
 const sampleTodos: readonly SessionTodo[] = [
@@ -86,5 +86,40 @@ describe('morning-session-store', () => {
 
   it('returns zero progress when no session', () => {
     expect(useMorningSessionStore.getState().getProgress()).toEqual({ completed: 0, total: 0 });
+  });
+
+  describe('snooze state', () => {
+    it('stores snoozeAlarmId when set', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      useMorningSessionStore.getState().setSnoozeAlarmId('snooze-abc');
+      expect(useMorningSessionStore.getState().snoozeAlarmId).toBe('snooze-abc');
+    });
+
+    it('clears snoozeAlarmId on clearSession', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      useMorningSessionStore.getState().setSnoozeAlarmId('snooze-abc');
+      await useMorningSessionStore.getState().clearSession();
+      expect(useMorningSessionStore.getState().snoozeAlarmId).toBeNull();
+    });
+
+    it('stores snoozeFiresAt timestamp', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      const fireTime = '2026-02-22T07:09:00.000Z';
+      useMorningSessionStore.getState().setSnoozeFiresAt(fireTime);
+      expect(useMorningSessionStore.getState().snoozeFiresAt).toBe(fireTime);
+    });
+
+    it('clears snoozeFiresAt on clearSession', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      useMorningSessionStore.getState().setSnoozeFiresAt('2026-02-22T07:09:00.000Z');
+      await useMorningSessionStore.getState().clearSession();
+      expect(useMorningSessionStore.getState().snoozeFiresAt).toBeNull();
+    });
+
+    it('initializes snooze state as null in new session', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      expect(useMorningSessionStore.getState().snoozeAlarmId).toBeNull();
+      expect(useMorningSessionStore.getState().snoozeFiresAt).toBeNull();
+    });
   });
 });

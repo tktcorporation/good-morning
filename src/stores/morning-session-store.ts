@@ -7,10 +7,14 @@ const STORAGE_KEY = 'morning-session';
 interface MorningSessionState {
   readonly session: MorningSession | null;
   readonly loaded: boolean;
+  readonly snoozeAlarmId: string | null;
+  readonly snoozeFiresAt: string | null;
   loadSession: () => Promise<void>;
   startSession: (recordId: string, date: string, todos: readonly SessionTodo[]) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
+  setSnoozeAlarmId: (id: string | null) => void;
+  setSnoozeFiresAt: (time: string | null) => void;
   isActive: () => boolean;
   areAllCompleted: () => boolean;
   getProgress: () => { completed: number; total: number };
@@ -27,6 +31,8 @@ async function persistSession(session: MorningSession | null): Promise<void> {
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
   session: null,
   loaded: false,
+  snoozeAlarmId: null,
+  snoozeFiresAt: null,
 
   loadSession: async () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -70,8 +76,16 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   },
 
   clearSession: async () => {
-    set({ session: null });
+    set({ session: null, snoozeAlarmId: null, snoozeFiresAt: null });
     await persistSession(null);
+  },
+
+  setSnoozeAlarmId: (id: string | null) => {
+    set({ snoozeAlarmId: id });
+  },
+
+  setSnoozeFiresAt: (time: string | null) => {
+    set({ snoozeFiresAt: time });
   },
 
   isActive: () => get().session !== null,
