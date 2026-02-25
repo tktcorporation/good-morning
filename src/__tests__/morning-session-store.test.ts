@@ -7,6 +7,7 @@ beforeEach(() => {
     loaded: false,
     snoozeAlarmId: null,
     snoozeFiresAt: null,
+    liveActivityId: null,
   });
 });
 
@@ -125,6 +126,21 @@ describe('morning-session-store', () => {
       await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
       expect(useMorningSessionStore.getState().snoozeAlarmId).toBeNull();
       expect(useMorningSessionStore.getState().snoozeFiresAt).toBeNull();
+    });
+  });
+
+  describe('live activity state', () => {
+    it('stores liveActivityId when set', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
+      expect(useMorningSessionStore.getState().liveActivityId).toBe('activity-xyz');
+    });
+
+    it('clears liveActivityId on clearSession', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
+      await useMorningSessionStore.getState().clearSession();
+      expect(useMorningSessionStore.getState().liveActivityId).toBeNull();
     });
   });
 });
