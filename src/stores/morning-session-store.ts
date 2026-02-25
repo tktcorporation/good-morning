@@ -7,10 +7,19 @@ const STORAGE_KEY = 'morning-session';
 interface MorningSessionState {
   readonly session: MorningSession | null;
   readonly loaded: boolean;
+  /** スケジュール済みスヌーズの AlarmKit ID。キャンセル時に使用。メモリのみ（永続化しない）。 */
+  readonly snoozeAlarmId: string | null;
+  /** 次のスヌーズ発火予定時刻（ISO文字列）。ダッシュボードのカウントダウン表示に使用。メモリのみ。 */
+  readonly snoozeFiresAt: string | null;
+  /** アクティブな Live Activity の ID。更新・終了時に使用。メモリのみ。 */
+  readonly liveActivityId: string | null;
   loadSession: () => Promise<void>;
   startSession: (recordId: string, date: string, todos: readonly SessionTodo[]) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
+  setSnoozeAlarmId: (id: string | null) => void;
+  setSnoozeFiresAt: (time: string | null) => void;
+  setLiveActivityId: (id: string | null) => void;
   isActive: () => boolean;
   areAllCompleted: () => boolean;
   getProgress: () => { completed: number; total: number };
@@ -27,6 +36,9 @@ async function persistSession(session: MorningSession | null): Promise<void> {
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
   session: null,
   loaded: false,
+  snoozeAlarmId: null,
+  snoozeFiresAt: null,
+  liveActivityId: null,
 
   loadSession: async () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -69,9 +81,22 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     await persistSession(updated);
   },
 
+  /** セッションと全てのエフェメラル状態（snooze, Live Activity）をクリアする。 */
   clearSession: async () => {
-    set({ session: null });
+    set({ session: null, snoozeAlarmId: null, snoozeFiresAt: null, liveActivityId: null });
     await persistSession(null);
+  },
+
+  setSnoozeAlarmId: (id: string | null) => {
+    set({ snoozeAlarmId: id });
+  },
+
+  setSnoozeFiresAt: (time: string | null) => {
+    set({ snoozeFiresAt: time });
+  },
+
+  setLiveActivityId: (id: string | null) => {
+    set({ liveActivityId: id });
   },
 
   isActive: () => get().session !== null,

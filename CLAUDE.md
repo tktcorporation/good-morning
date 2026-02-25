@@ -36,6 +36,7 @@
 - Biome でリント・フォーマット (ESLint/Prettier は使わない) — 設定は biome.json を参照
 - パスエイリアス: `@/*` は `./src/*` にマッピング
 - Strict TypeScript — 設定は tsconfig.json を参照
+- コードの意図(WHY)を記録する — 詳細は `.claude/rules/code-intent-documentation.md` を参照
 
 ## Version Control
 - jj (Jujutsu) を使用（Git の代わりに）

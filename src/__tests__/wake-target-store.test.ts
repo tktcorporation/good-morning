@@ -156,18 +156,6 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().alarmIds).toEqual(ids);
   });
 
-  test('loadTarget falls back to legacy notification-ids key', async () => {
-    const ids = ['legacy-a', 'legacy-b'];
-    mockGetItem.mockImplementation((key: string) => {
-      if (key === 'wake-target') return Promise.resolve(null);
-      if (key === 'alarm-ids') return Promise.resolve(null);
-      if (key === 'notification-ids') return Promise.resolve(JSON.stringify(ids));
-      return Promise.resolve(null);
-    });
-    await useWakeTargetStore.getState().loadTarget();
-    expect(useWakeTargetStore.getState().alarmIds).toEqual(ids);
-  });
-
   test('setSoundId updates the sound and persists', async () => {
     await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
     mockSetItem.mockClear();

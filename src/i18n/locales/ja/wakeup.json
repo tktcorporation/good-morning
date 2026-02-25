@@ -2,5 +2,7 @@
   "alarmPrefix": "アラーム: {{time}}",
   "dismissAlarm": "アラームを止める",
   "demoComplete": "デモ完了",
-  "alarmNotFound": "アラームが見つかりません"
+  "alarmNotFound": "アラームが見つかりません",
+  "snoozeTitle": "スヌーズ",
+  "snoozeRemaining": "残りタスク: {{count}}件"
 }

@@ -13,7 +13,9 @@
   "morningRoutine": {
     "title": "Morning Routine",
     "progress": "{{completed}} / {{total}} completed",
-    "banner": "Morning Routine: {{completed}}/{{total}} done"
+    "banner": "Morning Routine: {{completed}}/{{total}} done",
+    "snoozeCountdown": "Next snooze in {{time}}",
+    "allDone": "All tasks done!"
   },
   "week": {
     "title": "This Week",

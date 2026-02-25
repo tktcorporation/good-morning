@@ -142,6 +142,56 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
   return ids;
 }
 
+/**
+ * iOSの標準アラームと同じ9分間隔。
+ * 由来: 機械式時計時代の歯車制約から生まれた慣習で、ユーザーにとって馴染みのある間隔。
+ */
+export const SNOOZE_DURATION_SECONDS = 540;
+
+/**
+ * スヌーズアラームを9分後にスケジュールする。
+ *
+ * 背景: TODO完了まで繰り返しスヌーズを鳴らすことで、ユーザーが二度寝するのを防ぐ。
+ * dismissPayload に isSnooze フラグを含め、再起動時にスヌーズ経由と判別する。
+ *
+ * 呼び出し元: app/wakeup.tsx (アラーム解除時・スヌーズ再発火時)
+ * 対になる関数: cancelSnooze() (TODO全完了時に取消)
+ */
+export async function scheduleSnooze(): Promise<string | null> {
+  const kit = getAlarmKit();
+  if (kit === null) return null;
+
+  const id = kit.generateUUID();
+  const now = new Date();
+  const snoozeDate = new Date(now.getTime() + SNOOZE_DURATION_SECONDS * 1000);
+  const epochSeconds = Math.floor(snoozeDate.getTime() / 1000);
+
+  try {
+    const success = await kit.scheduleAlarm({
+      id,
+      epochSeconds,
+      title: 'Good Morning',
+      launchAppOnDismiss: true,
+      dismissPayload: JSON.stringify({ isSnooze: true }),
+    });
+    return success ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * スケジュール済みのスヌーズアラームを取り消す。
+ *
+ * 呼び出し元: app/(tabs)/index.tsx (TODO全完了時)
+ * TODO が全て完了すればスヌーズは不要なため、次の発火前にキャンセルする。
+ */
+export async function cancelSnooze(alarmId: string): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  await kit.cancelAlarm(alarmId);
+}
+
 export async function cancelAllAlarms(): Promise<void> {
   const kit = getAlarmKit();
   if (kit === null) return;
@@ -149,6 +199,94 @@ export async function cancelAllAlarms(): Promise<void> {
   const existing = kit.getAllAlarms();
   const cancellations = existing.map((id) => kit.cancelAlarm(id));
   await Promise.all(cancellations);
+}
+
+/**
+ * Live Activity ウィジェットに表示するTODO項目。
+ * SessionTodo の軽量サブセットで、ネイティブ側に渡すために plain object にする。
+ */
+export interface LiveActivityTodo {
+  readonly id: string;
+  readonly title: string;
+  readonly completed: boolean;
+}
+
+/**
+ * ロック画面にTODO進捗とスヌーズカウントダウンを表示する Live Activity を開始する。
+ *
+ * ネイティブモジュールが未実装の場合は null を返し、アプリの動作には影響しない（graceful degradation）。
+ * 呼び出し元: app/wakeup.tsx (セッション開始＋スヌーズスケジュール後)
+ */
+export async function startLiveActivity(
+  todos: readonly LiveActivityTodo[],
+  snoozeFiresAt: string | null,
+): Promise<string | null> {
+  const kit = getAlarmKit();
+  if (kit === null) return null;
+
+  try {
+    const snoozeEpoch =
+      snoozeFiresAt !== null ? Math.floor(new Date(snoozeFiresAt).getTime() / 1000) : null;
+    const startFn = (kit as Record<string, unknown>).startLiveActivity;
+    if (typeof startFn !== 'function') return null;
+    const result = await (
+      startFn as (todos: object[], epoch: number | null) => Promise<string | null>
+    )(
+      todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+      snoozeEpoch,
+    );
+    return result ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Live Activity のTODO進捗・スヌーズカウントダウンを更新する。
+ *
+ * 呼び出し元:
+ *   - app/(tabs)/index.tsx: TODOトグル時に完了状態を反映
+ *   - app/wakeup.tsx: スヌーズ再発火時に新しいカウントダウンを反映
+ */
+export async function updateLiveActivity(
+  activityId: string,
+  todos: readonly LiveActivityTodo[],
+  snoozeFiresAt: string | null,
+): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+
+  try {
+    const updateFn = (kit as Record<string, unknown>).updateLiveActivity;
+    if (typeof updateFn !== 'function') return;
+    const snoozeEpoch =
+      snoozeFiresAt !== null ? Math.floor(new Date(snoozeFiresAt).getTime() / 1000) : null;
+    await (updateFn as (id: string, todos: object[], epoch: number | null) => Promise<boolean>)(
+      activityId,
+      todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+      snoozeEpoch,
+    );
+  } catch {
+    // Non-blocking
+  }
+}
+
+/**
+ * Live Activity を終了してロック画面から除去する。
+ *
+ * 呼び出し元: app/(tabs)/index.tsx (TODO全完了時、セッションクリア前)
+ */
+export async function endLiveActivity(activityId: string): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+
+  try {
+    const endFn = (kit as Record<string, unknown>).endLiveActivity;
+    if (typeof endFn !== 'function') return;
+    await (endFn as (id: string) => Promise<boolean>)(activityId);
+  } catch {
+    // Non-blocking
+  }
 }
 
 export function checkLaunchPayload(): LaunchPayload | null {

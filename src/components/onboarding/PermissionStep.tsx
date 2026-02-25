@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { colors, spacing } from '../../constants/theme';
-import { requestNotificationPermissions } from '../../services/notifications';
+import { initializeAlarmKit } from '../../services/alarm-kit';
 import { StepButton } from './StepButton';
 import { StepHeader } from './StepHeader';
 
@@ -16,7 +16,8 @@ export function PermissionStep({ onNext, onBack }: PermissionStepProps) {
   const [granted, setGranted] = useState(false);
 
   const handleAllow = async () => {
-    const result = await requestNotificationPermissions();
+    const status = await initializeAlarmKit();
+    const result = status === 'authorized';
     setGranted(result);
     if (result) {
       onNext();

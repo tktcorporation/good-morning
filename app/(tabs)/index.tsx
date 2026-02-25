@@ -13,7 +13,12 @@ import {
   spacing,
 } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
-import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
+import {
+  cancelSnooze,
+  endLiveActivity,
+  isAlarmKitAvailable,
+  updateLiveActivity,
+} from '../../src/services/alarm-kit';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
@@ -52,8 +57,10 @@ export default function DashboardScreen() {
   const clearSession = useMorningSessionStore((s) => s.clearSession);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
+  const snoozeFiresAt = useMorningSessionStore((s) => s.snoozeFiresAt);
 
   const [newTodoText, setNewTodoText] = useState('');
+  const [snoozeRemaining, setSnoozeRemaining] = useState<string | null>(null);
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
 
   const today = useMemo(() => new Date(), []);
@@ -91,6 +98,14 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
 
+    // レコード更新前にスヌーズをキャンセルする。
+    // updateRecord → clearSession の順で処理するため、先にキャンセルしないと
+    // clearSession でストアの snoozeAlarmId が消えて参照できなくなる。
+    const snoozeId = useMorningSessionStore.getState().snoozeAlarmId;
+    if (snoozeId !== null) {
+      cancelSnooze(snoozeId);
+    }
+
     const now = new Date();
     const todosCompletedAt = now.toISOString();
     const todoCompletionSeconds = Math.round(
@@ -104,6 +119,12 @@ export default function DashboardScreen() {
       orderCompleted: todo.completed ? index + 1 : null,
     }));
 
+    // clearSession でストアの liveActivityId が消える前に Live Activity を終了する
+    const activityId = useMorningSessionStore.getState().liveActivityId;
+    if (activityId !== null) {
+      endLiveActivity(activityId);
+    }
+
     updateRecord(session.recordId, {
       todosCompleted: true,
       todosCompletedAt,
@@ -112,9 +133,46 @@ export default function DashboardScreen() {
     }).then(() => clearSession());
   }, [session, areAllCompleted, updateRecord, clearSession]);
 
+  // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。
+  // snoozeFiresAt が null になった時点（TODO全完了 or セッションクリア）でタイマーを停止。
+  useEffect(() => {
+    if (snoozeFiresAt === null) {
+      setSnoozeRemaining(null);
+      return;
+    }
+    const updateCountdown = () => {
+      const diff = new Date(snoozeFiresAt).getTime() - Date.now();
+      if (diff <= 0) {
+        setSnoozeRemaining(null);
+        return;
+      }
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      setSnoozeRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+    };
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [snoozeFiresAt]);
+
   const handleToggleTodo = useCallback(
     (todoId: string) => {
       toggleTodo(todoId);
+
+      // setTimeout(0) で Zustand の state 更新を待つ。
+      // toggleTodo() は同期的に set() するが、直後に getState() すると
+      // 更新前の値が返る場合があるため、マイクロタスク境界を挟む。
+      setTimeout(() => {
+        const state = useMorningSessionStore.getState();
+        const activityId = state.liveActivityId;
+        if (activityId !== null && state.session !== null) {
+          updateLiveActivity(
+            activityId,
+            state.session.todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+            state.snoozeFiresAt,
+          );
+        }
+      }, 0);
     },
     [toggleTodo],
   );
@@ -204,6 +262,11 @@ export default function DashboardScreen() {
               })}
             </Text>
           </View>
+          {snoozeRemaining !== null && (
+            <Text style={styles.snoozeCountdownText}>
+              {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
+            </Text>
+          )}
           {session.todos.map((todo) => (
             <TodoListItem
               key={todo.id}
@@ -385,6 +448,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  snoozeCountdownText: {
+    fontSize: fontSize.sm,
+    color: colors.warning,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
 
   // Todos

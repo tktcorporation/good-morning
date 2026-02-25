@@ -2,5 +2,7 @@
   "alarmPrefix": "Alarm: {{time}}",
   "dismissAlarm": "Stop Alarm",
   "demoComplete": "Demo Complete",
-  "alarmNotFound": "Alarm not found"
+  "alarmNotFound": "Alarm not found",
+  "snoozeTitle": "Snooze",
+  "snoozeRemaining": "Remaining tasks: {{count}}"
 }

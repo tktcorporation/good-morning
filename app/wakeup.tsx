@@ -4,7 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { cancelAllAlarms } from '../src/services/alarm-kit';
+import {
+  cancelAllAlarms,
+  SNOOZE_DURATION_SECONDS,
+  scheduleSnooze,
+  startLiveActivity,
+  updateLiveActivity,
+} from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -21,11 +27,53 @@ import { getLogicalDateString } from '../src/utils/date';
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 const DEMO_SOUND_DURATION_MS = 3000;
 
+/**
+ * スヌーズ再発火時の処理。既存セッションに未完了TODOがあれば次のスヌーズを再スケジュールする。
+ * 新しいレコードやセッションは作成しない — 初回 dismiss 時に作成済みのものを継続利用する。
+ */
+function handleSnoozeRefire(): void {
+  const sessionState = useMorningSessionStore.getState();
+  if (sessionState.session !== null && !sessionState.areAllCompleted()) {
+    scheduleAndStoreSnooze();
+
+    // Update Live Activity with new snooze countdown
+    const activityId = sessionState.liveActivityId;
+    if (activityId !== null) {
+      const newSnoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+      updateLiveActivity(
+        activityId,
+        sessionState.session.todos.map((t) => ({
+          id: t.id,
+          title: t.title,
+          completed: t.completed,
+        })),
+        newSnoozeFiresAt,
+      );
+    }
+  }
+}
+
+/**
+ * スヌーズアラームをスケジュールし、ID と発火予定時刻をストアに保存する。
+ * ID は cancelSnooze() でのキャンセルに、発火時刻はダッシュボードのカウントダウン表示に使われる。
+ */
+function scheduleAndStoreSnooze(): void {
+  scheduleSnooze().then((snoozeId) => {
+    if (snoozeId !== null) {
+      const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+      useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
+      useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+    }
+  });
+}
+
 export default function WakeUpScreen() {
   const { t } = useTranslation('wakeup');
   const { t: tCommon } = useTranslation('common');
-  const { demo } = useLocalSearchParams<{ demo?: string }>();
+  const { demo, snooze } = useLocalSearchParams<{ demo?: string; snooze?: string }>();
   const isDemo = demo === 'true';
+  // _layout.tsx が launch payload の isSnooze フラグを解析し、?snooze=true パラメータとして渡す
+  const isSnooze = snooze === 'true';
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -94,6 +142,13 @@ export default function WakeUpScreen() {
       return;
     }
 
+    // Handle snooze re-fire: don't create new record/session
+    if (isSnooze) {
+      handleSnoozeRefire();
+      router.replace('/');
+      return;
+    }
+
     if (target !== null && resolvedTime !== null) {
       const now = new Date();
       const diffMinutes = calculateDiffMinutes(resolvedTime, now);
@@ -131,7 +186,28 @@ export default function WakeUpScreen() {
               completed: false,
               completedAt: null,
             }));
-            return startSession(record.id, dateStr, sessionTodos);
+            startSession(record.id, dateStr, sessionTodos);
+
+            // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
+            // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
+            scheduleAndStoreSnooze();
+
+            // セッション＋スヌーズの両方が確定してから Live Activity を開始する。
+            // スヌーズの発火時刻をカウントダウン表示に使うため、この順序が必要。
+            const liveActivityTodos = todos.map((td) => ({
+              id: td.id,
+              title: td.title,
+              completed: false,
+            }));
+            const snoozeFiresAt = new Date(
+              Date.now() + SNOOZE_DURATION_SECONDS * 1000,
+            ).toISOString();
+            startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
+              if (activityId !== null) {
+                useMorningSessionStore.getState().setLiveActivityId(activityId);
+              }
+            });
+            return;
           }
 
           if (!isHealthKitInitialized()) return;
@@ -159,6 +235,7 @@ export default function WakeUpScreen() {
     resolvedTime,
     todos,
     isDemo,
+    isSnooze,
     dayBoundaryHour,
     alarmIds,
     setAlarmIds,
