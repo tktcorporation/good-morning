@@ -38,7 +38,14 @@ export default function RootLayout() {
     // Check if launched from alarm dismiss
     const payload = checkLaunchPayload();
     if (payload !== null) {
-      router.push('/wakeup');
+      let isSnooze = false;
+      if (payload.payload) {
+        try {
+          const parsed = JSON.parse(payload.payload) as { isSnooze?: boolean };
+          isSnooze = parsed.isSnooze === true;
+        } catch { /* ignore */ }
+      }
+      router.push(isSnooze ? '/wakeup?snooze=true' : '/wakeup');
     }
 
     AsyncStorage.getItem('onboarding-completed').then((val) => {

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { cancelAllAlarms } from '../src/services/alarm-kit';
+import { cancelAllAlarms, scheduleSnooze, SNOOZE_DURATION_SECONDS } from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -24,8 +24,9 @@ const DEMO_SOUND_DURATION_MS = 3000;
 export default function WakeUpScreen() {
   const { t } = useTranslation('wakeup');
   const { t: tCommon } = useTranslation('common');
-  const { demo } = useLocalSearchParams<{ demo?: string }>();
+  const { demo, snooze } = useLocalSearchParams<{ demo?: string; snooze?: string }>();
   const isDemo = demo === 'true';
+  const isSnooze = snooze === 'true';
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -94,6 +95,23 @@ export default function WakeUpScreen() {
       return;
     }
 
+    // Handle snooze re-fire: don't create new record/session
+    if (isSnooze) {
+      const sessionState = useMorningSessionStore.getState();
+      if (sessionState.session !== null && !sessionState.areAllCompleted()) {
+        // Re-schedule snooze since TODOs remain
+        scheduleSnooze().then((snoozeId) => {
+          if (snoozeId !== null) {
+            const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+            useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
+            useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+          }
+        });
+      }
+      router.replace('/');
+      return;
+    }
+
     if (target !== null && resolvedTime !== null) {
       const now = new Date();
       const diffMinutes = calculateDiffMinutes(resolvedTime, now);
@@ -131,7 +149,17 @@ export default function WakeUpScreen() {
               completed: false,
               completedAt: null,
             }));
-            return startSession(record.id, dateStr, sessionTodos);
+            startSession(record.id, dateStr, sessionTodos);
+
+            // Schedule snooze (fires in 9 min if TODOs not completed)
+            scheduleSnooze().then((snoozeId) => {
+              if (snoozeId !== null) {
+                const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+                useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
+                useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+              }
+            });
+            return;
           }
 
           if (!isHealthKitInitialized()) return;
@@ -159,6 +187,7 @@ export default function WakeUpScreen() {
     resolvedTime,
     todos,
     isDemo,
+    isSnooze,
     dayBoundaryHour,
     alarmIds,
     setAlarmIds,
