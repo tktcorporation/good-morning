@@ -10,6 +10,7 @@ import {
   initializeAlarmKit,
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
+import { handleSnoozeRefire } from '../src/services/snooze';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
@@ -37,7 +38,7 @@ export default function RootLayout() {
 
     // AlarmKit の dismissPayload からスヌーズ経由かどうかを判定する。
     // scheduleSnooze() が payload に { isSnooze: true } を埋め込んでおり、
-    // ここで解析して ?snooze=true パラメータとして wakeup 画面に渡す。
+    // ここで解析して処理を分岐する。
     const payload = checkLaunchPayload();
     if (payload !== null) {
       let isSnooze = false;
@@ -49,7 +50,17 @@ export default function RootLayout() {
           /* ignore */
         }
       }
-      router.push(isSnooze ? '/wakeup?snooze=true' : '/wakeup');
+
+      if (isSnooze) {
+        // スヌーズ再発火: wakeup 画面を表示せず自動処理する。
+        // ネイティブアラームが既にユーザーを起こしているため、アプリ側では
+        // TODO状態に基づいて次のスヌーズをスケジュールし、ダッシュボードへ遷移する。
+        handleSnoozeRefire();
+        router.push('/');
+      } else {
+        // 初回アラーム: wakeup 画面を表示してユーザーにdismissしてもらう
+        router.push('/wakeup');
+      }
     }
 
     AsyncStorage.getItem('onboarding-completed').then((val) => {
