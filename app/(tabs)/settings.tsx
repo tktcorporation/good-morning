@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
@@ -30,6 +30,7 @@ export default function SettingsScreen() {
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
   const soundId = target?.soundId ?? 'default';
   const setSoundId = useWakeTargetStore((s) => s.setSoundId);
+  const setBedtimeTarget = useWakeTargetStore((s) => s.setBedtimeTarget);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -104,6 +105,48 @@ export default function SettingsScreen() {
     [permissionStatuses, t],
   );
 
+  /**
+   * 就寝目標時刻のプリセット候補。
+   * 一般的な就寝時間帯（22:00〜0:30）を30分刻みで用意し、
+   * 最後に null（クリア）を含める。Pressable のタップでサイクルする。
+   */
+  const BEDTIME_PRESETS = useMemo(
+    () =>
+      [
+        { hour: 22, minute: 0 },
+        { hour: 22, minute: 30 },
+        { hour: 23, minute: 0 },
+        { hour: 23, minute: 30 },
+        { hour: 0, minute: 0 },
+        { hour: 0, minute: 30 },
+        null,
+      ] as const,
+    [],
+  );
+
+  /**
+   * 就寝目標時刻のサイクル切り替えハンドラ。
+   * 現在の値が BEDTIME_PRESETS 内に見つかれば次の候補に進む。
+   * 見つからなければ先頭（22:00）に戻る。シンプルなUXのためピッカーではなくサイクル方式を採用。
+   */
+  const handleBedtimeCycle = useCallback(async () => {
+    const current = target?.bedtimeTarget ?? null;
+    const currentIndex = BEDTIME_PRESETS.findIndex((preset) => {
+      if (preset === null && current === null) return true;
+      if (preset === null || current === null) return false;
+      return preset.hour === current.hour && preset.minute === current.minute;
+    });
+    const nextIndex = (currentIndex + 1) % BEDTIME_PRESETS.length;
+    const next = BEDTIME_PRESETS[nextIndex];
+    await setBedtimeTarget(next ?? null);
+  }, [target?.bedtimeTarget, setBedtimeTarget, BEDTIME_PRESETS]);
+
+  const bedtimeDisplay = useMemo(() => {
+    const bt = target?.bedtimeTarget;
+    if (bt == null) return t('settings.bedtimeNotSet');
+    return `${String(bt.hour).padStart(2, '0')}:${String(bt.minute).padStart(2, '0')}`;
+  }, [target?.bedtimeTarget, t]);
+
   const isEnabled = target?.enabled ?? false;
 
   return (
@@ -176,6 +219,20 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
         </View>
+      </View>
+
+      {/* Bedtime Target — 就寝目標時刻。Daily Grade で ◎ excellent を狙うために必要 */}
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('settings.bedtimeTarget')}</Text>
+        <Pressable style={styles.row} onPress={handleBedtimeCycle}>
+          <View>
+            <Text style={styles.rowTitle}>{bedtimeDisplay}</Text>
+            {target?.bedtimeTarget == null && (
+              <Text style={styles.description}>{t('settings.bedtimeTargetDescription')}</Text>
+            )}
+          </View>
+          {target?.bedtimeTarget != null && <Text style={styles.chevron}>{'>'}</Text>}
+        </Pressable>
       </View>
 
       {/* Permissions - 通知やヘルスケアなど、アプリが必要とするOS権限を一覧表示 */}

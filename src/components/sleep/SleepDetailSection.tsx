@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../constants/theme';
 import type { DailySummary } from '../../hooks/useDailySummary';
+import { useSettingsStore } from '../../stores/settings-store';
 import { SleepTimelineBar } from './SleepTimelineBar';
 
 interface SleepDetailSectionProps {
@@ -17,8 +18,21 @@ function formatTimeFromIso(isoString: string): string {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
+/**
+ * 日別レビュー画面で HealthKit の睡眠データを表示するセクション。
+ *
+ * healthKitEnabled=false の場合はセクション自体を非表示にする。
+ * ユーザーが HealthKit を連携していないのに「データなし」と表示すると、
+ * 「何か壊れている？」という誤解を招くため。
+ */
 export function SleepDetailSection({ summary }: SleepDetailSectionProps) {
   const { t } = useTranslation('stats');
+  const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
+
+  // HealthKit 未連携時はセクション自体を表示しない
+  if (!healthKitEnabled) {
+    return null;
+  }
 
   // Loading
   if (summary.loading) {
@@ -32,13 +46,15 @@ export function SleepDetailSection({ summary }: SleepDetailSectionProps) {
     );
   }
 
-  // No sleep data
+  // No sleep data — HealthKit は有効だがデータがない。
+  // 権限が取り消された可能性があるため、ヒントで設定確認を促す。
   if (summary.sleep === null) {
     return (
       <View style={styles.section}>
         <Text style={commonStyles.sectionTitle}>{t('healthKit.sleep.title')}</Text>
         <View style={styles.content}>
           <Text style={styles.noDataText}>{t('healthKit.sleep.noData')}</Text>
+          <Text style={styles.noDataHintText}>{t('healthKit.noDataHint')}</Text>
         </View>
       </View>
     );
@@ -112,6 +128,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fontSize.sm,
     textAlign: 'center',
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  noDataHintText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.lg,
   },
 });

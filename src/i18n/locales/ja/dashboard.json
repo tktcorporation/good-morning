@@ -26,6 +26,22 @@
     "current": "{{count}}日連続",
     "best": "最高: {{count}}日"
   },
+  "grade": {
+    "title": "本日のグレード",
+    "excellent": "◎ Excellent",
+    "good": "○ Good",
+    "fair": "△ Fair",
+    "poor": "× Poor",
+    "undetermined": "未確定",
+    "morning": "朝",
+    "night": "夜",
+    "morningPass": "○",
+    "morningFail": "×",
+    "bedtimeOnTime": "○",
+    "bedtimeLate": "×",
+    "bedtimeNoData": "データなし",
+    "freezeCount": "\u00d7{{count}}"
+  },
   "review": {
     "title": "{{date}}",
     "target": "ターゲット",

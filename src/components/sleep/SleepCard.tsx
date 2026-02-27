@@ -50,12 +50,14 @@ export function SleepCard({ summary }: SleepCardProps) {
     );
   }
 
-  // No sleep data
+  // No sleep data — ヘルスケア権限が拒否された可能性があるため、
+  // ヒントテキストで設定アプリへの誘導を表示する。
   if (summary.sleep === null) {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <Text style={styles.noDataText}>{t('healthKit.sleep.noData')}</Text>
+        <Text style={styles.noDataHintText}>{t('healthKit.noDataHint')}</Text>
       </View>
     );
   }
@@ -136,7 +138,14 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fontSize.sm,
     textAlign: 'center',
-    paddingVertical: spacing.md,
+    paddingTop: spacing.md,
+  },
+  noDataHintText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
   },
   connectButton: {
     backgroundColor: colors.surfaceLight,

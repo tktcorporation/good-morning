@@ -242,4 +242,50 @@ describe('useWakeTargetStore', () => {
     await useWakeTargetStore.getState().loadTarget();
     expect(useWakeTargetStore.getState().target?.soundId).toBe(DEFAULT_SOUND_ID);
   });
+
+  test('setBedtimeTarget sets and persists the time', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    mockSetItem.mockClear();
+    await useWakeTargetStore.getState().setBedtimeTarget({ hour: 23, minute: 0 });
+    expect(useWakeTargetStore.getState().target?.bedtimeTarget).toEqual({
+      hour: 23,
+      minute: 0,
+    });
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"bedtimeTarget":{"hour":23,"minute":0}'),
+    );
+  });
+
+  test('setBedtimeTarget(null) clears the target', async () => {
+    await useWakeTargetStore.getState().setTarget({
+      ...DEFAULT_WAKE_TARGET,
+      bedtimeTarget: { hour: 23, minute: 0 },
+    });
+    mockSetItem.mockClear();
+    await useWakeTargetStore.getState().setBedtimeTarget(null);
+    expect(useWakeTargetStore.getState().target?.bedtimeTarget).toBeNull();
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"bedtimeTarget":null'),
+    );
+  });
+
+  test('loadTarget migrates legacy data without bedtimeTarget to null', async () => {
+    // Simulate a stored target without bedtimeTarget (pre-migration data)
+    const legacyTarget = {
+      defaultTime: { hour: 7, minute: 0 },
+      dayOverrides: {},
+      nextOverride: null,
+      todos: [],
+      enabled: true,
+      soundId: DEFAULT_SOUND_ID,
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.bedtimeTarget).toBeNull();
+  });
 });
