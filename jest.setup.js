@@ -18,22 +18,16 @@ jest.mock('expo-notifications', () => ({
   },
 }));
 
-// Mock expo-av
-jest.mock('expo-av', () => ({
-  Audio: {
-    Sound: {
-      createAsync: jest.fn().mockResolvedValue({
-        sound: {
-          playAsync: jest.fn(),
-          stopAsync: jest.fn(),
-          unloadAsync: jest.fn(),
-          setIsLoopingAsync: jest.fn(),
-          setVolumeAsync: jest.fn(),
-        },
-      }),
-    },
-    setAudioModeAsync: jest.fn(),
-  },
+// Mock expo-audio
+jest.mock('expo-audio', () => ({
+  createAudioPlayer: jest.fn(() => ({
+    play: jest.fn(),
+    pause: jest.fn(),
+    release: jest.fn(),
+    loop: false,
+    volume: 1.0,
+  })),
+  setAudioModeAsync: jest.fn(),
 }));
 
 // Mock expo-localization
