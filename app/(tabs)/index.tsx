@@ -279,18 +279,21 @@ export default function DashboardScreen() {
         <View style={commonStyles.section}>
           <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
           {target !== null && target.todos.length > 0 ? (
-            target.todos.map((todo) => (
-              <View key={todo.id} style={styles.todoRow}>
-                <View style={styles.todoBullet} />
-                <Text style={styles.todoText}>{todo.title}</Text>
-                <Pressable
-                  style={styles.todoDeleteButton}
-                  onPress={() => handleRemoveTodo(todo.id)}
-                >
-                  <Text style={styles.todoDeleteText}>{'x'}</Text>
-                </Pressable>
-              </View>
-            ))
+            <>
+              <Text style={styles.todoDescription}>{t('todos.description')}</Text>
+              {target.todos.map((todo) => (
+                <View key={todo.id} style={styles.todoRow}>
+                  <View style={styles.todoBullet} />
+                  <Text style={styles.todoText}>{todo.title}</Text>
+                  <Pressable
+                    style={styles.todoDeleteButton}
+                    onPress={() => handleRemoveTodo(todo.id)}
+                  >
+                    <Text style={styles.todoDeleteText}>{'x'}</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </>
           ) : (
             <Text style={styles.emptyText}>{t('todos.empty')}</Text>
           )}
@@ -457,6 +460,11 @@ const styles = StyleSheet.create({
   },
 
   // Todos
+  todoDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
   todoRow: {
     flexDirection: 'row',
     alignItems: 'center',
