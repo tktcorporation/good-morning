@@ -26,6 +26,7 @@ export default function RootLayout() {
   const loadRecords = useWakeRecordStore((s) => s.loadRecords);
   const loadSession = useMorningSessionStore((s) => s.loadSession);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const setAlarmKitGranted = useSettingsStore((s) => s.setAlarmKitGranted);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: initialization effect — runs once on mount
@@ -37,7 +38,13 @@ export default function RootLayout() {
     loadTarget();
     loadRecords();
     loadSettings();
-    initializeAlarmKit();
+    // initializeAlarmKit の結果を store に永続化して、設定画面で権限状態を正しく復元する。
+    // HealthKit は settings.healthKitEnabled で管理済みだが、AlarmKit は未管理だったため追加。
+    initializeAlarmKit().then((status) => {
+      if (status === 'authorized') {
+        setAlarmKitGranted(true);
+      }
+    });
 
     // AlarmKit の dismissPayload からスヌーズ経由かどうかを判定する。
     // scheduleSnooze() が payload に { isSnooze: true } を埋め込んでおり、
