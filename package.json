@@ -21,7 +21,8 @@
     "@react-navigation/bottom-tabs": "^7.10.1",
     "expo": "55.0.3",
     "expo-alarm-kit": "^0.1.6",
-    "expo-av": "16.0.8",
+    "expo-asset": "~55.0.8",
+    "expo-audio": "^55.0.8",
     "expo-build-properties": "^55.0.9",
     "expo-constants": "55.0.7",
     "expo-dev-client": "~55.0.10",
@@ -56,8 +57,7 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "expo-alarm-kit",
-          "expo-av"
+          "expo-alarm-kit"
         ]
       }
     }

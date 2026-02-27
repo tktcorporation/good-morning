@@ -44,7 +44,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
-    'expo-av',
+    'expo-audio',
     'expo-localization',
     [
       'expo-build-properties',
