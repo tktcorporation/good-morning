@@ -43,6 +43,10 @@ const BEDTIME_TOLERANCE_MINUTES = 30;
  * 具体的には、差分が12時間を超える場合は24時間分の補正を行い、
  * 「翌日の0:30は23:00の1.5時間後」として計算する。
  *
+ * AlarmTime 構造体ではなく hour/minute を直接受け取る。
+ * 呼び出し元が DailyGradeRecord.bedtimeTarget (HH:mm 文字列) からパースして渡すことを想定。
+ * 秒以下は切り捨て。HealthKit の就寝データは分単位で十分な精度のため。
+ *
  * @param actualBedtime - 実際の就寝時刻。null ならデータなし
  * @param targetHour - 就寝目標の時 (0-23)
  * @param targetMinute - 就寝目標の分 (0-59)
@@ -112,9 +116,16 @@ export function calculateDailyGrade(
  *
  * longestStreak は currentStreak が更新されるたびに比較・更新する。
  *
+ * @param current - 現在のストリーク状態
+ * @param grade - 確定したグレード
+ * @param gradedDate - グレード対象日 (YYYY-MM-DD)。lastGradedDate の更新に使用。
  * @returns 新しい StreakState。元のオブジェクトは変更しない。
  */
-export function applyGradeToStreak(current: StreakState, grade: DailyGrade): StreakState {
+export function applyGradeToStreak(
+  current: StreakState,
+  grade: DailyGrade,
+  gradedDate: string,
+): StreakState {
   switch (grade) {
     case 'excellent': {
       const newStreak = current.currentStreak + 1;
@@ -123,6 +134,7 @@ export function applyGradeToStreak(current: StreakState, grade: DailyGrade): Str
         currentStreak: newStreak,
         longestStreak: Math.max(current.longestStreak, newStreak),
         freezesAvailable: Math.min(current.freezesAvailable + 1, MAX_FREEZES),
+        lastGradedDate: gradedDate,
       };
     }
     case 'good': {
@@ -131,10 +143,11 @@ export function applyGradeToStreak(current: StreakState, grade: DailyGrade): Str
         ...current,
         currentStreak: newStreak,
         longestStreak: Math.max(current.longestStreak, newStreak),
+        lastGradedDate: gradedDate,
       };
     }
     case 'fair': {
-      return { ...current };
+      return { ...current, lastGradedDate: gradedDate };
     }
     case 'poor': {
       if (current.freezesAvailable > 0) {
@@ -142,11 +155,13 @@ export function applyGradeToStreak(current: StreakState, grade: DailyGrade): Str
           ...current,
           freezesAvailable: current.freezesAvailable - 1,
           freezesUsedTotal: current.freezesUsedTotal + 1,
+          lastGradedDate: gradedDate,
         };
       }
       return {
         ...current,
         currentStreak: 0,
+        lastGradedDate: gradedDate,
       };
     }
   }

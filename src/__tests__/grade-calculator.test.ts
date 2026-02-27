@@ -139,14 +139,16 @@ describe('applyGradeToStreak', () => {
     lastGradedDate: null,
   };
 
+  const testDate = '2026-02-27';
+
   describe('excellent grade', () => {
     it('increments streak by 1', () => {
-      const result = applyGradeToStreak(initialState, 'excellent');
+      const result = applyGradeToStreak(initialState, 'excellent', testDate);
       expect(result.currentStreak).toBe(1);
     });
 
     it('adds 1 freeze', () => {
-      const result = applyGradeToStreak(initialState, 'excellent');
+      const result = applyGradeToStreak(initialState, 'excellent', testDate);
       expect(result.freezesAvailable).toBe(1);
     });
 
@@ -156,7 +158,7 @@ describe('applyGradeToStreak', () => {
         currentStreak: 5,
         freezesAvailable: MAX_FREEZES,
       };
-      const result = applyGradeToStreak(stateWithMaxFreezes, 'excellent');
+      const result = applyGradeToStreak(stateWithMaxFreezes, 'excellent', testDate);
       expect(result.freezesAvailable).toBe(MAX_FREEZES);
     });
 
@@ -166,7 +168,7 @@ describe('applyGradeToStreak', () => {
         currentStreak: 3,
         longestStreak: 3,
       };
-      const result = applyGradeToStreak(state, 'excellent');
+      const result = applyGradeToStreak(state, 'excellent', testDate);
       expect(result.longestStreak).toBe(4);
     });
 
@@ -176,22 +178,27 @@ describe('applyGradeToStreak', () => {
         currentStreak: 2,
         longestStreak: 10,
       };
-      const result = applyGradeToStreak(state, 'excellent');
+      const result = applyGradeToStreak(state, 'excellent', testDate);
       expect(result.currentStreak).toBe(3);
       expect(result.longestStreak).toBe(10);
+    });
+
+    it('updates lastGradedDate', () => {
+      const result = applyGradeToStreak(initialState, 'excellent', testDate);
+      expect(result.lastGradedDate).toBe(testDate);
     });
   });
 
   describe('good grade', () => {
     it('increments streak by 1', () => {
       const state: StreakState = { ...initialState, currentStreak: 3 };
-      const result = applyGradeToStreak(state, 'good');
+      const result = applyGradeToStreak(state, 'good', testDate);
       expect(result.currentStreak).toBe(4);
     });
 
     it('does not change freezes', () => {
       const state: StreakState = { ...initialState, freezesAvailable: 1 };
-      const result = applyGradeToStreak(state, 'good');
+      const result = applyGradeToStreak(state, 'good', testDate);
       expect(result.freezesAvailable).toBe(1);
     });
 
@@ -201,28 +208,38 @@ describe('applyGradeToStreak', () => {
         currentStreak: 5,
         longestStreak: 5,
       };
-      const result = applyGradeToStreak(state, 'good');
+      const result = applyGradeToStreak(state, 'good', testDate);
       expect(result.longestStreak).toBe(6);
+    });
+
+    it('updates lastGradedDate', () => {
+      const result = applyGradeToStreak(initialState, 'good', testDate);
+      expect(result.lastGradedDate).toBe(testDate);
     });
   });
 
   describe('fair grade', () => {
     it('does not change streak', () => {
       const state: StreakState = { ...initialState, currentStreak: 5 };
-      const result = applyGradeToStreak(state, 'fair');
+      const result = applyGradeToStreak(state, 'fair', testDate);
       expect(result.currentStreak).toBe(5);
     });
 
     it('does not change freezes', () => {
       const state: StreakState = { ...initialState, freezesAvailable: 2 };
-      const result = applyGradeToStreak(state, 'fair');
+      const result = applyGradeToStreak(state, 'fair', testDate);
       expect(result.freezesAvailable).toBe(2);
     });
 
     it('does not change longestStreak', () => {
       const state: StreakState = { ...initialState, longestStreak: 10 };
-      const result = applyGradeToStreak(state, 'fair');
+      const result = applyGradeToStreak(state, 'fair', testDate);
       expect(result.longestStreak).toBe(10);
+    });
+
+    it('updates lastGradedDate', () => {
+      const result = applyGradeToStreak(initialState, 'fair', testDate);
+      expect(result.lastGradedDate).toBe(testDate);
     });
   });
 
@@ -233,7 +250,7 @@ describe('applyGradeToStreak', () => {
         currentStreak: 5,
         freezesAvailable: 1,
       };
-      const result = applyGradeToStreak(state, 'poor');
+      const result = applyGradeToStreak(state, 'poor', testDate);
       expect(result.currentStreak).toBe(5);
       expect(result.freezesAvailable).toBe(0);
     });
@@ -245,7 +262,7 @@ describe('applyGradeToStreak', () => {
         freezesAvailable: 1,
         freezesUsedTotal: 2,
       };
-      const result = applyGradeToStreak(state, 'poor');
+      const result = applyGradeToStreak(state, 'poor', testDate);
       expect(result.freezesUsedTotal).toBe(3);
     });
 
@@ -255,7 +272,7 @@ describe('applyGradeToStreak', () => {
         currentStreak: 5,
         freezesAvailable: 0,
       };
-      const result = applyGradeToStreak(state, 'poor');
+      const result = applyGradeToStreak(state, 'poor', testDate);
       expect(result.currentStreak).toBe(0);
     });
 
@@ -266,7 +283,7 @@ describe('applyGradeToStreak', () => {
         freezesAvailable: 0,
         freezesUsedTotal: 2,
       };
-      const result = applyGradeToStreak(state, 'poor');
+      const result = applyGradeToStreak(state, 'poor', testDate);
       expect(result.freezesUsedTotal).toBe(2);
     });
 
@@ -277,9 +294,14 @@ describe('applyGradeToStreak', () => {
         longestStreak: 10,
         freezesAvailable: 0,
       };
-      const result = applyGradeToStreak(state, 'poor');
+      const result = applyGradeToStreak(state, 'poor', testDate);
       expect(result.currentStreak).toBe(0);
       expect(result.longestStreak).toBe(10);
+    });
+
+    it('updates lastGradedDate', () => {
+      const result = applyGradeToStreak(initialState, 'poor', testDate);
+      expect(result.lastGradedDate).toBe(testDate);
     });
   });
 
@@ -293,7 +315,7 @@ describe('applyGradeToStreak', () => {
         lastGradedDate: '2026-02-26',
       };
       const original = { ...state };
-      applyGradeToStreak(state, 'excellent');
+      applyGradeToStreak(state, 'excellent', testDate);
 
       expect(state).toEqual(original);
     });
@@ -304,17 +326,18 @@ describe('applyGradeToStreak', () => {
       let state: StreakState = { ...initialState };
 
       // First excellent: freeze 0 → 1
-      state = applyGradeToStreak(state, 'excellent');
+      state = applyGradeToStreak(state, 'excellent', '2026-02-25');
       expect(state.freezesAvailable).toBe(1);
 
       // Second excellent: freeze 1 → 2
-      state = applyGradeToStreak(state, 'excellent');
+      state = applyGradeToStreak(state, 'excellent', '2026-02-26');
       expect(state.freezesAvailable).toBe(2);
 
       // Third excellent: freeze stays at 2 (capped)
-      state = applyGradeToStreak(state, 'excellent');
+      state = applyGradeToStreak(state, 'excellent', '2026-02-27');
       expect(state.freezesAvailable).toBe(2);
       expect(state.currentStreak).toBe(3);
+      expect(state.lastGradedDate).toBe('2026-02-27');
     });
 
     it('uses freezes then resets on consecutive poor grades', () => {
@@ -326,20 +349,21 @@ describe('applyGradeToStreak', () => {
       };
 
       // First poor: use freeze (2 → 1), streak maintained
-      const after1 = applyGradeToStreak(state, 'poor');
+      const after1 = applyGradeToStreak(state, 'poor', '2026-02-25');
       expect(after1.freezesAvailable).toBe(1);
       expect(after1.currentStreak).toBe(10);
 
       // Second poor: use freeze (1 → 0), streak maintained
-      const after2 = applyGradeToStreak(after1, 'poor');
+      const after2 = applyGradeToStreak(after1, 'poor', '2026-02-26');
       expect(after2.freezesAvailable).toBe(0);
       expect(after2.currentStreak).toBe(10);
 
       // Third poor: no freezes, streak reset
-      const after3 = applyGradeToStreak(after2, 'poor');
+      const after3 = applyGradeToStreak(after2, 'poor', '2026-02-27');
       expect(after3.freezesAvailable).toBe(0);
       expect(after3.currentStreak).toBe(0);
       expect(after3.longestStreak).toBe(10);
+      expect(after3.lastGradedDate).toBe('2026-02-27');
     });
   });
 });
