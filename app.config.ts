@@ -50,10 +50,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
-      'react-native-health',
+      '@kingstinct/react-native-healthkit',
       {
-        healthSharePermission:
+        NSHealthShareUsageDescription:
           'Good Morning はあなたの睡眠データを読み取り、起床パターンを分析します',
+        NSHealthUpdateUsageDescription: false,
+        background: false,
       },
     ],
   ],
