@@ -30,9 +30,12 @@ export default function RootLayout() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: initialization effect — runs once on mount
   useEffect(() => {
+    // handleSnoozeRefire() がセッション情報を参照するため、
+    // loadSession の Promise を保持してスヌーズ処理前に await する。
+    // 他の load は互いに独立しているため fire-and-forget で問題ない。
+    const sessionLoaded = loadSession();
     loadTarget();
     loadRecords();
-    loadSession();
     loadSettings();
     initializeAlarmKit();
 
@@ -55,8 +58,14 @@ export default function RootLayout() {
         // スヌーズ再発火: wakeup 画面を表示せず自動処理する。
         // ネイティブアラームが既にユーザーを起こしているため、アプリ側では
         // TODO状態に基づいて次のスヌーズをスケジュールし、ダッシュボードへ遷移する。
-        handleSnoozeRefire();
-        router.push('/');
+        //
+        // handleSnoozeRefire() は useMorningSessionStore.getState().session を
+        // 直接参照するため、loadSession() の完了（AsyncStorage → set()）を待つ必要がある。
+        // 待たないと session === null で判定され、スヌーズが再スケジュールされない。
+        sessionLoaded.then(() => {
+          handleSnoozeRefire();
+          router.push('/');
+        });
       } else {
         // 初回アラーム: wakeup 画面を表示してユーザーにdismissしてもらう
         router.push('/wakeup');

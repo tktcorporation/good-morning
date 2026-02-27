@@ -5,7 +5,7 @@
  * ネイティブアラームのスヌーズ/停止の二択UIではなく、
  * TODO完了状態に基づいてアプリ側でスヌーズを制御する。
  *
- * wakeup.tsx と _layout.tsx の両方から利用される。
+ * _layout.tsx（スヌーズ再発火時）と app/(tabs)/index.tsx（初回スヌーズ＋TODO管理）から利用される。
  */
 
 import { useMorningSessionStore } from '../stores/morning-session-store';

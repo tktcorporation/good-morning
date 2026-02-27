@@ -10,7 +10,7 @@ import {
   startLiveActivity,
 } from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
-import { handleSnoozeRefire, scheduleAndStoreSnooze } from '../src/services/snooze';
+import { scheduleAndStoreSnooze } from '../src/services/snooze';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -29,10 +29,8 @@ const DEMO_SOUND_DURATION_MS = 3000;
 export default function WakeUpScreen() {
   const { t } = useTranslation('wakeup');
   const { t: tCommon } = useTranslation('common');
-  const { demo, snooze } = useLocalSearchParams<{ demo?: string; snooze?: string }>();
+  const { demo } = useLocalSearchParams<{ demo?: string }>();
   const isDemo = demo === 'true';
-  // _layout.tsx が launch payload の isSnooze フラグを解析し、?snooze=true パラメータとして渡す
-  const isSnooze = snooze === 'true';
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -98,13 +96,6 @@ export default function WakeUpScreen() {
 
     if (isDemo) {
       router.back();
-      return;
-    }
-
-    // Handle snooze re-fire: don't create new record/session
-    if (isSnooze) {
-      handleSnoozeRefire();
-      router.replace('/');
       return;
     }
 
@@ -194,7 +185,6 @@ export default function WakeUpScreen() {
     resolvedTime,
     todos,
     isDemo,
-    isSnooze,
     dayBoundaryHour,
     alarmIds,
     setAlarmIds,
