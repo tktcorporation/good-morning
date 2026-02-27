@@ -18,7 +18,7 @@
 
 import { useEffect, useRef } from 'react';
 import { buildGradeRecord } from '../services/grade-finalizer';
-import { getSleepSummary, initHealthKit, isHealthKitInitialized } from '../services/health';
+import { getSleepSummary, initHealthKit } from '../services/health';
 import { useDailyGradeStore } from '../stores/daily-grade-store';
 import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
@@ -79,9 +79,9 @@ async function fetchSleepBedtime(
   if (dateStr !== yesterdayStr || !healthKitEnabled) return null;
 
   try {
-    if (!isHealthKitInitialized()) {
-      await initHealthKit();
-    }
+    // @kingstinct/react-native-healthkit は初期化不要。
+    // requestAuthorization は既に許可済みなら即成功する。
+    await initHealthKit();
     const sleepData = await getSleepSummary(date);
     return sleepData?.bedtime ?? null;
   } catch {

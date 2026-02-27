@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SleepSummary } from '../services/health';
-import { getSleepSummary, initHealthKit, isHealthKitInitialized } from '../services/health';
+import { getSleepSummary, initHealthKit } from '../services/health';
 import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { WakeRecord } from '../types/wake-record';
@@ -46,13 +46,11 @@ export function useDailySummary(date: Date): DailySummary {
     let cancelled = false;
     setLoading(true);
 
-    // アプリ再起動後は initialized=false にリセットされるため、
-    // healthKitEnabled=true なら自動で再初期化してからデータ取得する。
+    // @kingstinct/react-native-healthkit は明示的な初期化が不要。
+    // requestAuthorization を呼べば権限リクエスト完了（既に許可済みなら即成功）。
     const fetchSleep = async (): Promise<SleepSummary | null> => {
-      if (!isHealthKitInitialized()) {
-        const ok = await initHealthKit();
-        if (!ok) return null;
-      }
+      const ok = await initHealthKit();
+      if (!ok) return null;
       return getSleepSummary(date);
     };
 

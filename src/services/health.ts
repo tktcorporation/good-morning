@@ -10,153 +10,100 @@ export interface SleepSummary {
 }
 
 /**
- * Safely get the AppleHealthKit instance.
- * Returns null if HealthKit is not available (Android, simulator, Expo Go).
+ * HealthKit が利用可能かチェックする。
+ * iOS 以外、または HealthKit フレームワークが存在しないデバイスでは false。
  *
- * react-native-health は `module.exports = HealthKit` でエクスポートしており、
- * `export default` ではない。そのため `.default` ではなく require() の戻り値を
- * そのまま使う。Object.assign で NativeModule のメソッドがコピーされているため、
- * initHealthKit / getSleepSamples 等は直接呼び出せる。
+ * @kingstinct/react-native-healthkit は iOS 専用のため、
+ * Android では import 自体が失敗する。dynamic import で安全にガードする。
  */
-function getHealthKit(): import('react-native-health').AppleHealthKit | null {
-  if (Platform.OS !== 'ios') {
-    return null;
-  }
+function isAvailable(): boolean {
+  if (Platform.OS !== 'ios') return false;
   try {
-    // Dynamic require to avoid crashes on Android/non-iOS platforms.
-    // module.exports = HealthKit なので .default は不要（undefined になる）。
-    const kit = require('react-native-health') as import('react-native-health').AppleHealthKit;
-    // NativeModule が未リンクの場合、メソッドが存在しないことがある
-    if (kit?.initHealthKit == null) {
-      return null;
-    }
-    return kit;
+    const { isHealthDataAvailable } =
+      require('@kingstinct/react-native-healthkit') as typeof import('@kingstinct/react-native-healthkit');
+    return isHealthDataAvailable();
   } catch {
-    return null;
+    return false;
   }
 }
 
-let initialized = false;
-
 /**
- * Check if HealthKit has been initialized in this session.
- */
-export function isHealthKitInitialized(): boolean {
-  return initialized;
-}
-
-/**
- * Initialize HealthKit and request read permission for SleepAnalysis.
- * Returns true if initialization succeeded, false otherwise.
+ * HealthKit の SleepAnalysis 読み取り権限をリクエストする。
+ * 成功時 true を返す。
+ *
+ * @kingstinct/react-native-healthkit は initHealthKit のような初期化ステップが不要で、
+ * requestAuthorization だけでセットアップが完了する。
+ * HealthKit はプライバシー上の理由から read 権限の拒否状態を隠蔽するため、
+ * ユーザーが拒否しても true が返る場合がある。
+ *
+ * 呼び出し元: src/constants/permissions.ts, src/hooks/useDailySummary.ts, src/hooks/useGradeFinalization.ts
  */
 export async function initHealthKit(): Promise<boolean> {
-  if (initialized) return true;
-
-  const kit = getHealthKit();
-  if (kit == null) {
-    return false;
-  }
+  if (!isAvailable()) return false;
 
   try {
-    // HealthPermission enum は TypeScript 型定義（index.d.ts）にのみ存在し、
-    // ランタイムの named export としては存在しない。
-    // react-native-health の index.js は module.exports = HealthKit で全体を上書き
-    // しているため、import { HealthPermission } では取得できない。
-    // 実際の権限文字列は Constants.Permissions オブジェクトに格納されている。
-    const { Constants } = require('react-native-health') as {
-      Constants: import('react-native-health').Constants;
-    };
-    const permissions = {
-      permissions: {
-        read: [Constants.Permissions.SleepAnalysis],
-        write: [] as import('react-native-health').HealthPermission[],
-      },
-    };
-
-    return new Promise<boolean>((resolve) => {
-      kit.initHealthKit(permissions, (error) => {
-        if (error) {
-          logError('HealthKit init failed:', error);
-          initialized = false;
-          resolve(false);
-        } else {
-          initialized = true;
-          resolve(true);
-        }
-      });
+    const { requestAuthorization } =
+      require('@kingstinct/react-native-healthkit') as typeof import('@kingstinct/react-native-healthkit');
+    return await requestAuthorization({
+      toRead: ['HKCategoryTypeIdentifierSleepAnalysis'],
     });
   } catch (error) {
-    logError('HealthKit init error:', error);
+    logError('HealthKit authorization failed:', error);
     return false;
   }
 }
 
 /**
- * Query HealthKit for sleep samples (INBED type) for the given date.
- * Returns a SleepSummary with bedtime, wakeUpTime, and totalMinutes.
- * Returns null if no data is available or HealthKit is not initialized.
+ * 指定日の睡眠データを HealthKit から取得する。
+ * 前日 18:00 〜 当日 18:00 の範囲で INBED サンプルを集約し、
+ * 最も早い就寝時刻と最も遅い起床時刻から SleepSummary を構築する。
+ *
+ * 睡眠は日をまたぐため（例: 23:00就寝→7:00起床）、当日 0:00 起点だと
+ * 前日夜の就寝開始が範囲外になり睡眠セッション全体を取りこぼす恐れがある。
+ *
+ * 呼び出し元: src/hooks/useDailySummary.ts, src/hooks/useGradeFinalization.ts
  */
 export async function getSleepSummary(date: Date): Promise<SleepSummary | null> {
-  const kit = getHealthKit();
-  if (kit === null || !initialized) {
-    return null;
-  }
+  if (!isAvailable()) return null;
 
   try {
-    // 前日 18:00 〜 当日 18:00 の範囲で取得する。
-    // 睡眠は日をまたぐため（例: 23:00就寝→7:00起床）、当日 0:00 起点だと
-    // 前日夜の就寝開始が範囲外になり睡眠セッション全体を取りこぼす恐れがある。
+    const { queryCategorySamples, CategoryValueSleepAnalysis } =
+      require('@kingstinct/react-native-healthkit') as typeof import('@kingstinct/react-native-healthkit');
+
     const startDate = new Date(date);
     startDate.setDate(startDate.getDate() - 1);
     startDate.setHours(18, 0, 0, 0);
     const endDate = new Date(date);
     endDate.setHours(18, 0, 0, 0);
 
-    const samples = await new Promise<ReadonlyArray<import('react-native-health').HealthValue>>(
-      (resolve, reject) => {
-        kit.getSleepSamples(
-          {
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-          },
-          (error, results) => {
-            if (error) {
-              reject(new Error(String(error)));
-            } else {
-              resolve(results);
-            }
-          },
-        );
+    const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
+      limit: 0, // 0 = 全サンプル取得
+      ascending: true,
+      filter: {
+        date: { startDate, endDate },
       },
-    );
+    });
 
-    if (samples.length === 0) {
-      return null;
-    }
+    if (samples.length === 0) return null;
 
-    // Filter for INBED samples (value 0); fall back to all samples if none found
-    const inBedSamples = samples.filter((s) => s.value === 0);
+    // INBED サンプルをフィルタ。見つからなければ全サンプルにフォールバック。
+    const inBedSamples = samples.filter((s) => s.value === CategoryValueSleepAnalysis.inBed);
     const samplesToUse = inBedSamples.length > 0 ? inBedSamples : samples;
 
-    // Find the earliest bedtime and latest wake time from INBED samples
     let earliestStart: Date | null = null;
     let latestEnd: Date | null = null;
 
     for (const sample of samplesToUse) {
-      const sampleStart = new Date(sample.startDate);
-      const sampleEnd = new Date(sample.endDate);
-
-      if (earliestStart === null || sampleStart < earliestStart) {
-        earliestStart = sampleStart;
+      // @kingstinct は Date オブジェクトを直接返す（ISO 文字列ではない）
+      if (earliestStart === null || sample.startDate < earliestStart) {
+        earliestStart = sample.startDate;
       }
-      if (latestEnd === null || sampleEnd > latestEnd) {
-        latestEnd = sampleEnd;
+      if (latestEnd === null || sample.endDate > latestEnd) {
+        latestEnd = sample.endDate;
       }
     }
 
-    if (earliestStart === null || latestEnd === null) {
-      return null;
-    }
+    if (earliestStart === null || latestEnd === null) return null;
 
     const totalMinutes = Math.round((latestEnd.getTime() - earliestStart.getTime()) / (1000 * 60));
 
