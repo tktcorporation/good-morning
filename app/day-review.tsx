@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { DailyGradeSection } from '../src/components/grade/DailyGradeSection';
 import { SleepDetailSection } from '../src/components/sleep/SleepDetailSection';
 import {
   borderRadius,
@@ -12,6 +13,7 @@ import {
   spacing,
 } from '../src/constants/theme';
 import { useDailySummary } from '../src/hooks/useDailySummary';
+import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { formatTime } from '../src/types/alarm';
 import type { WakeResult } from '../src/types/wake-record';
@@ -28,7 +30,14 @@ export default function DayReviewScreen() {
   const { date } = useLocalSearchParams<{ readonly date: string }>();
   const records = useWakeRecordStore((s) => s.records);
 
+  const getGradeForDate = useDailyGradeStore((s) => s.getGradeForDate);
+  const gradeStreak = useDailyGradeStore((s) => s.streak);
+
   const record = useMemo(() => records.find((r) => r.date === date), [records, date]);
+  const gradeRecord = useMemo(
+    () => (date !== undefined ? getGradeForDate(date) : undefined),
+    [date, getGradeForDate],
+  );
 
   const reviewDate = useMemo(() => new Date(`${date}T00:00:00`), [date]);
   const summary = useDailySummary(reviewDate);
@@ -83,6 +92,9 @@ export default function DayReviewScreen() {
 
       {/* Sleep Data */}
       <SleepDetailSection summary={summary} />
+
+      {/* Daily Grade — 朝×夜の2軸評価とストリーク状態 */}
+      <DailyGradeSection gradeRecord={gradeRecord} streak={gradeStreak} />
 
       {/* Todo Completion */}
       {record.todos.length > 0 && (

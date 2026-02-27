@@ -2,16 +2,11 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { GradeIcon } from '../../src/components/grade/GradeIcon';
+import { StreakBadge } from '../../src/components/grade/StreakBadge';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
-import {
-  borderRadius,
-  colors,
-  commonStyles,
-  fontSize,
-  RESULT_COLORS,
-  spacing,
-} from '../../src/constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import {
@@ -46,14 +41,14 @@ export default function DashboardScreen() {
 
   const loadGrades = useDailyGradeStore((s) => s.loadGrades);
   const gradesLoaded = useDailyGradeStore((s) => s.loaded);
+  const gradeStreak = useDailyGradeStore((s) => s.streak);
+  const getGradeForDate = useDailyGradeStore((s) => s.getGradeForDate);
 
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
   const addTodo = useWakeTargetStore((s) => s.addTodo);
   const removeTodo = useWakeTargetStore((s) => s.removeTodo);
 
-  const getRecordsForPeriod = useWakeRecordStore((s) => s.getRecordsForPeriod);
-  const getCurrentStreak = useWakeRecordStore((s) => s.getCurrentStreak);
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
@@ -92,15 +87,6 @@ export default function DashboardScreen() {
     () => (weekStart !== undefined ? getWeekStats(weekStart) : null),
     [getWeekStats, weekStart],
   );
-  const currentStreak = useMemo(() => getCurrentStreak(), [getCurrentStreak]);
-
-  const weekRecords = useMemo(() => {
-    if (weekStart === undefined) return [];
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    return getRecordsForPeriod(weekStart, weekEnd);
-  }, [getRecordsForPeriod, weekStart]);
-
   // グレード履歴とストリーク状態を AsyncStorage からロードする。
   // useGradeFinalization が gradeLoaded を参照するため、ダッシュボード表示時に
   // 確実にロード済みにしておく必要がある。
@@ -328,15 +314,22 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* Weekly Calendar */}
+      {/* Streak Badge — グレードストアから取得したストリーク情報を表示 */}
+      <View style={commonStyles.section}>
+        <StreakBadge
+          currentStreak={gradeStreak.currentStreak}
+          freezesAvailable={gradeStreak.freezesAvailable}
+        />
+      </View>
+
+      {/* Weekly Calendar — 各日のグレードを GradeIcon で表示 */}
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
         <View style={styles.weekRow}>
           {recentDates.map((date) => {
             const dateStr = getLogicalDateString(date, dayBoundaryHour);
-            const record = weekRecords.find((r) => r.date === dateStr);
+            const gradeRecord = getGradeForDate(dateStr);
             const isToday = dateStr === getLogicalDateString(new Date(), dayBoundaryHour);
-            const dotColor = record !== undefined ? RESULT_COLORS[record.result] : colors.disabled;
 
             return (
               <Pressable
@@ -347,7 +340,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
                   {getDayLabel(date.getDay() as DayOfWeek, tCommon as (key: string) => string)}
                 </Text>
-                <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
+                <GradeIcon grade={gradeRecord?.grade ?? null} size={16} />
                 <Text style={styles.dayNumber}>{`${date.getDate()}`}</Text>
               </Pressable>
             );
@@ -360,14 +353,9 @@ export default function DashboardScreen() {
         <SleepCard summary={todaySummary} />
       </View>
 
-      {/* Streak + Stats */}
+      {/* Weekly Stats */}
       <View style={commonStyles.section}>
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statEmoji}>{'🔥'}</Text>
-            <Text style={styles.statValue}>{`${currentStreak}`}</Text>
-            <Text style={styles.statLabel}>{t('streak.current', { count: currentStreak })}</Text>
-          </View>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>
               {t('week.success', {
@@ -566,12 +554,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-  dayDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: spacing.xs,
-  },
   dayNumber: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
@@ -589,19 +571,10 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     alignItems: 'center',
   },
-  statEmoji: {
-    fontSize: fontSize.xxl,
-    marginBottom: spacing.xs,
-  },
   statValue: {
     color: colors.text,
     fontSize: fontSize.lg,
     fontWeight: '700',
     marginBottom: spacing.xs,
-  },
-  statLabel: {
-    color: colors.textSecondary,
-    fontSize: fontSize.xs,
-    textAlign: 'center',
   },
 });

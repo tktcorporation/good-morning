@@ -26,6 +26,22 @@
     "current": "{{count}} day streak",
     "best": "Best: {{count}} days"
   },
+  "grade": {
+    "title": "Daily Grade",
+    "excellent": "Excellent",
+    "good": "Good",
+    "fair": "Fair",
+    "poor": "Poor",
+    "undetermined": "Not yet graded",
+    "morning": "Morning",
+    "night": "Night",
+    "morningPass": "Pass",
+    "morningFail": "Fail",
+    "bedtimeOnTime": "On Time",
+    "bedtimeLate": "Late",
+    "bedtimeNoData": "No Data",
+    "freezeCount": "\u00d7{{count}}"
+  },
   "review": {
     "title": "{{date}}",
     "target": "Target",
