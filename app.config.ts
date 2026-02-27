@@ -9,7 +9,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   scheme: 'good-morning',
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
   runtimeVersion: {
     policy: 'fingerprint',
   },
@@ -41,12 +40,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#1a1a2e',
     },
     package: 'com.goodmorning.app',
-    edgeToEdgeEnabled: true,
     permissions: ['android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS'],
   },
   plugins: [
     'expo-router',
     'expo-av',
+    'expo-localization',
     [
       'expo-build-properties',
       {
