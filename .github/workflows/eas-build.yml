@@ -1,24 +1,18 @@
-# EAS Build - 内部配布用ワークフロー
+# EAS Deploy - Fingerprint ベースの条件付きビルド/アップデート
 #
-# 使い方:
-#   1. このファイルを .github/workflows/eas-build.yml にコピー
-#   2. GitHub リポジトリの Settings > Secrets に以下を追加:
-#      - EXPO_TOKEN: Expo アクセストークン
-#        (https://expo.dev/accounts/[account]/settings/access-tokens で発行)
-#      - EXPO_ASC_KEY_ID: App Store Connect API の Key ID
-#      - EXPO_ASC_ISSUER_ID: App Store Connect API の Issuer ID
-#      - EXPO_ASC_API_KEY_P8_BASE64: AuthKey_*.p8 ファイルの中身 (base64)
-#        (cat AuthKey_*.p8 | base64 で取得)
-#      - EXPO_APPLE_TEAM_ID: Apple Team ID
-#      - EXPO_APPLE_TEAM_TYPE: Apple Team Type (INDIVIDUAL / COMPANY_OR_ORGANIZATION / IN_HOUSE)
-#   3. 初回のみローカルPCで以下を実行:
-#      - npx eas-cli login
-#      - npx eas-cli build:configure
-#      - iOS内部配布の場合: Apple Developer アカウントの登録とデバイス登録が必要
-#        npx eas-cli device:create  (iPhoneのUDIDを登録)
-#   4. push すると自動でビルドが走り、Expo のダッシュボードからインストール可能
+# ネイティブコード変更時 → EAS Build（フルビルド、クレジット消費）
+# JS/TS のみ変更時    → EAS Update（OTA配信、クレジット消費なし）
+#
+# Expo Fingerprint がネイティブランタイムのハッシュを比較し、
+# 既存ビルドと互換性があれば JS バンドルだけを差し替える。
+#
+# 前提:
+#   GitHub Secrets に以下を設定済み:
+#     - EXPO_TOKEN: Expo アクセストークン
+#     - EXPO_ASC_KEY_ID / EXPO_ASC_ISSUER_ID / EXPO_ASC_API_KEY_P8_BASE64
+#     - EXPO_APPLE_TEAM_ID / EXPO_APPLE_TEAM_TYPE
 
-name: EAS Build (Internal Distribution)
+name: EAS Deploy
 
 on:
   push:
@@ -26,12 +20,65 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: eas-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: '22'
 
 jobs:
+  fingerprint:
+    name: Check Fingerprint
+    runs-on: ubuntu-latest
+    outputs:
+      native-changed: ${{ steps.check.outputs.native-changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Generate fingerprint and check for existing build
+        id: check
+        run: |
+          HASH=$(npx @expo/fingerprint . | jq -r '.hash')
+          echo "Fingerprint hash: $HASH"
+
+          # 同じ fingerprint を持つ完了済みビルドが存在するか確認
+          BUILD_ID=$(eas build:list --platform ios --status finished \
+            --json --non-interactive --limit 1 \
+            --runtimeVersion="$HASH" 2>/dev/null \
+            | jq -r '.[0].id // empty') || true
+
+          if [ -n "$BUILD_ID" ]; then
+            echo "native-changed=false" >> "$GITHUB_OUTPUT"
+            echo "Compatible build found: $BUILD_ID → EAS Update で配信"
+          else
+            echo "native-changed=true" >> "$GITHUB_OUTPUT"
+            echo "No compatible build → フルビルド実行"
+          fi
+
   build:
-    name: EAS Build
+    name: EAS Build (Native)
+    needs: fingerprint
+    if: needs.fingerprint.outputs.native-changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -68,3 +115,38 @@ jobs:
           EXPO_ASC_API_KEY_PATH: ./AuthKey.p8
           EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
           EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
+
+  update:
+    name: EAS Update (JS only)
+    needs: fingerprint
+    if: needs.fingerprint.outputs.native-changed == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish OTA update
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          eas update --branch preview \
+            --message "Deploy ${COMMIT_SHA:0:7}" \
+            --non-interactive

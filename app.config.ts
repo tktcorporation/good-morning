@@ -10,6 +10,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   scheme: 'good-morning',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
+  runtimeVersion: {
+    policy: 'fingerprint',
+  },
+  updates: {
+    url: 'https://u.expo.dev/a7deb1ff-f5c1-4073-b33a-1505a7073130',
+  },
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
