@@ -28,6 +28,7 @@ interface WakeTargetState {
   removeTodo: (id: string) => Promise<void>;
   reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
   setSoundId: (soundId: string) => Promise<void>;
+  setBedtimeTarget: (time: AlarmTime | null) => Promise<void>;
   toggleEnabled: () => Promise<void>;
   toggleTodoCompleted: (todoId: string) => void;
   resetTodos: () => void;
@@ -55,6 +56,11 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
       let migrated: WakeTarget = {
         ...(parsed as unknown as WakeTarget),
         soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
+        // bedtimeTarget が未定義（レガシーデータ）の場合は null にフォールバック
+        bedtimeTarget:
+          parsed.bedtimeTarget !== undefined
+            ? (parsed as unknown as WakeTarget).bedtimeTarget
+            : null,
       };
       // 期限切れの nextOverride を自動クリア（レガシーデータの targetDate 欠落も含む）
       if (migrated.nextOverride !== null && isNextOverrideExpired(migrated.nextOverride)) {
@@ -150,6 +156,18 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const { target } = get();
     if (target === null) return;
     const updated: WakeTarget = { ...target, soundId };
+    set({ target: updated });
+    await persist(updated);
+  },
+
+  /**
+   * 目標就寝時刻を設定する。null を渡すとクリア。
+   * Daily Grade System の夜の評価で使用される。
+   */
+  setBedtimeTarget: async (time: AlarmTime | null) => {
+    const { target } = get();
+    if (target === null) return;
+    const updated: WakeTarget = { ...target, bedtimeTarget: time };
     set({ target: updated });
     await persist(updated);
   },

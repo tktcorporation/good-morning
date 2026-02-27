@@ -13,6 +13,7 @@ describe('resolveTimeForDate', () => {
     todos: [],
     enabled: true,
     soundId: 'default',
+    bedtimeTarget: null,
   };
 
   test('returns defaultTime when no overrides', () => {
