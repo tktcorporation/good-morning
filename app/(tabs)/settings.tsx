@@ -35,12 +35,13 @@ export default function SettingsScreen() {
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
+  const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
+
   /**
    * 各権限の現在の状態を管理する。
    * APP_PERMISSIONS の id をキーとして、PermissionStatus を保持。
-   * 初期値は 'pending' で、マウント時に各権限の request() を呼ばず
-   * ステータスだけを確認する方法がないため、pending のまま開始し
-   * ユーザーが許可操作をしたら granted/denied に更新する。
+   * 初期値は 'pending' だが、healthKitEnabled が true なら
+   * HealthKit 権限は以前に許可済みなので 'granted' で初期化する。
    */
   const [permissionStatuses, setPermissionStatuses] = useState<Record<string, PermissionStatus>>(
     () => {
@@ -55,6 +56,15 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // healthKitEnabled が AsyncStorage からロードされた後、
+  // 権限ステータスに反映する。直接 useState の初期値では
+  // loadSettings 完了前なので false のままになる。
+  useEffect(() => {
+    if (healthKitEnabled) {
+      setPermissionStatuses((prev) => ({ ...prev, healthKit: 'granted' }));
+    }
+  }, [healthKitEnabled]);
 
   const handleToggleEnabled = useCallback(async () => {
     await toggleEnabled();

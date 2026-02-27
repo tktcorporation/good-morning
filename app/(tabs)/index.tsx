@@ -32,6 +32,30 @@ function getTomorrowDate(): Date {
   return tomorrow;
 }
 
+/** 週間スタッツカード。レコードが0件の時は何も表示しない（"0/0 成功" は意味不明なため） */
+function WeeklyStatsCard({
+  weekStats,
+}: {
+  readonly weekStats: import('../../src/types/wake-record').WakeStats | null;
+}) {
+  const { t } = useTranslation('dashboard');
+  const totalCount = weekStats?.totalRecords ?? 0;
+  if (totalCount === 0) return null;
+  const successCount =
+    weekStats !== null ? weekStats.resultCounts.great + weekStats.resultCounts.ok : 0;
+  return (
+    <View style={commonStyles.section}>
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>
+            {t('week.success', { count: successCount, total: totalCount })}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function DashboardScreen() {
   useGradeFinalization();
 
@@ -82,10 +106,19 @@ export default function DashboardScreen() {
   }, [tomorrow, tCommon]);
 
   const recentDates = useMemo(() => getRecentDates(), []);
-  const weekStart = recentDates[0];
+  // getWeekStats に渡す日付文字列は dayBoundaryHour を考慮する必要がある。
+  // WakeRecord.date は getLogicalDateString で保存されるため、
+  // 同じ関数で変換しないとレコードが見つからない。
+  const weekStartStr = useMemo(
+    () =>
+      recentDates[0] !== undefined
+        ? getLogicalDateString(recentDates[0], dayBoundaryHour)
+        : undefined,
+    [recentDates, dayBoundaryHour],
+  );
   const weekStats = useMemo(
-    () => (weekStart !== undefined ? getWeekStats(weekStart) : null),
-    [getWeekStats, weekStart],
+    () => (weekStartStr !== undefined ? getWeekStats(weekStartStr) : null),
+    [getWeekStats, weekStartStr],
   );
   // グレード履歴とストリーク状態を AsyncStorage からロードする。
   // useGradeFinalization が gradeLoaded を参照するため、ダッシュボード表示時に
@@ -210,10 +243,6 @@ export default function DashboardScreen() {
       </View>
     );
   }
-
-  const successCount =
-    weekStats !== null ? weekStats.resultCounts.great + weekStats.resultCounts.ok : 0;
-  const totalCount = weekStats?.totalRecords ?? 0;
 
   const sessionActive = session !== null;
   const progress = sessionActive ? getProgress() : null;
@@ -354,18 +383,7 @@ export default function DashboardScreen() {
       </View>
 
       {/* Weekly Stats */}
-      <View style={commonStyles.section}>
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>
-              {t('week.success', {
-                count: successCount,
-                total: totalCount,
-              })}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <WeeklyStatsCard weekStats={weekStats} />
     </ScrollView>
   );
 }

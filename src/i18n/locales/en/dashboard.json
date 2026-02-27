@@ -48,7 +48,8 @@
     "actual": "Actual",
     "result": "Result",
     "todos": "Tasks",
-    "noRecord": "No record"
+    "noRecord": "No record",
+    "noAlarm": "No alarm was set for this day"
   },
   "targetEdit": {
     "title": "Change wake time",

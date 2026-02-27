@@ -48,7 +48,8 @@
     "actual": "実際",
     "result": "結果",
     "todos": "タスク",
-    "noRecord": "記録なし"
+    "noRecord": "記録なし",
+    "noAlarm": "この日はアラームが設定されていませんでした"
   },
   "targetEdit": {
     "title": "起床時刻を変更",

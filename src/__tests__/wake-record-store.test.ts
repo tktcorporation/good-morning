@@ -83,8 +83,7 @@ describe('wake-record store', () => {
     await store.addRecord({ ...sampleRecord, date: '2026-02-17', result: 'ok', diffMinutes: 8 });
     await store.addRecord({ ...sampleRecord, date: '2026-02-18', result: 'late', diffMinutes: 20 });
 
-    const weekStart = new Date('2026-02-16');
-    const stats = useWakeRecordStore.getState().getWeekStats(weekStart);
+    const stats = useWakeRecordStore.getState().getWeekStats('2026-02-16');
     expect(stats.totalRecords).toBe(3);
     expect(stats.successRate).toBeCloseTo(66.7, 0);
     expect(stats.averageDiffMinutes).toBe(10);
