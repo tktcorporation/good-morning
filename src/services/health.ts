@@ -87,11 +87,14 @@ export async function getSleepSummary(date: Date): Promise<SleepSummary | null> 
   }
 
   try {
-    // Query sleep samples for the day (midnight to midnight)
+    // 前日 18:00 〜 当日 18:00 の範囲で取得する。
+    // 睡眠は日をまたぐため（例: 23:00就寝→7:00起床）、当日 0:00 起点だと
+    // 前日夜の就寝開始が範囲外になり睡眠セッション全体を取りこぼす恐れがある。
     const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - 1);
+    startDate.setHours(18, 0, 0, 0);
     const endDate = new Date(date);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setHours(18, 0, 0, 0);
 
     const samples = await new Promise<ReadonlyArray<import('react-native-health').HealthValue>>(
       (resolve, reject) => {
