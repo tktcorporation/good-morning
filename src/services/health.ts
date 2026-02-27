@@ -1,4 +1,9 @@
-import { Platform } from 'react-native';
+import {
+  CategoryValueSleepAnalysis,
+  isHealthDataAvailable,
+  queryCategorySamples,
+  requestAuthorization,
+} from '@kingstinct/react-native-healthkit';
 
 // biome-ignore lint/suspicious/noConsole: Health service errors need logging for debugging
 const logError = console.error;
@@ -10,40 +15,22 @@ export interface SleepSummary {
 }
 
 /**
- * HealthKit が利用可能かチェックする。
- * iOS 以外、または HealthKit フレームワークが存在しないデバイスでは false。
- *
- * @kingstinct/react-native-healthkit は iOS 専用のため、
- * Android では import 自体が失敗する。dynamic import で安全にガードする。
- */
-function isAvailable(): boolean {
-  if (Platform.OS !== 'ios') return false;
-  try {
-    const { isHealthDataAvailable } =
-      require('@kingstinct/react-native-healthkit') as typeof import('@kingstinct/react-native-healthkit');
-    return isHealthDataAvailable();
-  } catch {
-    return false;
-  }
-}
-
-/**
  * HealthKit の SleepAnalysis 読み取り権限をリクエストする。
  * 成功時 true を返す。
  *
- * @kingstinct/react-native-healthkit は initHealthKit のような初期化ステップが不要で、
- * requestAuthorization だけでセットアップが完了する。
+ * @kingstinct/react-native-healthkit は Android 用の no-op スタブを内蔵しており、
+ * iOS 以外では isHealthDataAvailable() が false、requestAuthorization() が
+ * Promise<false> を返すため、プラットフォーム分岐は不要。
+ *
  * HealthKit はプライバシー上の理由から read 権限の拒否状態を隠蔽するため、
  * ユーザーが拒否しても true が返る場合がある。
  *
  * 呼び出し元: src/constants/permissions.ts, src/hooks/useDailySummary.ts, src/hooks/useGradeFinalization.ts
  */
 export async function initHealthKit(): Promise<boolean> {
-  if (!isAvailable()) return false;
+  if (!isHealthDataAvailable()) return false;
 
   try {
-    const { requestAuthorization } =
-      require('@kingstinct/react-native-healthkit') as typeof import('@kingstinct/react-native-healthkit');
     return await requestAuthorization({
       toRead: ['HKCategoryTypeIdentifierSleepAnalysis'],
     });
@@ -64,12 +51,9 @@ export async function initHealthKit(): Promise<boolean> {
  * 呼び出し元: src/hooks/useDailySummary.ts, src/hooks/useGradeFinalization.ts
  */
 export async function getSleepSummary(date: Date): Promise<SleepSummary | null> {
-  if (!isAvailable()) return null;
+  if (!isHealthDataAvailable()) return null;
 
   try {
-    const { queryCategorySamples, CategoryValueSleepAnalysis } =
-      require('@kingstinct/react-native-healthkit') as typeof import('@kingstinct/react-native-healthkit');
-
     const startDate = new Date(date);
     startDate.setDate(startDate.getDate() - 1);
     startDate.setHours(18, 0, 0, 0);
