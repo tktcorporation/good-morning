@@ -13,12 +13,14 @@ import {
   spacing,
 } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
+import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import {
   cancelSnooze,
   endLiveActivity,
   isAlarmKitAvailable,
   updateLiveActivity,
 } from '../../src/services/alarm-kit';
+import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
@@ -36,9 +38,14 @@ function getTomorrowDate(): Date {
 }
 
 export default function DashboardScreen() {
+  useGradeFinalization();
+
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();
+
+  const loadGrades = useDailyGradeStore((s) => s.loadGrades);
+  const gradesLoaded = useDailyGradeStore((s) => s.loaded);
 
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
@@ -93,6 +100,13 @@ export default function DashboardScreen() {
     weekEnd.setDate(weekEnd.getDate() + 6);
     return getRecordsForPeriod(weekStart, weekEnd);
   }, [getRecordsForPeriod, weekStart]);
+
+  // グレード履歴とストリーク状態を AsyncStorage からロードする。
+  // useGradeFinalization が gradeLoaded を参照するため、ダッシュボード表示時に
+  // 確実にロード済みにしておく必要がある。
+  useEffect(() => {
+    if (!gradesLoaded) loadGrades();
+  }, [gradesLoaded, loadGrades]);
 
   // Complete session when all todos are done
   useEffect(() => {
