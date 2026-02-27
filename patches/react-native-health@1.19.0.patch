@@ -1,0 +1,31 @@
+diff --git a/index.js b/index.js
+index 06e5105d5057fc403ed92584821c6b22ff210ff3..4976e8e7ea7935d852cee9d551fe096bc8778cf2 100644
+--- a/index.js
++++ b/index.js
+@@ -2,12 +2,21 @@ import { Activities, Observers, Permissions, Units } from './src/constants'
+ 
+ const { AppleHealthKit } = require('react-native').NativeModules
+ 
+-export const HealthKit = Object.assign({}, AppleHealthKit, {
++// New Architecture (Bridgeless) では NativeModules のメソッドがプロトタイプ上に
++// 遅延ロードされるため、Object.assign() では own enumerable property しかコピーされず
++// initHealthKit 等のネイティブメソッドが消失する。
++// Object.create() でプロトタイプチェーンを維持し、Constants のみ own property として追加する。
++// See: https://github.com/agencyenterprise/react-native-health/issues/404
++export const HealthKit = Object.create(AppleHealthKit || {}, {
+   Constants: {
+-    Activities,
+-    Observers,
+-    Permissions,
+-    Units,
++    value: {
++      Activities,
++      Observers,
++      Permissions,
++      Units,
++    },
++    enumerable: true,
++    configurable: true,
+   },
+ })
+ 

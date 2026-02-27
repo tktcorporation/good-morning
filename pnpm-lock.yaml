@@ -8,6 +8,11 @@ overrides:
   tar@<7.5.8: '>=7.5.8'
   '@expo/fingerprint': 0.15.4
 
+patchedDependencies:
+  react-native-health@1.19.0:
+    hash: 0da04661e1efb0cdc852afe5ee1db09ef3e2b95276150d40a4e7204fd5ea1ec0
+    path: patches/react-native-health@1.19.0.patch
+
 importers:
 
   .:
@@ -71,7 +76,7 @@ importers:
         version: 2.28.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-health:
         specifier: 1.19.0
-        version: 1.19.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))
+        version: 1.19.0(patch_hash=0da04661e1efb0cdc852afe5ee1db09ef3e2b95276150d40a4e7204fd5ea1ec0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))
       react-native-safe-area-context:
         specifier: 5.6.2
         version: 5.6.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -8097,7 +8102,7 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)
 
-  react-native-health@1.19.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)):
+  react-native-health@1.19.0(patch_hash=0da04661e1efb0cdc852afe5ee1db09ef3e2b95276150d40a4e7204fd5ea1ec0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)):
     dependencies:
       '@expo/config-plugins': 7.9.2
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)
