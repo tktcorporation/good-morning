@@ -9,7 +9,6 @@ import {
   SNOOZE_DURATION_SECONDS,
   startLiveActivity,
 } from '../src/services/alarm-kit';
-import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
 import { scheduleAndStoreSnooze } from '../src/services/snooze';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -40,7 +39,6 @@ export default function WakeUpScreen() {
   const setAlarmIds = useWakeTargetStore((s) => s.setAlarmIds);
 
   const addRecord = useWakeRecordStore((s) => s.addRecord);
-  const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
   const startSession = useMorningSessionStore((s) => s.startSession);
 
@@ -129,48 +127,32 @@ export default function WakeUpScreen() {
         todosCompletedAt: hasTodos ? null : now.toISOString(),
       })
         .then((record) => {
-          if (hasTodos) {
-            const sessionTodos: readonly SessionTodo[] = todos.map((todo) => ({
-              id: todo.id,
-              title: todo.title,
-              completed: false,
-              completedAt: null,
-            }));
-            startSession(record.id, dateStr, sessionTodos);
+          if (!hasTodos) return;
 
-            // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
-            // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
-            scheduleAndStoreSnooze();
+          const sessionTodos: readonly SessionTodo[] = todos.map((todo) => ({
+            id: todo.id,
+            title: todo.title,
+            completed: false,
+            completedAt: null,
+          }));
+          startSession(record.id, dateStr, sessionTodos);
 
-            // セッション＋スヌーズの両方が確定してから Live Activity を開始する。
-            // スヌーズの発火時刻をカウントダウン表示に使うため、この順序が必要。
-            const liveActivityTodos = todos.map((td) => ({
-              id: td.id,
-              title: td.title,
-              completed: false,
-            }));
-            const snoozeFiresAt = new Date(
-              Date.now() + SNOOZE_DURATION_SECONDS * 1000,
-            ).toISOString();
-            startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
-              if (activityId !== null) {
-                useMorningSessionStore.getState().setLiveActivityId(activityId);
-              }
-            });
-            return;
-          }
+          // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
+          // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
+          scheduleAndStoreSnooze();
 
-          if (!isHealthKitInitialized()) return;
-          return getSleepSummary(now).then((summary) => {
-            if (summary === null) return;
-            const hkWakeTime = new Date(summary.wakeUpTime);
-            const hkDiffMinutes = calculateDiffMinutes(resolvedTime, hkWakeTime);
-            const hkResult = calculateWakeResult(hkDiffMinutes);
-            return updateRecord(record.id, {
-              healthKitWakeTime: summary.wakeUpTime,
-              diffMinutes: hkDiffMinutes,
-              result: hkResult,
-            });
+          // セッション＋スヌーズの両方が確定してから Live Activity を開始する。
+          // スヌーズの発火時刻をカウントダウン表示に使うため、この順序が必要。
+          const liveActivityTodos = todos.map((td) => ({
+            id: td.id,
+            title: td.title,
+            completed: false,
+          }));
+          const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+          startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
+            if (activityId !== null) {
+              useMorningSessionStore.getState().setLiveActivityId(activityId);
+            }
           });
         })
         .catch(() => {
@@ -189,7 +171,6 @@ export default function WakeUpScreen() {
     alarmIds,
     setAlarmIds,
     addRecord,
-    updateRecord,
     startSession,
     clearNextOverride,
     router,
