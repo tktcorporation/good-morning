@@ -10,6 +10,7 @@ import {
   initializeAlarmKit,
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
+import { handleSnoozeRefire } from '../src/services/snooze';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
@@ -29,15 +30,18 @@ export default function RootLayout() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: initialization effect — runs once on mount
   useEffect(() => {
+    // handleSnoozeRefire() がセッション情報を参照するため、
+    // loadSession の Promise を保持してスヌーズ処理前に await する。
+    // 他の load は互いに独立しているため fire-and-forget で問題ない。
+    const sessionLoaded = loadSession();
     loadTarget();
     loadRecords();
-    loadSession();
     loadSettings();
     initializeAlarmKit();
 
     // AlarmKit の dismissPayload からスヌーズ経由かどうかを判定する。
     // scheduleSnooze() が payload に { isSnooze: true } を埋め込んでおり、
-    // ここで解析して ?snooze=true パラメータとして wakeup 画面に渡す。
+    // ここで解析して処理を分岐する。
     const payload = checkLaunchPayload();
     if (payload !== null) {
       let isSnooze = false;
@@ -49,7 +53,23 @@ export default function RootLayout() {
           /* ignore */
         }
       }
-      router.push(isSnooze ? '/wakeup?snooze=true' : '/wakeup');
+
+      if (isSnooze) {
+        // スヌーズ再発火: wakeup 画面を表示せず自動処理する。
+        // ネイティブアラームが既にユーザーを起こしているため、アプリ側では
+        // TODO状態に基づいて次のスヌーズをスケジュールし、ダッシュボードへ遷移する。
+        //
+        // handleSnoozeRefire() は useMorningSessionStore.getState().session を
+        // 直接参照するため、loadSession() の完了（AsyncStorage → set()）を待つ必要がある。
+        // 待たないと session === null で判定され、スヌーズが再スケジュールされない。
+        sessionLoaded.then(() => {
+          handleSnoozeRefire();
+          router.push('/');
+        });
+      } else {
+        // 初回アラーム: wakeup 画面を表示してユーザーにdismissしてもらう
+        router.push('/wakeup');
+      }
     }
 
     AsyncStorage.getItem('onboarding-completed').then((val) => {

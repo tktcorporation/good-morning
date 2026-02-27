@@ -6,6 +6,7 @@
   "override": "Tomorrow only",
   "todos": {
     "title": "Morning Tasks",
+    "description": "These become a checklist after you dismiss your alarm",
     "addTask": "Add task",
     "placeholder": "New task",
     "empty": "Add tasks to complete when your alarm rings"

@@ -7,11 +7,10 @@ import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme'
 import {
   cancelAllAlarms,
   SNOOZE_DURATION_SECONDS,
-  scheduleSnooze,
   startLiveActivity,
-  updateLiveActivity,
 } from '../src/services/alarm-kit';
 import { getSleepSummary, isHealthKitInitialized } from '../src/services/health';
+import { scheduleAndStoreSnooze } from '../src/services/snooze';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -27,53 +26,11 @@ import { getLogicalDateString } from '../src/utils/date';
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 const DEMO_SOUND_DURATION_MS = 3000;
 
-/**
- * スヌーズ再発火時の処理。既存セッションに未完了TODOがあれば次のスヌーズを再スケジュールする。
- * 新しいレコードやセッションは作成しない — 初回 dismiss 時に作成済みのものを継続利用する。
- */
-function handleSnoozeRefire(): void {
-  const sessionState = useMorningSessionStore.getState();
-  if (sessionState.session !== null && !sessionState.areAllCompleted()) {
-    scheduleAndStoreSnooze();
-
-    // Update Live Activity with new snooze countdown
-    const activityId = sessionState.liveActivityId;
-    if (activityId !== null) {
-      const newSnoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
-      updateLiveActivity(
-        activityId,
-        sessionState.session.todos.map((t) => ({
-          id: t.id,
-          title: t.title,
-          completed: t.completed,
-        })),
-        newSnoozeFiresAt,
-      );
-    }
-  }
-}
-
-/**
- * スヌーズアラームをスケジュールし、ID と発火予定時刻をストアに保存する。
- * ID は cancelSnooze() でのキャンセルに、発火時刻はダッシュボードのカウントダウン表示に使われる。
- */
-function scheduleAndStoreSnooze(): void {
-  scheduleSnooze().then((snoozeId) => {
-    if (snoozeId !== null) {
-      const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
-      useMorningSessionStore.getState().setSnoozeAlarmId(snoozeId);
-      useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
-    }
-  });
-}
-
 export default function WakeUpScreen() {
   const { t } = useTranslation('wakeup');
   const { t: tCommon } = useTranslation('common');
-  const { demo, snooze } = useLocalSearchParams<{ demo?: string; snooze?: string }>();
+  const { demo } = useLocalSearchParams<{ demo?: string }>();
   const isDemo = demo === 'true';
-  // _layout.tsx が launch payload の isSnooze フラグを解析し、?snooze=true パラメータとして渡す
-  const isSnooze = snooze === 'true';
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -139,13 +96,6 @@ export default function WakeUpScreen() {
 
     if (isDemo) {
       router.back();
-      return;
-    }
-
-    // Handle snooze re-fire: don't create new record/session
-    if (isSnooze) {
-      handleSnoozeRefire();
-      router.replace('/');
       return;
     }
 
@@ -235,7 +185,6 @@ export default function WakeUpScreen() {
     resolvedTime,
     todos,
     isDemo,
-    isSnooze,
     dayBoundaryHour,
     alarmIds,
     setAlarmIds,

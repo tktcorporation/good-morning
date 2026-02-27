@@ -4,7 +4,11 @@ import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';
-import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
+import {
+  computeOverrideTargetDate,
+  DEFAULT_WAKE_TARGET,
+  isNextOverrideExpired,
+} from '../types/wake-target';
 
 const STORAGE_KEY = 'wake-target';
 const ALARM_IDS_KEY = 'alarm-ids';
@@ -48,10 +52,15 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const alarmIds: readonly string[] = rawIds !== null ? (JSON.parse(rawIds) as string[]) : [];
     if (raw !== null) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const migrated: WakeTarget = {
+      let migrated: WakeTarget = {
         ...(parsed as unknown as WakeTarget),
         soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
       };
+      // 期限切れの nextOverride を自動クリア（レガシーデータの targetDate 欠落も含む）
+      if (migrated.nextOverride !== null && isNextOverrideExpired(migrated.nextOverride)) {
+        migrated = { ...migrated, nextOverride: null };
+        await persist(migrated);
+      }
       set({ target: migrated, loaded: true, alarmIds });
     } else {
       const fallback: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
@@ -75,7 +84,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   setNextOverride: async (time: AlarmTime) => {
     const { target } = get();
     if (target === null) return;
-    const updated: WakeTarget = { ...target, nextOverride: { time } };
+    const targetDate = computeOverrideTargetDate(time);
+    const updated: WakeTarget = { ...target, nextOverride: { time, targetDate } };
     set({ target: updated });
     await persist(updated);
   },

@@ -1,4 +1,9 @@
-import { resolveTimeForDate, type WakeTarget } from '../types/wake-target';
+import {
+  computeOverrideTargetDate,
+  isNextOverrideExpired,
+  resolveTimeForDate,
+  type WakeTarget,
+} from '../types/wake-target';
 
 describe('resolveTimeForDate', () => {
   const baseTarget: WakeTarget = {
@@ -40,7 +45,7 @@ describe('resolveTimeForDate', () => {
     const target: WakeTarget = {
       ...baseTarget,
       dayOverrides: { 3: { type: 'custom', time: { hour: 6, minute: 30 } } },
-      nextOverride: { time: { hour: 5, minute: 0 } },
+      nextOverride: { time: { hour: 5, minute: 0 }, targetDate: '2026-02-25' },
     };
     const date = new Date('2026-02-25T00:00:00');
     expect(resolveTimeForDate(target, date)).toEqual({ hour: 5, minute: 0 });
@@ -49,9 +54,46 @@ describe('resolveTimeForDate', () => {
   test('nextOverride takes priority over defaultTime', () => {
     const target: WakeTarget = {
       ...baseTarget,
-      nextOverride: { time: { hour: 5, minute: 45 } },
+      nextOverride: { time: { hour: 5, minute: 45 }, targetDate: '2026-02-25' },
     };
     const date = new Date('2026-02-25T00:00:00');
     expect(resolveTimeForDate(target, date)).toEqual({ hour: 5, minute: 45 });
+  });
+});
+
+describe('isNextOverrideExpired', () => {
+  test('returns true when targetDate + time is in the past', () => {
+    const override = { time: { hour: 7, minute: 0 }, targetDate: '2026-02-25' };
+    const now = new Date('2026-02-25T07:01:00');
+    expect(isNextOverrideExpired(override, now)).toBe(true);
+  });
+
+  test('returns false when targetDate + time is in the future', () => {
+    const override = { time: { hour: 7, minute: 0 }, targetDate: '2026-02-25' };
+    const now = new Date('2026-02-25T06:59:00');
+    expect(isNextOverrideExpired(override, now)).toBe(false);
+  });
+
+  test('returns true for legacy override without targetDate', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: testing backward compatibility with legacy data
+    const override = { time: { hour: 7, minute: 0 } } as any;
+    expect(isNextOverrideExpired(override)).toBe(true);
+  });
+});
+
+describe('computeOverrideTargetDate', () => {
+  test('returns today if time has not passed yet', () => {
+    const now = new Date('2026-02-25T06:00:00');
+    expect(computeOverrideTargetDate({ hour: 7, minute: 0 }, now)).toBe('2026-02-25');
+  });
+
+  test('returns tomorrow if time has already passed', () => {
+    const now = new Date('2026-02-25T08:00:00');
+    expect(computeOverrideTargetDate({ hour: 7, minute: 0 }, now)).toBe('2026-02-26');
+  });
+
+  test('returns tomorrow if time is exactly now', () => {
+    const now = new Date('2026-02-25T07:00:00');
+    expect(computeOverrideTargetDate({ hour: 7, minute: 0 }, now)).toBe('2026-02-26');
   });
 });
