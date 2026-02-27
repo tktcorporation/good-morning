@@ -20,6 +20,9 @@
   "healthKit": {
     "connect": "Connect to Health",
     "connected": "Health Connected",
+    "connectFailedTitle": "Connection Failed",
+    "connectFailedIos": "Health access was not granted. Go to Settings > Privacy & Security > Health to enable it.",
+    "connectFailedNotIos": "Health integration is only available on iOS devices.",
     "noData": "No sleep data found",
     "noDataHint": "Check permissions in the Health app",
     "wakeTime": "HealthKit Wake Time",

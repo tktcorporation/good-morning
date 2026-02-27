@@ -12,16 +12,25 @@ export interface SleepSummary {
 /**
  * Safely get the AppleHealthKit instance.
  * Returns null if HealthKit is not available (Android, simulator, Expo Go).
+ *
+ * react-native-health は `module.exports = HealthKit` でエクスポートしており、
+ * `export default` ではない。そのため `.default` ではなく require() の戻り値を
+ * そのまま使う。Object.assign で NativeModule のメソッドがコピーされているため、
+ * initHealthKit / getSleepSamples 等は直接呼び出せる。
  */
 function getHealthKit(): import('react-native-health').AppleHealthKit | null {
   if (Platform.OS !== 'ios') {
     return null;
   }
   try {
-    // Dynamic require to avoid crashes on Android/non-iOS platforms
-    const AppleHealthKit = require('react-native-health')
-      .default as import('react-native-health').AppleHealthKit;
-    return AppleHealthKit;
+    // Dynamic require to avoid crashes on Android/non-iOS platforms.
+    // module.exports = HealthKit なので .default は不要（undefined になる）。
+    const kit = require('react-native-health') as import('react-native-health').AppleHealthKit;
+    // NativeModule が未リンクの場合、メソッドが存在しないことがある
+    if (kit?.initHealthKit == null) {
+      return null;
+    }
+    return kit;
   } catch {
     return null;
   }
@@ -44,15 +53,22 @@ export async function initHealthKit(): Promise<boolean> {
   if (initialized) return true;
 
   const kit = getHealthKit();
-  if (kit === null) {
+  if (kit == null) {
     return false;
   }
 
   try {
-    const { HealthPermission } = await import('react-native-health');
+    // HealthPermission enum は TypeScript 型定義（index.d.ts）にのみ存在し、
+    // ランタイムの named export としては存在しない。
+    // react-native-health の index.js は module.exports = HealthKit で全体を上書き
+    // しているため、import { HealthPermission } では取得できない。
+    // 実際の権限文字列は Constants.Permissions オブジェクトに格納されている。
+    const { Constants } = require('react-native-health') as {
+      Constants: import('react-native-health').Constants;
+    };
     const permissions = {
       permissions: {
-        read: [HealthPermission.SleepAnalysis],
+        read: [Constants.Permissions.SleepAnalysis],
         write: [] as import('react-native-health').HealthPermission[],
       },
     };

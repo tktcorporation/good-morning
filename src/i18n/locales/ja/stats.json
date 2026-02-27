@@ -20,6 +20,9 @@
   "healthKit": {
     "connect": "ヘルスケアと連携",
     "connected": "ヘルスケア連携済み",
+    "connectFailedTitle": "連携できませんでした",
+    "connectFailedIos": "ヘルスケアへのアクセスが許可されませんでした。「設定」>「プライバシーとセキュリティ」>「ヘルスケア」から許可してください。",
+    "connectFailedNotIos": "ヘルスケア連携はiOSデバイスでのみ利用可能です。",
     "noData": "睡眠データが見つかりません",
     "noDataHint": "ヘルスケアアプリで権限を確認してください",
     "wakeTime": "HealthKit起床時刻",

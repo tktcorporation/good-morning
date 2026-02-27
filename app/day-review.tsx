@@ -42,7 +42,10 @@ export default function DayReviewScreen() {
   const reviewDate = useMemo(() => new Date(`${date}T00:00:00`), [date]);
   const summary = useDailySummary(reviewDate);
 
-  if (record === undefined) {
+  // WakeRecord も DailyGradeRecord もない日のみ「記録なし」を表示。
+  // useGradeFinalization が過去の日のグレードを自動生成するため、
+  // WakeRecord がなくても gradeRecord が存在するケースがある（アラーム未使用日など）。
+  if (record === undefined && gradeRecord === undefined) {
     return (
       <View style={styles.container}>
         <View style={styles.center}>
@@ -52,64 +55,69 @@ export default function DayReviewScreen() {
     );
   }
 
-  const resultColor = RESULT_COLORS[record.result];
-  const resultLabel = RESULT_LABELS[record.result];
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.dateTitle}>{t('review.title', { date: date ?? '' })}</Text>
 
-      {/* Result Badge */}
-      <View style={[styles.resultBadge, { backgroundColor: resultColor }]}>
-        <Text style={styles.resultBadgeText}>{resultLabel}</Text>
-      </View>
+      {record !== undefined ? (
+        <>
+          {/* Result Badge */}
+          <View style={[styles.resultBadge, { backgroundColor: RESULT_COLORS[record.result] }]}>
+            <Text style={styles.resultBadgeText}>{RESULT_LABELS[record.result]}</Text>
+          </View>
 
-      {/* Time Info */}
-      <View style={styles.infoSection}>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t('review.target')}</Text>
-          <Text style={styles.infoValue}>{formatTime(record.targetTime)}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t('review.actual')}</Text>
-          <Text style={styles.infoValue}>
-            {new Date(record.dismissedAt).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            })}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t('review.result')}</Text>
-          <Text style={[styles.infoValue, { color: resultColor }]}>
-            {record.diffMinutes > 0
-              ? `+${Math.round(record.diffMinutes)} min`
-              : `${Math.round(record.diffMinutes)} min`}
-          </Text>
-        </View>
-      </View>
+          {/* Time Info */}
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{t('review.target')}</Text>
+              <Text style={styles.infoValue}>{formatTime(record.targetTime)}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{t('review.actual')}</Text>
+              <Text style={styles.infoValue}>
+                {new Date(record.dismissedAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{t('review.result')}</Text>
+              <Text style={[styles.infoValue, { color: RESULT_COLORS[record.result] }]}>
+                {record.diffMinutes > 0
+                  ? `+${Math.round(record.diffMinutes)} min`
+                  : `${Math.round(record.diffMinutes)} min`}
+              </Text>
+            </View>
+          </View>
+
+          {/* Todo Completion */}
+          {record.todos.length > 0 && (
+            <View style={styles.todosSection}>
+              <Text style={commonStyles.sectionTitle}>{t('review.todos')}</Text>
+              {record.todos.map((todo) => (
+                <View key={todo.id} style={styles.todoRow}>
+                  <Text style={styles.todoCheckmark}>{todo.completedAt !== null ? '✓' : '○'}</Text>
+                  <Text
+                    style={[styles.todoText, todo.completedAt !== null && styles.todoCompleted]}
+                  >
+                    {todo.title}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      ) : (
+        <Text style={styles.noAlarmText}>{t('review.noAlarm')}</Text>
+      )}
 
       {/* Sleep Data */}
       <SleepDetailSection summary={summary} />
 
       {/* Daily Grade — 朝×夜の2軸評価とストリーク状態 */}
       <DailyGradeSection gradeRecord={gradeRecord} streak={gradeStreak} />
-
-      {/* Todo Completion */}
-      {record.todos.length > 0 && (
-        <View style={styles.todosSection}>
-          <Text style={commonStyles.sectionTitle}>{t('review.todos')}</Text>
-          {record.todos.map((todo) => (
-            <View key={todo.id} style={styles.todoRow}>
-              <Text style={styles.todoCheckmark}>{todo.completedAt !== null ? '✓' : '○'}</Text>
-              <Text style={[styles.todoText, todo.completedAt !== null && styles.todoCompleted]}>
-                {todo.title}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
     </ScrollView>
   );
 }
@@ -130,6 +138,12 @@ const styles = StyleSheet.create({
   noRecordText: {
     color: colors.textMuted,
     fontSize: fontSize.lg,
+  },
+  noAlarmText: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
   },
   dateTitle: {
     color: colors.text,

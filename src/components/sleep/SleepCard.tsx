@@ -1,6 +1,14 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
 import type { DailySummary } from '../../hooks/useDailySummary';
 import { initHealthKit } from '../../services/health';
@@ -20,21 +28,43 @@ export function SleepCard({ summary }: SleepCardProps) {
   const { t } = useTranslation('stats');
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
   const setHealthKitEnabled = useSettingsStore((s) => s.setHealthKitEnabled);
+  const [connecting, setConnecting] = useState(false);
 
+  // initHealthKit が false を返した場合、ユーザーにフィードバックを表示する。
+  // iOS 以外では HealthKit 自体が利用不可、iOS でも権限リクエストが
+  // システムダイアログを出さずに失敗する場合がある。
   const handleConnect = useCallback(async () => {
-    const success = await initHealthKit();
-    if (success) {
-      await setHealthKitEnabled(true);
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      const success = await initHealthKit();
+      if (success) {
+        await setHealthKitEnabled(true);
+      } else if (Platform.OS !== 'ios') {
+        Alert.alert(t('healthKit.connectFailedTitle'), t('healthKit.connectFailedNotIos'));
+      } else {
+        Alert.alert(t('healthKit.connectFailedTitle'), t('healthKit.connectFailedIos'));
+      }
+    } finally {
+      setConnecting(false);
     }
-  }, [setHealthKitEnabled]);
+  }, [setHealthKitEnabled, connecting, t]);
 
   // Not connected to HealthKit
   if (!healthKitEnabled) {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
-        <Pressable style={styles.connectButton} onPress={handleConnect}>
-          <Text style={styles.connectButtonText}>{t('healthKit.sleep.connect')}</Text>
+        <Pressable
+          style={[styles.connectButton, connecting && styles.connectButtonDisabled]}
+          onPress={handleConnect}
+          disabled={connecting}
+        >
+          {connecting ? (
+            <ActivityIndicator color={colors.primaryLight} size="small" />
+          ) : (
+            <Text style={styles.connectButtonText}>{t('healthKit.sleep.connect')}</Text>
+          )}
         </Pressable>
       </View>
     );
@@ -153,6 +183,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     alignItems: 'center',
     marginTop: spacing.sm,
+  },
+  connectButtonDisabled: {
+    opacity: 0.6,
   },
   connectButtonText: {
     color: colors.primaryLight,
