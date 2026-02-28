@@ -56,7 +56,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setDayBoundaryHour: async (hour: number) => {
-    const clamped = Math.max(0, Math.min(6, hour));
+    const clamped = Math.max(0, Math.min(23, hour));
     set({ dayBoundaryHour: clamped });
     await persist({ ...currentSettings(get), dayBoundaryHour: clamped });
   },

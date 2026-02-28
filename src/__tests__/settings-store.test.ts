@@ -60,10 +60,12 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().healthKitEnabled).toBe(true);
   });
 
-  test('setDayBoundaryHour clamps to 0-6 range', async () => {
+  test('setDayBoundaryHour clamps to 0-23 range', async () => {
     await useSettingsStore.getState().loadSettings();
-    await useSettingsStore.getState().setDayBoundaryHour(7);
-    expect(useSettingsStore.getState().dayBoundaryHour).toBe(6);
+    await useSettingsStore.getState().setDayBoundaryHour(23);
+    expect(useSettingsStore.getState().dayBoundaryHour).toBe(23);
+    await useSettingsStore.getState().setDayBoundaryHour(24);
+    expect(useSettingsStore.getState().dayBoundaryHour).toBe(23);
     await useSettingsStore.getState().setDayBoundaryHour(-1);
     expect(useSettingsStore.getState().dayBoundaryHour).toBe(0);
   });
