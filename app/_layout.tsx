@@ -18,6 +18,7 @@ import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
+import { getLogicalDateString } from '../src/utils/date';
 
 /**
  * AlarmKit の LaunchPayload からスヌーズ経由かどうかを判定する。
@@ -79,7 +80,20 @@ export default function RootLayout() {
           router.push('/');
         });
       } else {
-        // 初回アラーム: wakeup 画面を表示してユーザーにdismissしてもらう
+        // 初回アラーム: 古いセッションが残っていればクリーンアップしてから wakeup 画面へ
+        sessionLoaded.then(() => {
+          const state = useMorningSessionStore.getState();
+          if (state.session !== null) {
+            const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
+            const today = getLogicalDateString(new Date(), dayBoundaryHour);
+            if (state.session.date !== today) {
+              if (state.session.liveActivityId !== null) {
+                endLiveActivity(state.session.liveActivityId);
+              }
+              state.clearSession();
+            }
+          }
+        });
         router.push('/wakeup');
       }
     } else {
@@ -137,6 +151,11 @@ export default function RootLayout() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only reacting to target changes to avoid infinite loop
   useEffect(() => {
     if (target === null) return;
+
+    // アクティブセッション中は target 変更によるアラーム再スケジュールをスキップ。
+    // cancelAllAlarms がスヌーズを巻き添えでキャンセルしてしまうのを防ぐ。
+    // セッション完了後の completion effect (index.tsx) で再スケジュールされる。
+    if (useMorningSessionStore.getState().isActive()) return;
 
     if (target.enabled) {
       scheduleWakeTargetAlarm(target).then((newIds) => {

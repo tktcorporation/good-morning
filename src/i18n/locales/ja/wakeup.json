@@ -4,5 +4,9 @@
   "demoComplete": "デモ完了",
   "alarmNotFound": "アラームが見つかりません",
   "snoozeTitle": "スヌーズ",
-  "snoozeRemaining": "残りタスク: {{count}}件"
+  "snoozeRemaining": "残りタスク: {{count}}件",
+  "error": {
+    "title": "エラー",
+    "recordSaveFailed": "起床記録の保存に失敗しました。アラームは解除されましたが、記録を保存できませんでした。"
+  }
 }

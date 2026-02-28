@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
 import {
@@ -48,6 +48,7 @@ export default function WakeUpScreen() {
   const resolvedTime = target !== null ? resolveTimeForDate(target, new Date()) : null;
 
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [dismissing, setDismissing] = useState(false);
 
   const mountedAt = useRef(new Date());
 
@@ -82,6 +83,9 @@ export default function WakeUpScreen() {
   }, []);
 
   const handleDismiss = useCallback(() => {
+    if (dismissing) return;
+    setDismissing(true);
+
     stopAlarmSound();
     Vibration.cancel();
 
@@ -163,6 +167,12 @@ export default function WakeUpScreen() {
         .catch((e: unknown) => {
           // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
           console.error('[WakeUp] Failed to save record:', e);
+          // dismiss 自体は完了しているため、ユーザーに通知するが操作はブロックしない。
+          // 次回のアラームで新しい WakeRecord が作成される。
+          Alert.alert(
+            t('error.title'),
+            t('error.recordSaveFailed'),
+          );
         });
     }
 
@@ -171,6 +181,7 @@ export default function WakeUpScreen() {
     void clearNextOverride();
     router.replace('/');
   }, [
+    dismissing,
     target,
     resolvedTime,
     todos,
@@ -182,6 +193,7 @@ export default function WakeUpScreen() {
     startSession,
     clearNextOverride,
     router,
+    t,
   ]);
 
   if (target === null) {

@@ -4,5 +4,9 @@
   "demoComplete": "Demo Complete",
   "alarmNotFound": "Alarm not found",
   "snoozeTitle": "Snooze",
-  "snoozeRemaining": "Remaining tasks: {{count}}"
+  "snoozeRemaining": "Remaining tasks: {{count}}",
+  "error": {
+    "title": "Error",
+    "recordSaveFailed": "Failed to save wake record. Your alarm was dismissed, but the record could not be saved."
+  }
 }

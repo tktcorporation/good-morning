@@ -10,9 +10,10 @@ import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import {
-  cancelSnoozeAlarms,
+  cancelAllAlarms,
   endLiveActivity,
   isAlarmKitAvailable,
+  scheduleWakeTargetAlarm,
   updateLiveActivity,
 } from '../../src/services/alarm-kit';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
@@ -122,15 +123,17 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
 
-    // レコード更新前にスヌーズを一括キャンセルする。
-    // updateRecord → clearSession の順で処理するため、先にキャンセルしないと
-    // clearSession でストアの snoozeAlarmIds が消えて参照できなくなる。
-    const snoozeIds = useMorningSessionStore.getState().snoozeAlarmIds;
-    if (snoozeIds.length > 0) {
-      // 意図的な fire-and-forget: useEffect は同期コールバックのため await 不可。
-      // キャンセルの成否はユーザー操作に影響しないので非同期で問題ない。
-      void cancelSnoozeAlarms(snoozeIds);
-    }
+    // アプリ再起動後は snoozeAlarmIds が消失するため、ID ベースのキャンセルではなく
+    // ネイティブ側の全アラームをキャンセルする。その後、通常の wake target アラームを
+    // 再スケジュールして翌朝のアラームを復元する。
+    void cancelAllAlarms().then(() => {
+      const currentTarget = useWakeTargetStore.getState().target;
+      if (currentTarget !== null && currentTarget.enabled) {
+        scheduleWakeTargetAlarm(currentTarget).then((newIds) => {
+          useWakeTargetStore.getState().setAlarmIds(newIds);
+        });
+      }
+    });
 
     const now = new Date();
     const todosCompletedAt = now.toISOString();
