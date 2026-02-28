@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { syncWidget } from '../services/widget-sync';
 import type { MorningSession, SessionTodo } from '../types/morning-session';
 
 const STORAGE_KEY = 'morning-session';
@@ -61,6 +62,8 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     };
     set({ session });
     await persistSession(session);
+    // ウィジェットにセッション開始を反映（fire-and-forget）
+    syncWidget().catch(() => {});
   },
 
   toggleTodo: async (todoId: string) => {
@@ -81,12 +84,16 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     };
     set({ session: updated });
     await persistSession(updated);
+    // ウィジェットに TODO 進捗を反映（fire-and-forget）
+    syncWidget().catch(() => {});
   },
 
   /** セッションと全てのエフェメラル状態（snooze）をクリアする。liveActivityId は session 内に含まれるため自動的にクリアされる。 */
   clearSession: async () => {
     set({ session: null, snoozeAlarmIds: [], snoozeFiresAt: null });
     await persistSession(null);
+    // ウィジェットにセッション終了を反映（fire-and-forget）
+    syncWidget().catch(() => {});
   },
 
   setSnoozeAlarmIds: (ids: readonly string[]) => {

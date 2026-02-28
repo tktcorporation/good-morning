@@ -12,6 +12,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { applyGradeToStreak } from '../services/grade-calculator';
+import { syncWidget } from '../services/widget-sync';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
 
@@ -103,6 +104,8 @@ export const useDailyGradeStore = create<DailyGradeState>((set, get) => ({
 
     set({ grades: updatedGrades, streak: updatedStreak });
     await persistAll(updatedGrades, updatedStreak);
+    // ウィジェットにストリーク更新を反映（fire-and-forget）
+    syncWidget().catch(() => {});
   },
 
   getGradeForDate: (date: string) => {

@@ -243,6 +243,47 @@ wakeup 画面が表示される
 | snoozeAlarmIds | アラーム dismiss 時（先行一括スケジュール） | セッションクリア時 | メモリのみ |
 | snoozeFiresAt | アラーム dismiss 時 / スヌーズ発火時 | セッションクリア時 | メモリのみ |
 | liveActivityId | Live Activity 開始時 | セッションクリア時 | AsyncStorage（session 内） |
+| WidgetData | ストア変更時 / BG Fetch 時 | 上書き更新 | App Groups UserDefaults |
+
+## 13. ホームウィジェット表示フロー
+
+```
+ホーム画面にウィジェットを追加（Small/Medium/Large）
+  └─ AlarmWidget の TimelineProvider
+       └─ App Groups UserDefaults から WidgetData を読み取り:
+            ├─ nextAlarm: 次のアラーム時刻 + 有効/無効 + 曜日
+            ├─ session: アクティブな TODO 進捗（セッション中のみ）
+            ├─ streak: 連続達成日数 + 最新グレード
+            └─ updatedAt: 最終更新時刻
+       └─ タイムライン更新トリガー:
+            ├─ メインアプリでストア変更 → syncWidget() → reloadWidgetTimelines()
+            ├─ Background Fetch → syncWidget() → reloadWidgetTimelines()
+            └─ 次のアラーム時刻（Timeline policy: .after(nextAlarmDate)）
+       └─ ウィジェットタップ → アプリを起動
+```
+
+**サイズ別表示**:
+- Small: アラーム時刻 + ストリーク + 曜日
+- Medium: 時刻 + ストリーク + TODO チェックリスト（最大5件）
+- Large: 時刻 + ストリーク + TODO + プログレスバー + スヌーズカウントダウン
+
+**関連ファイル**: `ios/GoodMorningWidgetExtension/AlarmWidget.swift`, `src/services/widget-sync.ts`
+
+## 14. バックグラウンド同期フロー
+
+```
+iOS がバックグラウンドフェッチを実行（30分〜数時間間隔、OS が判断）
+  └─ BACKGROUND_WIDGET_SYNC タスク (expo-task-manager)
+       ├─ 全ストアを AsyncStorage からロード
+       │    (loadTarget, loadSession, loadGrades, loadSettings)
+       ├─ buildWidgetData() で最新データを組み立て
+       ├─ syncWidgetData() で App Groups UserDefaults に書き出し
+       └─ reloadWidgetTimelines() でウィジェットタイムライン更新
+```
+
+**制約**: iOS が実行タイミングを制御（保証なし）。HealthKit はバックグラウンドで取得不可。
+
+**関連ファイル**: `src/services/background-sync.ts`, `app/_layout.tsx`
 
 ## 設定UXオーバーホール — ユーザーフロー検証
 

@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: false,
     bundleIdentifier: 'com.tktcorporation.goodmorning',
     infoPlist: {
-      UIBackgroundModes: ['audio'],
+      UIBackgroundModes: ['audio', 'fetch'],
       ITSAppUsesNonExemptEncryption: false,
       NSAlarmKitUsageDescription: 'Good Morning uses alarms to wake you up at your scheduled time.',
       NSSupportsLiveActivities: true,
