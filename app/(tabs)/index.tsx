@@ -159,7 +159,15 @@ export default function DashboardScreen() {
       todosCompletedAt,
       todoCompletionSeconds,
       todos: todoRecords,
-    }).then(() => clearSession());
+    })
+      .then(() => clearSession())
+      .catch(() => {
+        // updateRecord 失敗時でもセッションをクリアする。
+        // レコード更新は失われるが、セッションが残り続けると completion effect が
+        // 無限に再発火し、ユーザーが朝ルーティンから抜け出せなくなる。
+        // cleanupStaleSession は翌日にしか発動しないため、即座にクリアが必要。
+        clearSession();
+      });
   }, [session, areAllCompleted, updateRecord, clearSession]);
 
   // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。

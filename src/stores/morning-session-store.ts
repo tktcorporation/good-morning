@@ -102,8 +102,13 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     if (session === null) return;
     const updated: MorningSession = { ...session, liveActivityId: id };
     set({ session: updated });
-    // 永続化して、アプリ再起動後も Live Activity を終了できるようにする
-    persistSession(updated);
+    // 永続化して、アプリ再起動後も Live Activity を終了できるようにする。
+    // 失敗時はログのみ。set() で in-memory は更新済みなので、
+    // アプリが kill されなければ endLiveActivity は正常に動作する。
+    persistSession(updated).catch(() => {
+      // biome-ignore lint/suspicious/noConsole: persist 失敗のデバッグ用
+      console.error('[MorningSession] Failed to persist liveActivityId');
+    });
   },
 
   isActive: () => get().session !== null,
