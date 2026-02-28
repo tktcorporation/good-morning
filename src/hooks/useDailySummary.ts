@@ -4,7 +4,7 @@ import { getSleepSummary, initHealthKit } from '../services/health';
 import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { WakeRecord } from '../types/wake-record';
-import { calculateDiffMinutes, calculateWakeResult, formatDateString } from '../types/wake-record';
+import { formatDateString } from '../types/wake-record';
 
 export interface DailySummary {
   readonly date: string;
@@ -73,17 +73,17 @@ export function useDailySummary(date: Date): DailySummary {
   // HealthKit の睡眠データと WakeRecord を自動同期する。
   // アプリを開くたびに useDailySummary が実行されるため、
   // ここで同期すれば特定のタイミング（解除時・TODO完了時）に限定する必要がない。
+  //
+  // healthKitWakeTime のみを更新し、diffMinutes と result は変更しない。
+  // 理由: diffMinutes と result はアラーム解除時点のユーザーの実際の行動に基づく値。
+  // HealthKit の睡眠推定起床時刻はセンサーベースの推定値であり、アラーム操作時刻と
+  // 異なる場合がある（例: ユーザーが即座に解除しても、HealthKit が入眠中と判定）。
+  // ユーザーの実際の操作を正として維持し、HealthKit データは参考値として別フィールドに保持する。
   useEffect(() => {
     if (sleep === null || record === undefined || record.healthKitWakeTime !== null) return;
 
-    const hkWakeTime = new Date(sleep.wakeUpTime);
-    const hkDiffMinutes = calculateDiffMinutes(record.targetTime, hkWakeTime);
-    const hkResult = calculateWakeResult(hkDiffMinutes);
-
     updateRecord(record.id, {
       healthKitWakeTime: sleep.wakeUpTime,
-      diffMinutes: hkDiffMinutes,
-      result: hkResult,
     });
   }, [sleep, record, updateRecord]);
 
