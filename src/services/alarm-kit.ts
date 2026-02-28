@@ -300,3 +300,36 @@ export function checkLaunchPayload(): LaunchPayload | null {
   if (kit === null) return null;
   return kit.getLaunchPayload();
 }
+
+/**
+ * App Groups UserDefaults にウィジェット表示用データを書き込む。
+ * Widget Extension がこのデータを読み取ってタイムラインを生成する。
+ * ネイティブモジュールが利用不可の場合は no-op。
+ */
+export async function syncWidgetData(jsonString: string): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  const fn = (kit as Record<string, unknown>).syncWidgetData;
+  if (typeof fn !== 'function') return;
+  try {
+    await (fn as (groupId: string, json: string) => Promise<void>)(APP_GROUP_ID, jsonString);
+  } catch (e) {
+    logError('[AlarmKit] syncWidgetData failed:', e);
+  }
+}
+
+/**
+ * WidgetCenter.shared.reloadAllTimelines() を呼び出して全ウィジェットを更新する。
+ * syncWidgetData() の後に呼ぶ。ネイティブモジュールが利用不可の場合は no-op。
+ */
+export async function reloadWidgetTimelines(): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  const fn = (kit as Record<string, unknown>).reloadWidgetTimelines;
+  if (typeof fn !== 'function') return;
+  try {
+    await (fn as () => Promise<void>)();
+  } catch (e) {
+    logError('[AlarmKit] reloadWidgetTimelines failed:', e);
+  }
+}
