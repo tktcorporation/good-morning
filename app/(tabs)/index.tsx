@@ -63,8 +63,6 @@ export default function DashboardScreen() {
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();
 
-  const loadGrades = useDailyGradeStore((s) => s.loadGrades);
-  const gradesLoaded = useDailyGradeStore((s) => s.loaded);
   const gradeStreak = useDailyGradeStore((s) => s.streak);
   const getGradeForDate = useDailyGradeStore((s) => s.getGradeForDate);
 
@@ -120,13 +118,6 @@ export default function DashboardScreen() {
     () => (weekStartStr !== undefined ? getWeekStats(weekStartStr) : null),
     [getWeekStats, weekStartStr],
   );
-  // グレード履歴とストリーク状態を AsyncStorage からロードする。
-  // useGradeFinalization が gradeLoaded を参照するため、ダッシュボード表示時に
-  // 確実にロード済みにしておく必要がある。
-  useEffect(() => {
-    if (!gradesLoaded) loadGrades();
-  }, [gradesLoaded, loadGrades]);
-
   // Complete session when all todos are done
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
@@ -136,7 +127,9 @@ export default function DashboardScreen() {
     // clearSession でストアの snoozeAlarmId が消えて参照できなくなる。
     const snoozeId = useMorningSessionStore.getState().snoozeAlarmId;
     if (snoozeId !== null) {
-      cancelSnooze(snoozeId);
+      // 意図的な fire-and-forget: useEffect は同期コールバックのため await 不可。
+      // キャンセルの成否はユーザー操作に影響しないので非同期で問題ない。
+      void cancelSnooze(snoozeId);
     }
 
     const now = new Date();
@@ -152,8 +145,8 @@ export default function DashboardScreen() {
       orderCompleted: todo.completed ? index + 1 : null,
     }));
 
-    // clearSession でストアの liveActivityId が消える前に Live Activity を終了する
-    const activityId = useMorningSessionStore.getState().liveActivityId;
+    // clearSession でセッションの liveActivityId が消える前に Live Activity を終了する
+    const activityId = useMorningSessionStore.getState().session?.liveActivityId ?? null;
     if (activityId !== null) {
       endLiveActivity(activityId);
     }
@@ -197,7 +190,7 @@ export default function DashboardScreen() {
       // 更新前の値が返る場合があるため、マイクロタスク境界を挟む。
       setTimeout(() => {
         const state = useMorningSessionStore.getState();
-        const activityId = state.liveActivityId;
+        const activityId = state.session?.liveActivityId ?? null;
         if (activityId !== null && state.session !== null) {
           updateLiveActivity(
             activityId,

@@ -4,11 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import {
-  cancelAllAlarms,
-  SNOOZE_DURATION_SECONDS,
-  startLiveActivity,
-} from '../src/services/alarm-kit';
+import { cancelAllAlarms, startLiveActivity } from '../src/services/alarm-kit';
 import { scheduleAndStoreSnooze } from '../src/services/snooze';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -139,28 +135,30 @@ export default function WakeUpScreen() {
 
           // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
           // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
-          scheduleAndStoreSnooze();
-
-          // セッション＋スヌーズの両方が確定してから Live Activity を開始する。
-          // スヌーズの発火時刻をカウントダウン表示に使うため、この順序が必要。
-          const liveActivityTodos = todos.map((td) => ({
-            id: td.id,
-            title: td.title,
-            completed: false,
-          }));
-          const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
-          startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
-            if (activityId !== null) {
-              useMorningSessionStore.getState().setLiveActivityId(activityId);
-            }
+          // scheduleAndStoreSnooze を await して返り値の snoozeFiresAt を
+          // Live Activity に渡すことで、二重計算を防ぎ一貫した値を使う。
+          scheduleAndStoreSnooze().then((snoozeFiresAt) => {
+            const liveActivityTodos = todos.map((td) => ({
+              id: td.id,
+              title: td.title,
+              completed: false,
+            }));
+            startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
+              if (activityId !== null) {
+                useMorningSessionStore.getState().setLiveActivityId(activityId);
+              }
+            });
           });
         })
-        .catch(() => {
-          // Non-blocking: don't disrupt dismiss flow
+        .catch((e: unknown) => {
+          // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
+          console.error('[WakeUp] Failed to save record:', e);
         });
     }
 
-    clearNextOverride();
+    // 意図的な fire-and-forget: handleDismiss は同期コールバックのため await 不可。
+    // AsyncStorage への永続化が遅延しても画面遷移に影響しない。
+    void clearNextOverride();
     router.replace('/');
   }, [
     target,

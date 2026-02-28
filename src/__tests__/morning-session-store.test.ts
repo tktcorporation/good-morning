@@ -7,7 +7,6 @@ beforeEach(() => {
     loaded: false,
     snoozeAlarmId: null,
     snoozeFiresAt: null,
-    liveActivityId: null,
   });
 });
 
@@ -130,17 +129,27 @@ describe('morning-session-store', () => {
   });
 
   describe('live activity state', () => {
-    it('stores liveActivityId when set', async () => {
+    it('stores liveActivityId in session when set', async () => {
       await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
       useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
-      expect(useMorningSessionStore.getState().liveActivityId).toBe('activity-xyz');
+      expect(useMorningSessionStore.getState().session?.liveActivityId).toBe('activity-xyz');
     });
 
-    it('clears liveActivityId on clearSession', async () => {
+    it('initializes liveActivityId as null in new session', async () => {
+      await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
+      expect(useMorningSessionStore.getState().session?.liveActivityId).toBeNull();
+    });
+
+    it('clears liveActivityId on clearSession (session is null)', async () => {
       await useMorningSessionStore.getState().startSession('wake_123', '2026-02-22', sampleTodos);
       useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
       await useMorningSessionStore.getState().clearSession();
-      expect(useMorningSessionStore.getState().liveActivityId).toBeNull();
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+
+    it('does nothing when setLiveActivityId is called without session', () => {
+      useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
+      expect(useMorningSessionStore.getState().session).toBeNull();
     });
   });
 });
