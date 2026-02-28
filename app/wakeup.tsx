@@ -130,7 +130,7 @@ export default function WakeUpScreen() {
         todosCompleted: !hasTodos,
         todosCompletedAt: hasTodos ? null : now.toISOString(),
       })
-        .then((record) => {
+        .then(async (record) => {
           if (!hasTodos) return;
 
           const sessionTodos: readonly SessionTodo[] = todos.map((todo) => ({
@@ -139,7 +139,7 @@ export default function WakeUpScreen() {
             completed: false,
             completedAt: null,
           }));
-          startSession(record.id, dateStr, sessionTodos);
+          await startSession(record.id, dateStr, sessionTodos);
 
           // セッション開始直後にスヌーズを先行スケジュール。
           // 先行スケジュール方式: dismiss 時点から9分間隔で最大20本（3時間分）を一括スケジュール。
