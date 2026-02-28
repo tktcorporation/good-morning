@@ -195,23 +195,21 @@ export default function DashboardScreen() {
   }, [snoozeFiresAt]);
 
   const handleToggleTodo = useCallback(
-    (todoId: string) => {
-      toggleTodo(todoId);
+    async (todoId: string) => {
+      // await で persistSession 完了を保証する。set() 自体は同期なので
+      // UI は即座に更新されるが、await 後に getState() すれば
+      // AsyncStorage 永続化も完了した確定状態を読める。
+      await toggleTodo(todoId);
 
-      // setTimeout(0) で Zustand の state 更新を待つ。
-      // toggleTodo() は同期的に set() するが、直後に getState() すると
-      // 更新前の値が返る場合があるため、マイクロタスク境界を挟む。
-      setTimeout(() => {
-        const state = useMorningSessionStore.getState();
-        const activityId = state.session?.liveActivityId ?? null;
-        if (activityId !== null && state.session !== null) {
-          updateLiveActivity(
-            activityId,
-            state.session.todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
-            state.snoozeFiresAt,
-          );
-        }
-      }, 0);
+      const state = useMorningSessionStore.getState();
+      const activityId = state.session?.liveActivityId ?? null;
+      if (activityId !== null && state.session !== null) {
+        updateLiveActivity(
+          activityId,
+          state.session.todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
+          state.snoozeFiresAt,
+        );
+      }
     },
     [toggleTodo],
   );
