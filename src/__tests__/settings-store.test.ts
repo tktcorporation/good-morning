@@ -60,11 +60,28 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().healthKitEnabled).toBe(true);
   });
 
-  test('setDayBoundaryHour clamps to 0-6 range', async () => {
+  test('setDayBoundaryHour clamps to 0-23 range', async () => {
     await useSettingsStore.getState().loadSettings();
-    await useSettingsStore.getState().setDayBoundaryHour(7);
-    expect(useSettingsStore.getState().dayBoundaryHour).toBe(6);
+    await useSettingsStore.getState().setDayBoundaryHour(23);
+    expect(useSettingsStore.getState().dayBoundaryHour).toBe(23);
+    await useSettingsStore.getState().setDayBoundaryHour(24);
+    expect(useSettingsStore.getState().dayBoundaryHour).toBe(23);
     await useSettingsStore.getState().setDayBoundaryHour(-1);
     expect(useSettingsStore.getState().dayBoundaryHour).toBe(0);
+  });
+
+  test('dayBoundaryHour変更後も既存設定が保持される', async () => {
+    mockGetItem.mockResolvedValue(
+      JSON.stringify({
+        dayBoundaryHour: 3,
+        healthKitEnabled: true,
+        alarmKitGranted: true,
+      }),
+    );
+    await useSettingsStore.getState().loadSettings();
+    await useSettingsStore.getState().setDayBoundaryHour(12);
+    expect(useSettingsStore.getState().dayBoundaryHour).toBe(12);
+    expect(useSettingsStore.getState().healthKitEnabled).toBe(true);
+    expect(useSettingsStore.getState().alarmKitGranted).toBe(true);
   });
 });

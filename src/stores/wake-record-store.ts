@@ -61,11 +61,20 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   },
 
   addRecord: async (data: Omit<WakeRecord, 'id'>): Promise<WakeRecord> => {
+    // 同日のレコードが既にある場合は上書き更新（2回連続 dismiss 等のエッジケース対策）
+    const existing = get().records.find((r) => r.date === data.date);
+    if (existing !== undefined) {
+      const merged: WakeRecord = { ...existing, ...data, id: existing.id };
+      const updated = get().records.map((r) => (r.id === existing.id ? merged : r));
+      set({ records: updated });
+      await persistRecords(updated);
+      return merged;
+    }
+
     const record: WakeRecord = {
       id: createWakeRecordId(),
       ...data,
     };
-
     const updated = [...get().records, record];
     set({ records: updated });
     await persistRecords(updated);

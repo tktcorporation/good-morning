@@ -9,6 +9,7 @@ import {
   DEFAULT_WAKE_TARGET,
   isNextOverrideExpired,
 } from '../types/wake-target';
+import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
 
 const STORAGE_KEY = 'wake-target';
 const ALARM_IDS_KEY = 'alarm-ids';
@@ -28,16 +29,38 @@ interface WakeTargetState {
   removeTodo: (id: string) => Promise<void>;
   reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
   setSoundId: (soundId: string) => Promise<void>;
-  setBedtimeTarget: (time: AlarmTime | null) => Promise<void>;
+  setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
   toggleEnabled: () => Promise<void>;
-  toggleTodoCompleted: (todoId: string) => void;
-  resetTodos: () => void;
-  areAllTodosCompleted: () => boolean;
   setAlarmIds: (ids: readonly string[]) => Promise<void>;
 }
 
 async function persist(target: WakeTarget): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(target));
+}
+
+/**
+ * AsyncStorage のパース済みデータから WakeTarget を復元する。
+ * レガシーフィールド（soundId 欠落、bedtimeTarget → targetSleepMinutes）のマイグレーションも行う。
+ */
+function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
+  // targetSleepMinutes マイグレーション:
+  // 1. 新フォーマット (targetSleepMinutes) があればそのまま使用
+  // 2. 旧フォーマット (bedtimeTarget) があれば分数に変換
+  // 3. どちらもなければ null（未設定）
+  let targetSleepMinutes: number | null = null;
+  if (typeof parsed.targetSleepMinutes === 'number') {
+    targetSleepMinutes = parsed.targetSleepMinutes as number;
+  } else if (parsed.bedtimeTarget !== undefined && parsed.bedtimeTarget !== null) {
+    const bt = parsed.bedtimeTarget as { hour: number; minute: number };
+    const dt = (parsed as unknown as WakeTarget).defaultTime;
+    targetSleepMinutes = migrateBedtimeToSleepMinutes(bt, dt);
+  }
+
+  return {
+    ...(parsed as unknown as WakeTarget),
+    soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
+    targetSleepMinutes,
+  };
 }
 
 export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
@@ -53,15 +76,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const alarmIds: readonly string[] = rawIds !== null ? (JSON.parse(rawIds) as string[]) : [];
     if (raw !== null) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      let migrated: WakeTarget = {
-        ...(parsed as unknown as WakeTarget),
-        soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
-        // bedtimeTarget が未定義（レガシーデータ）の場合は null にフォールバック
-        bedtimeTarget:
-          parsed.bedtimeTarget !== undefined
-            ? (parsed as unknown as WakeTarget).bedtimeTarget
-            : null,
-      };
+      let migrated = migrateStoredTarget(parsed);
       // 期限切れの nextOverride を自動クリア（レガシーデータの targetDate 欠落も含む）
       if (migrated.nextOverride !== null && isNextOverrideExpired(migrated.nextOverride)) {
         migrated = { ...migrated, nextOverride: null };
@@ -161,13 +176,14 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   },
 
   /**
-   * 目標就寝時刻を設定する。null を渡すとクリア。
+   * 目標睡眠時間（分）を設定する。null を渡すとクリア。
    * Daily Grade System の夜の評価で使用される。
+   * 就寝目標時刻は calculateBedtime() で算出。
    */
-  setBedtimeTarget: async (time: AlarmTime | null) => {
+  setTargetSleepMinutes: async (minutes: number | null) => {
     const { target } = get();
     if (target === null) return;
-    const updated: WakeTarget = { ...target, bedtimeTarget: time };
+    const updated: WakeTarget = { ...target, targetSleepMinutes: minutes };
     set({ target: updated });
     await persist(updated);
   },
@@ -178,32 +194,6 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, enabled: !target.enabled };
     set({ target: updated });
     await persist(updated);
-  },
-
-  toggleTodoCompleted: (todoId: string) => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = {
-      ...target,
-      todos: target.todos.map((t) => (t.id === todoId ? { ...t, completed: !t.completed } : t)),
-    };
-    set({ target: updated });
-  },
-
-  resetTodos: () => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = {
-      ...target,
-      todos: target.todos.map((t) => ({ ...t, completed: false })),
-    };
-    set({ target: updated });
-  },
-
-  areAllTodosCompleted: (): boolean => {
-    const { target } = get();
-    if (target === null || target.todos.length === 0) return true;
-    return target.todos.every((t) => t.completed);
   },
 
   setAlarmIds: async (ids: readonly string[]) => {

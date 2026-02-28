@@ -4,15 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
+import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import {
-  cancelSnooze,
+  cancelAllAlarms,
   endLiveActivity,
   isAlarmKitAvailable,
+  scheduleWakeTargetAlarm,
   updateLiveActivity,
 } from '../../src/services/alarm-kit';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
@@ -63,8 +65,6 @@ export default function DashboardScreen() {
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();
 
-  const loadGrades = useDailyGradeStore((s) => s.loadGrades);
-  const gradesLoaded = useDailyGradeStore((s) => s.loaded);
   const gradeStreak = useDailyGradeStore((s) => s.streak);
   const getGradeForDate = useDailyGradeStore((s) => s.getGradeForDate);
 
@@ -76,6 +76,7 @@ export default function DashboardScreen() {
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
+  const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const session = useMorningSessionStore((s) => s.session);
@@ -120,24 +121,21 @@ export default function DashboardScreen() {
     () => (weekStartStr !== undefined ? getWeekStats(weekStartStr) : null),
     [getWeekStats, weekStartStr],
   );
-  // グレード履歴とストリーク状態を AsyncStorage からロードする。
-  // useGradeFinalization が gradeLoaded を参照するため、ダッシュボード表示時に
-  // 確実にロード済みにしておく必要がある。
-  useEffect(() => {
-    if (!gradesLoaded) loadGrades();
-  }, [gradesLoaded, loadGrades]);
-
   // Complete session when all todos are done
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
 
-    // レコード更新前にスヌーズをキャンセルする。
-    // updateRecord → clearSession の順で処理するため、先にキャンセルしないと
-    // clearSession でストアの snoozeAlarmId が消えて参照できなくなる。
-    const snoozeId = useMorningSessionStore.getState().snoozeAlarmId;
-    if (snoozeId !== null) {
-      cancelSnooze(snoozeId);
-    }
+    // アプリ再起動後は snoozeAlarmIds が消失するため、ID ベースのキャンセルではなく
+    // ネイティブ側の全アラームをキャンセルする。その後、通常の wake target アラームを
+    // 再スケジュールして翌朝のアラームを復元する。
+    void cancelAllAlarms().then(() => {
+      const currentTarget = useWakeTargetStore.getState().target;
+      if (currentTarget?.enabled) {
+        scheduleWakeTargetAlarm(currentTarget).then((newIds) => {
+          useWakeTargetStore.getState().setAlarmIds(newIds);
+        });
+      }
+    });
 
     const now = new Date();
     const todosCompletedAt = now.toISOString();
@@ -152,8 +150,8 @@ export default function DashboardScreen() {
       orderCompleted: todo.completed ? index + 1 : null,
     }));
 
-    // clearSession でストアの liveActivityId が消える前に Live Activity を終了する
-    const activityId = useMorningSessionStore.getState().liveActivityId;
+    // clearSession でセッションの liveActivityId が消える前に Live Activity を終了する
+    const activityId = useMorningSessionStore.getState().session?.liveActivityId ?? null;
     if (activityId !== null) {
       endLiveActivity(activityId);
     }
@@ -163,7 +161,15 @@ export default function DashboardScreen() {
       todosCompletedAt,
       todoCompletionSeconds,
       todos: todoRecords,
-    }).then(() => clearSession());
+    })
+      .then(() => clearSession())
+      .catch(() => {
+        // updateRecord 失敗時でもセッションをクリアする。
+        // レコード更新は失われるが、セッションが残り続けると completion effect が
+        // 無限に再発火し、ユーザーが朝ルーティンから抜け出せなくなる。
+        // cleanupStaleSession は翌日にしか発動しないため、即座にクリアが必要。
+        clearSession();
+      });
   }, [session, areAllCompleted, updateRecord, clearSession]);
 
   // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。
@@ -197,7 +203,7 @@ export default function DashboardScreen() {
       // 更新前の値が返る場合があるため、マイクロタスク境界を挟む。
       setTimeout(() => {
         const state = useMorningSessionStore.getState();
-        const activityId = state.liveActivityId;
+        const activityId = state.session?.liveActivityId ?? null;
         if (activityId !== null && state.session !== null) {
           updateLiveActivity(
             activityId,
@@ -268,6 +274,13 @@ export default function DashboardScreen() {
           </View>
         )}
       </Pressable>
+
+      {/* Sleep Duration Card -- 目標睡眠時間と就寝目標時刻を表示 */}
+      <SleepDurationCard
+        alarmTime={resolvedTime}
+        targetSleepMinutes={target?.targetSleepMinutes ?? null}
+        onSleepMinutesChange={setTargetSleepMinutes}
+      />
 
       {/* Morning Routine Session (active) OR Todo List (inactive) */}
       {sessionActive && progress !== null ? (

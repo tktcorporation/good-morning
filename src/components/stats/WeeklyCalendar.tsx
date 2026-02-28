@@ -2,10 +2,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, RESULT_COLORS, spacing } from '../../constants/theme';
+import { useSettingsStore } from '../../stores/settings-store';
 import { formatTime } from '../../types/alarm';
 import type { WakeRecord } from '../../types/wake-record';
-import { formatDateString } from '../../types/wake-record';
-import { formatIsoTime } from '../../utils/date';
+import { formatIsoTime, getLogicalDateString } from '../../utils/date';
 
 interface WeeklyCalendarProps {
   readonly records: readonly WakeRecord[];
@@ -37,6 +37,7 @@ export function WeeklyCalendar({
 }: WeeklyCalendarProps) {
   const { t } = useTranslation('stats');
   const { t: tCommon } = useTranslation('common');
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   // Reset selection when navigating to a different week
@@ -52,12 +53,12 @@ export function WeeklyCalendar({
     for (let i = 0; i < 7; i++) {
       const date = new Date(weekStart);
       date.setDate(date.getDate() + i);
-      const dateStr = formatDateString(date);
+      const dateStr = getLogicalDateString(date, dayBoundaryHour);
       const record = records.find((r) => r.date === dateStr);
       days.push({ date, dateStr, record });
     }
     return days;
-  }, [records, weekStart]);
+  }, [records, weekStart, dayBoundaryHour]);
 
   const selectedRecord = selectedDay !== null ? weekDays[selectedDay]?.record : undefined;
 

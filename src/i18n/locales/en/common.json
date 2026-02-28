@@ -58,10 +58,6 @@
         "description": "Used to record sleep data"
       }
     },
-    "bedtimeTarget": "Bedtime Target",
-    "bedtimeTargetDescription": "Set a target to unlock \u25ce excellent grade",
-    "bedtimeNotSet": "Not Set",
-    "bedtimeClear": "Clear",
     "alarmSound": "Alarm Sound",
     "dayBoundary": "Day Boundary",
     "dayBoundaryDescription": "Hours before midnight count as the previous day",

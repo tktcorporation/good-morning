@@ -1,15 +1,15 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
 import {
   cancelAllAlarms,
   SNOOZE_DURATION_SECONDS,
+  scheduleSnoozeAlarms,
   startLiveActivity,
 } from '../src/services/alarm-kit';
-import { scheduleAndStoreSnooze } from '../src/services/snooze';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -48,6 +48,7 @@ export default function WakeUpScreen() {
   const resolvedTime = target !== null ? resolveTimeForDate(target, new Date()) : null;
 
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [dismissing, setDismissing] = useState(false);
 
   const mountedAt = useRef(new Date());
 
@@ -82,6 +83,9 @@ export default function WakeUpScreen() {
   }, []);
 
   const handleDismiss = useCallback(() => {
+    if (dismissing) return;
+    setDismissing(true);
+
     stopAlarmSound();
     Vibration.cancel();
 
@@ -137,32 +141,47 @@ export default function WakeUpScreen() {
           }));
           startSession(record.id, dateStr, sessionTodos);
 
-          // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
-          // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
-          scheduleAndStoreSnooze();
+          // セッション開始直後にスヌーズを先行スケジュール。
+          // 先行スケジュール方式: dismiss 時点から9分間隔で最大20本（3時間分）を一括スケジュール。
+          // iOS がアプリを起動しないケースでもネイティブ側で確実に発火する。
+          const dismissTime = now;
+          const snoozeFiresAt = new Date(
+            dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
+          ).toISOString();
+          scheduleSnoozeAlarms(dismissTime).then((snoozeIds) => {
+            useMorningSessionStore.getState().setSnoozeAlarmIds(snoozeIds);
+            useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
 
-          // セッション＋スヌーズの両方が確定してから Live Activity を開始する。
-          // スヌーズの発火時刻をカウントダウン表示に使うため、この順序が必要。
-          const liveActivityTodos = todos.map((td) => ({
-            id: td.id,
-            title: td.title,
-            completed: false,
-          }));
-          const snoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
-          startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
-            if (activityId !== null) {
-              useMorningSessionStore.getState().setLiveActivityId(activityId);
-            }
+            const liveActivityTodos = todos.map((td) => ({
+              id: td.id,
+              title: td.title,
+              completed: false,
+            }));
+            startLiveActivity(liveActivityTodos, snoozeFiresAt).then(async (activityId) => {
+              if (activityId !== null) {
+                // await して AsyncStorage に永続化完了を保証する。
+                // これにより、直後にアプリが kill されても再起動時に
+                // loadSession() → cleanupStaleSession() で endLiveActivity できる。
+                await useMorningSessionStore.getState().setLiveActivityId(activityId);
+              }
+            });
           });
         })
-        .catch(() => {
-          // Non-blocking: don't disrupt dismiss flow
+        .catch((e: unknown) => {
+          // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
+          console.error('[WakeUp] Failed to save record:', e);
+          // dismiss 自体は完了しているため、ユーザーに通知するが操作はブロックしない。
+          // 次回のアラームで新しい WakeRecord が作成される。
+          Alert.alert(t('error.title'), t('error.recordSaveFailed'));
         });
     }
 
-    clearNextOverride();
+    // 意図的な fire-and-forget: handleDismiss は同期コールバックのため await 不可。
+    // AsyncStorage への永続化が遅延しても画面遷移に影響しない。
+    void clearNextOverride();
     router.replace('/');
   }, [
+    dismissing,
     target,
     resolvedTime,
     todos,
@@ -174,15 +193,13 @@ export default function WakeUpScreen() {
     startSession,
     clearNextOverride,
     router,
+    t,
   ]);
 
   if (target === null) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.errorText}>{t('alarmNotFound')}</Text>
-        <Pressable style={styles.dismissButton} onPress={() => router.replace('/')}>
-          <Text style={styles.dismissButtonText}>{tCommon('goBack')}</Text>
-        </Pressable>
+        <Text style={styles.loadingText}>{tCommon('loading')}</Text>
       </View>
     );
   }
@@ -253,8 +270,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '600',
   },
-  errorText: {
-    color: colors.text,
+  loadingText: {
+    color: colors.textSecondary,
     fontSize: fontSize.lg,
     textAlign: 'center',
     marginTop: spacing.xxl,

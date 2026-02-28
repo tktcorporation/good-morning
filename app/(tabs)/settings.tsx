@@ -1,8 +1,9 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { DayBoundaryPicker } from '../../src/components/DayBoundaryPicker';
 import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
 import {
   APP_PERMISSIONS,
@@ -30,18 +31,19 @@ export default function SettingsScreen() {
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
   const soundId = target?.soundId ?? 'default';
   const setSoundId = useWakeTargetStore((s) => s.setSoundId);
-  const setBedtimeTarget = useWakeTargetStore((s) => s.setBedtimeTarget);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
+  const alarmKitGranted = useSettingsStore((s) => s.alarmKitGranted);
+  const setAlarmKitGranted = useSettingsStore((s) => s.setAlarmKitGranted);
 
   /**
    * 各権限の現在の状態を管理する。
    * APP_PERMISSIONS の id をキーとして、PermissionStatus を保持。
-   * 初期値は 'pending' だが、healthKitEnabled が true なら
-   * HealthKit 権限は以前に許可済みなので 'granted' で初期化する。
+   * 初期値は 'pending' だが、loadSettings 完了後に AsyncStorage から
+   * 復元した値で上書きされる（下の useEffect を参照）。
    */
   const [permissionStatuses, setPermissionStatuses] = useState<Record<string, PermissionStatus>>(
     () => {
@@ -57,7 +59,7 @@ export default function SettingsScreen() {
     loadSettings();
   }, [loadSettings]);
 
-  // healthKitEnabled が AsyncStorage からロードされた後、
+  // healthKitEnabled / alarmKitGranted が AsyncStorage からロードされた後、
   // 権限ステータスに反映する。直接 useState の初期値では
   // loadSettings 完了前なので false のままになる。
   useEffect(() => {
@@ -65,6 +67,12 @@ export default function SettingsScreen() {
       setPermissionStatuses((prev) => ({ ...prev, healthKit: 'granted' }));
     }
   }, [healthKitEnabled]);
+
+  useEffect(() => {
+    if (alarmKitGranted) {
+      setPermissionStatuses((prev) => ({ ...prev, alarmKit: 'granted' }));
+    }
+  }, [alarmKitGranted]);
 
   const handleToggleEnabled = useCallback(async () => {
     await toggleEnabled();
@@ -94,6 +102,7 @@ export default function SettingsScreen() {
    * 権限リクエストのハンドラ。
    * すでに granted な権限はタップしても何もしない。
    * request() が false を返した場合はiOS設定アプリへの誘導を表示する。
+   * 成功時は store に永続化して、次回起動時にも権限状態を復元できるようにする。
    */
   const handlePermissionRequest = useCallback(
     async (perm: PermissionItem) => {
@@ -102,6 +111,10 @@ export default function SettingsScreen() {
       const success = await perm.request();
       if (success) {
         setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'granted' }));
+        // AlarmKit 権限の許可状態を永続化して、次回起動時に復元する
+        if (perm.id === 'alarmKit') {
+          await setAlarmKitGranted(true);
+        }
       } else {
         setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'denied' }));
         Alert.alert(
@@ -112,50 +125,8 @@ export default function SettingsScreen() {
         );
       }
     },
-    [permissionStatuses, t],
+    [permissionStatuses, t, setAlarmKitGranted],
   );
-
-  /**
-   * 就寝目標時刻のプリセット候補。
-   * 一般的な就寝時間帯（22:00〜0:30）を30分刻みで用意し、
-   * 最後に null（クリア）を含める。Pressable のタップでサイクルする。
-   */
-  const BEDTIME_PRESETS = useMemo(
-    () =>
-      [
-        { hour: 22, minute: 0 },
-        { hour: 22, minute: 30 },
-        { hour: 23, minute: 0 },
-        { hour: 23, minute: 30 },
-        { hour: 0, minute: 0 },
-        { hour: 0, minute: 30 },
-        null,
-      ] as const,
-    [],
-  );
-
-  /**
-   * 就寝目標時刻のサイクル切り替えハンドラ。
-   * 現在の値が BEDTIME_PRESETS 内に見つかれば次の候補に進む。
-   * 見つからなければ先頭（22:00）に戻る。シンプルなUXのためピッカーではなくサイクル方式を採用。
-   */
-  const handleBedtimeCycle = useCallback(async () => {
-    const current = target?.bedtimeTarget ?? null;
-    const currentIndex = BEDTIME_PRESETS.findIndex((preset) => {
-      if (preset === null && current === null) return true;
-      if (preset === null || current === null) return false;
-      return preset.hour === current.hour && preset.minute === current.minute;
-    });
-    const nextIndex = (currentIndex + 1) % BEDTIME_PRESETS.length;
-    const next = BEDTIME_PRESETS[nextIndex];
-    await setBedtimeTarget(next ?? null);
-  }, [target?.bedtimeTarget, setBedtimeTarget, BEDTIME_PRESETS]);
-
-  const bedtimeDisplay = useMemo(() => {
-    const bt = target?.bedtimeTarget;
-    if (bt == null) return t('settings.bedtimeNotSet');
-    return `${String(bt.hour).padStart(2, '0')}:${String(bt.minute).padStart(2, '0')}`;
-  }, [target?.bedtimeTarget, t]);
 
   const isEnabled = target?.enabled ?? false;
 
@@ -207,42 +178,7 @@ export default function SettingsScreen() {
       {/* Day Boundary */}
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('settings.dayBoundary')}</Text>
-        <Text style={styles.description}>{t('settings.dayBoundaryDescription')}</Text>
-        <View style={styles.dayBoundaryRow}>
-          {[0, 1, 2, 3, 4, 5, 6].map((hour) => (
-            <Pressable
-              key={hour}
-              style={[
-                styles.dayBoundaryOption,
-                hour === dayBoundaryHour && styles.dayBoundaryOptionSelected,
-              ]}
-              onPress={() => handleDayBoundaryChange(hour)}
-            >
-              <Text
-                style={[
-                  styles.dayBoundaryText,
-                  hour === dayBoundaryHour && styles.dayBoundaryTextSelected,
-                ]}
-              >
-                {t('settings.dayBoundaryHour', { hour })}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {/* Bedtime Target — 就寝目標時刻。Daily Grade で ◎ excellent を狙うために必要 */}
-      <View style={commonStyles.section}>
-        <Text style={commonStyles.sectionTitle}>{t('settings.bedtimeTarget')}</Text>
-        <Pressable style={styles.row} onPress={handleBedtimeCycle}>
-          <View>
-            <Text style={styles.rowTitle}>{bedtimeDisplay}</Text>
-            {target?.bedtimeTarget == null && (
-              <Text style={styles.description}>{t('settings.bedtimeTargetDescription')}</Text>
-            )}
-          </View>
-          {target?.bedtimeTarget != null && <Text style={styles.chevron}>{'>'}</Text>}
-        </Pressable>
+        <DayBoundaryPicker value={dayBoundaryHour} onValueChange={handleDayBoundaryChange} />
       </View>
 
       {/* Permissions - 通知やヘルスケアなど、アプリが必要とするOS権限を一覧表示 */}
@@ -395,28 +331,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: fontSize.lg,
     fontWeight: '700',
-  },
-  dayBoundaryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  dayBoundaryOption: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  dayBoundaryOptionSelected: {
-    backgroundColor: colors.primary,
-  },
-  dayBoundaryText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  dayBoundaryTextSelected: {
-    color: colors.text,
-    fontWeight: '600',
   },
 });

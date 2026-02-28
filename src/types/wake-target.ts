@@ -23,11 +23,12 @@ export interface WakeTarget {
   readonly enabled: boolean;
   readonly soundId: string;
   /**
-   * 目標就寝時刻。Daily Grade System で夜の評価に使用。
+   * 目標睡眠時間（分）。Daily Grade System で夜の評価に使用。
    * null = 未設定（夜の判定は常に noData → 最大 good まで）。
    * excellent を取るには HealthKit 連携 + この値の設定が必要。
+   * 就寝目標時刻は calculateBedtime(defaultTime, targetSleepMinutes) で算出。
    */
-  readonly bedtimeTarget: AlarmTime | null;
+  readonly targetSleepMinutes: number | null;
 }
 
 /**
@@ -91,5 +92,5 @@ export const DEFAULT_WAKE_TARGET: WakeTarget = {
   todos: [],
   enabled: true,
   soundId: DEFAULT_SOUND_ID,
-  bedtimeTarget: null,
+  targetSleepMinutes: null,
 };

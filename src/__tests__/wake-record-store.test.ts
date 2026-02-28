@@ -77,6 +77,17 @@ describe('wake-record store', () => {
     expect(updated?.todoCompletionSeconds).toBe(420);
   });
 
+  it('overwrites existing record when adding duplicate date', async () => {
+    const store = useWakeRecordStore.getState();
+    const first = await store.addRecord({ ...sampleRecord, result: 'ok' });
+    const second = await store.addRecord({ ...sampleRecord, result: 'great' });
+
+    const state = useWakeRecordStore.getState();
+    expect(state.records).toHaveLength(1);
+    expect(second.id).toBe(first.id);
+    expect(state.records[0]?.result).toBe('great');
+  });
+
   it('calculates week stats', async () => {
     const store = useWakeRecordStore.getState();
     await store.addRecord({ ...sampleRecord, date: '2026-02-16', result: 'great', diffMinutes: 2 });

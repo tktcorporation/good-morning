@@ -26,7 +26,8 @@ import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmTime } from '../types/alarm';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { WakeRecord } from '../types/wake-record';
-import { formatDateString } from '../types/wake-record';
+import { getLogicalDateString } from '../utils/date';
+import { calculateBedtime } from '../utils/sleep';
 
 /**
  * モジュールスコープのフラグ。
@@ -106,6 +107,10 @@ async function finalizeDay(
 ): Promise<void> {
   if (getGradeForDate(dateStr) !== undefined) return;
 
+  // WakeRecord が見つからない場合、buildGradeRecord は record=undefined として処理する。
+  // これは「アラームが鳴ったが dismiss されなかった（missed）」ケースに相当し、
+  // morningPass: false → grade は fair 以下になる。
+  // WakeRecord の明示的な 'missed' 記録は作成しない（推論で十分なため）。
   const record = records.find((r) => r.date === dateStr);
   const sleepBedtime = await fetchSleepBedtime(dateStr, yesterdayStr, healthKitEnabled, date);
   const gradeRecord = buildGradeRecord(dateStr, record, bedtimeTarget, sleepBedtime);
@@ -125,6 +130,7 @@ export function useGradeFinalization(): void {
   const targetLoaded = useWakeTargetStore((s) => s.loaded);
 
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   // useRef で finalize 中かどうかを追跡し、並行実行を防止する
   const finalizingRef = useRef(false);
@@ -141,14 +147,22 @@ export function useGradeFinalization(): void {
       try {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = formatDateString(yesterday);
+        // WakeRecord.date は getLogicalDateString で保存されるため、
+        // グレード確定の日付走査でも同じ関数で変換する。
+        // formatDateString は dayBoundaryHour を無視するため深夜帯に不整合が起きていた。
+        const yesterdayStr = getLogicalDateString(yesterday, dayBoundaryHour);
         const startDate = resolveStartDate(streak.lastGradedDate, yesterday);
-        const bedtimeTarget = target?.bedtimeTarget ?? null;
+        // targetSleepMinutes から bedtimeTarget を算出。
+        // buildGradeRecord は AlarmTime | null を期待するため、calculateBedtime で変換。
+        const bedtimeTarget =
+          target !== null && target.targetSleepMinutes !== null
+            ? calculateBedtime(target.defaultTime, target.targetSleepMinutes)
+            : null;
 
         // startDate 〜 yesterday の各日を走査
         const current = new Date(startDate);
         while (current <= yesterday) {
-          const dateStr = formatDateString(current);
+          const dateStr = getLogicalDateString(current, dayBoundaryHour);
           await finalizeDay(
             dateStr,
             yesterdayStr,
@@ -175,6 +189,7 @@ export function useGradeFinalization(): void {
     records,
     target,
     healthKitEnabled,
+    dayBoundaryHour,
     addGrade,
     getGradeForDate,
   ]);
