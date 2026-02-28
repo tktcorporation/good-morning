@@ -71,11 +71,13 @@ describe('useSettingsStore', () => {
   });
 
   test('dayBoundaryHour変更後も既存設定が保持される', async () => {
-    mockGetItem.mockResolvedValue(JSON.stringify({
-      dayBoundaryHour: 3,
-      healthKitEnabled: true,
-      alarmKitGranted: true,
-    }));
+    mockGetItem.mockResolvedValue(
+      JSON.stringify({
+        dayBoundaryHour: 3,
+        healthKitEnabled: true,
+        alarmKitGranted: true,
+      }),
+    );
     await useSettingsStore.getState().loadSettings();
     await useSettingsStore.getState().setDayBoundaryHour(12);
     expect(useSettingsStore.getState().dayBoundaryHour).toBe(12);
