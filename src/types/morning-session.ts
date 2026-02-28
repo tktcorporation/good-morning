@@ -20,4 +20,11 @@ export interface MorningSession {
   readonly date: string; // YYYY-MM-DD
   readonly startedAt: string; // ISO datetime
   readonly todos: readonly SessionTodo[];
+  /**
+   * アクティブな Live Activity の ID。更新・終了時に使用。
+   * session オブジェクトに含めることで AsyncStorage に永続化され、
+   * アプリ再起動後も Live Activity を終了できる。
+   * メモリのみだとアプリ kill 後にロック画面に残り続ける問題があった。
+   */
+  readonly liveActivityId: string | null;
 }

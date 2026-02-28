@@ -11,14 +11,13 @@ interface MorningSessionState {
   readonly snoozeAlarmId: string | null;
   /** 次のスヌーズ発火予定時刻（ISO文字列）。ダッシュボードのカウントダウン表示に使用。メモリのみ。 */
   readonly snoozeFiresAt: string | null;
-  /** アクティブな Live Activity の ID。更新・終了時に使用。メモリのみ。 */
-  readonly liveActivityId: string | null;
   loadSession: () => Promise<void>;
   startSession: (recordId: string, date: string, todos: readonly SessionTodo[]) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
   setSnoozeAlarmId: (id: string | null) => void;
   setSnoozeFiresAt: (time: string | null) => void;
+  /** liveActivityId を session 内に保存して AsyncStorage に永続化する。 */
   setLiveActivityId: (id: string | null) => void;
   isActive: () => boolean;
   areAllCompleted: () => boolean;
@@ -38,7 +37,6 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   loaded: false,
   snoozeAlarmId: null,
   snoozeFiresAt: null,
-  liveActivityId: null,
 
   loadSession: async () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -56,6 +54,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
       date,
       startedAt: new Date().toISOString(),
       todos,
+      liveActivityId: null,
     };
     set({ session });
     await persistSession(session);
@@ -81,9 +80,9 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     await persistSession(updated);
   },
 
-  /** セッションと全てのエフェメラル状態（snooze, Live Activity）をクリアする。 */
+  /** セッションと全てのエフェメラル状態（snooze）をクリアする。liveActivityId は session 内に含まれるため自動的にクリアされる。 */
   clearSession: async () => {
-    set({ session: null, snoozeAlarmId: null, snoozeFiresAt: null, liveActivityId: null });
+    set({ session: null, snoozeAlarmId: null, snoozeFiresAt: null });
     await persistSession(null);
   },
 
@@ -96,7 +95,12 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   },
 
   setLiveActivityId: (id: string | null) => {
-    set({ liveActivityId: id });
+    const { session } = get();
+    if (session === null) return;
+    const updated: MorningSession = { ...session, liveActivityId: id };
+    set({ session: updated });
+    // 永続化して、アプリ再起動後も Live Activity を終了できるようにする
+    persistSession(updated);
   },
 
   isActive: () => get().session !== null,
