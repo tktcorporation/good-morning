@@ -23,6 +23,7 @@
     "expo-alarm-kit": "^0.1.6",
     "expo-asset": "~55.0.8",
     "expo-audio": "^55.0.8",
+    "expo-background-fetch": "^55.0.9",
     "expo-build-properties": "^55.0.9",
     "expo-constants": "55.0.7",
     "expo-dev-client": "~55.0.10",
@@ -32,6 +33,7 @@
     "expo-router": "55.0.3",
     "expo-splash-screen": "55.0.10",
     "expo-status-bar": "55.0.4",
+    "expo-task-manager": "^55.0.9",
     "expo-updates": "^55.0.12",
     "i18next": "25.8.13",
     "react": "19.2.0",
@@ -65,6 +67,9 @@
   "pnpm": {
     "overrides": {
       "tar@<7.5.8": ">=7.5.8"
+    },
+    "patchedDependencies": {
+      "expo-alarm-kit@0.1.6": "patches/expo-alarm-kit@0.1.6.patch"
     }
   },
   "private": true,

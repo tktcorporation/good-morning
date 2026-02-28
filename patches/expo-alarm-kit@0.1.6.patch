@@ -1,0 +1,38 @@
+diff --git a/ios/ExpoAlarmKitModule.swift b/ios/ExpoAlarmKitModule.swift
+index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b28f23756 100644
+--- a/ios/ExpoAlarmKitModule.swift
++++ b/ios/ExpoAlarmKitModule.swift
+@@ -3,6 +3,7 @@ import AlarmKit
+ import ActivityKit
+ import AppIntents
+ import SwiftUI
++import WidgetKit
+ 
+ // MARK: - Storage Keys
+ private let alarmKeyPrefix = "ExpoAlarmKit.alarm:"
+@@ -576,5 +577,25 @@ public class ExpoAlarmKitModule: Module {
+             ExpoAlarmKitModule.launchPayload = nil
+             return payload
+         }
++
++        // MARK: - Sync Widget Data
++        // App Groups UserDefaults に JSON 文字列を書き込む。
++        // Widget Extension がこのデータを読み取ってタイムラインを生成する。
++        AsyncFunction("syncWidgetData") { (groupId: String, jsonString: String) in
++            guard let defaults = UserDefaults(suiteName: groupId) else {
++                throw NSError(domain: "ExpoAlarmKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid app group: \(groupId)"])
++            }
++            defaults.set(jsonString, forKey: "widget-data")
++            defaults.synchronize()
++        }
++
++        // MARK: - Reload Widget Timelines
++        // WidgetCenter.shared.reloadAllTimelines() を呼び出して全ウィジェットを更新する。
++        // syncWidgetData() の後に呼ぶ。
++        AsyncFunction("reloadWidgetTimelines") {
++            if #available(iOS 14.0, *) {
++                WidgetCenter.shared.reloadAllTimelines()
++            }
++        }
+     }
+ }
