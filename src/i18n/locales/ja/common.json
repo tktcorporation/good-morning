@@ -58,12 +58,6 @@
         "description": "睡眠データの記録に使用します"
       }
     },
-    "bedtimeTarget": "目標就寝時刻",
-    "bedtimeTargetDescription": "設定すると ◎ を狙えるようになります",
-    "bedtimeNotSet": "未設定",
-    "bedtimeClear": "クリア",
-    "bedtimeSave": "保存",
-    "bedtimeCancel": "キャンセル",
     "alarmSound": "アラーム音",
     "dayBoundary": "日付変更ライン",
     "dayBoundaryDescription": "この時刻より前は前日として扱います",

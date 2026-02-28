@@ -19,7 +19,7 @@ interface DayBoundaryPickerProps {
  *
  * 背景: 以前は DayBoundarySlider（0〜6時のスライダー）だったが、
  * 範囲が狭く直感的でないため、0〜23時をリスト選択できるボトムシート風モーダルに変更。
- * BedtimePickerModal と同じ overlay/sheet/buttonRow パターンを踏襲。
+ * overlay/sheet/buttonRow パターンのボトムシート風モーダル。
  *
  * 構成:
  * 1. トリガー行 — 設定画面に表示。現在値とシェブロンを表示し、タップでモーダルを開く。
@@ -122,7 +122,7 @@ export function DayBoundaryPicker({ value, onValueChange }: DayBoundaryPickerPro
               style={styles.list}
             />
 
-            {/* Action Buttons — BedtimePickerModal と同じ buttonRow パターン */}
+            {/* Action Buttons */}
             <View style={styles.buttonRow}>
               <Pressable style={styles.textButton} onPress={handleClose}>
                 <Text style={styles.textButtonLabel}>{t('cancel')}</Text>
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-  // Modal overlay & sheet — BedtimePickerModal と同じ構造
+  // Modal overlay & sheet — ボトムシート風モーダル
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Buttons — BedtimePickerModal と同じ buttonRow パターン
+  // Buttons
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

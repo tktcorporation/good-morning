@@ -1,9 +1,8 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { BedtimePickerModal } from '../../src/components/BedtimePickerModal';
 import { DayBoundaryPicker } from '../../src/components/DayBoundaryPicker';
 import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
 import {
@@ -22,7 +21,6 @@ import {
 import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
-import { calculateBedtime } from '../../src/utils/sleep';
 
 export default function SettingsScreen() {
   const { t } = useTranslation('common');
@@ -33,7 +31,6 @@ export default function SettingsScreen() {
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
   const soundId = target?.soundId ?? 'default';
   const setSoundId = useWakeTargetStore((s) => s.setSoundId);
-  const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -131,37 +128,6 @@ export default function SettingsScreen() {
     [permissionStatuses, t, setAlarmKitGranted],
   );
 
-  const [bedtimeModalVisible, setBedtimeModalVisible] = useState(false);
-
-  const handleBedtimeSave = useCallback(
-    async (value: { hour: number; minute: number } | null) => {
-      if (value === null || target === null) {
-        await setTargetSleepMinutes(null);
-      } else {
-        // BedtimePickerModal が返す就寝時刻を targetSleepMinutes に変換。
-        // alarmTime - bedtime の差分を分数として保存する。
-        const alarmMinutes = target.defaultTime.hour * 60 + target.defaultTime.minute;
-        const bedtimeMinutes = value.hour * 60 + value.minute;
-        let diff = alarmMinutes - bedtimeMinutes;
-        if (diff <= 0) diff += 1440;
-        await setTargetSleepMinutes(diff);
-      }
-      setBedtimeModalVisible(false);
-    },
-    [setTargetSleepMinutes, target],
-  );
-
-  // targetSleepMinutes から calculateBedtime で就寝目標時刻を算出して表示
-  const computedBedtime = useMemo(() => {
-    if (target === null || target.targetSleepMinutes === null) return null;
-    return calculateBedtime(target.defaultTime, target.targetSleepMinutes);
-  }, [target]);
-
-  const bedtimeDisplay = useMemo(() => {
-    if (computedBedtime == null) return t('settings.bedtimeNotSet');
-    return `${String(computedBedtime.hour).padStart(2, '0')}:${String(computedBedtime.minute).padStart(2, '0')}`;
-  }, [computedBedtime, t]);
-
   const isEnabled = target?.enabled ?? false;
 
   return (
@@ -214,27 +180,6 @@ export default function SettingsScreen() {
         <Text style={commonStyles.sectionTitle}>{t('settings.dayBoundary')}</Text>
         <DayBoundaryPicker value={dayBoundaryHour} onValueChange={handleDayBoundaryChange} />
       </View>
-
-      {/* Bedtime Target — 就寝目標時刻。Daily Grade で ◎ excellent を狙うために必要 */}
-      <View style={commonStyles.section}>
-        <Text style={commonStyles.sectionTitle}>{t('settings.bedtimeTarget')}</Text>
-        <Pressable style={styles.row} onPress={() => setBedtimeModalVisible(true)}>
-          <View>
-            <Text style={styles.rowTitle}>{bedtimeDisplay}</Text>
-            {target?.targetSleepMinutes == null && (
-              <Text style={styles.description}>{t('settings.bedtimeTargetDescription')}</Text>
-            )}
-          </View>
-          <Text style={styles.chevron}>{'>'}</Text>
-        </Pressable>
-      </View>
-
-      <BedtimePickerModal
-        visible={bedtimeModalVisible}
-        currentValue={computedBedtime ?? null}
-        onSave={handleBedtimeSave}
-        onClose={() => setBedtimeModalVisible(false)}
-      />
 
       {/* Permissions - 通知やヘルスケアなど、アプリが必要とするOS権限を一覧表示 */}
       <View style={commonStyles.section}>
