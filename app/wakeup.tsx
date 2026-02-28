@@ -157,9 +157,12 @@ export default function WakeUpScreen() {
               title: td.title,
               completed: false,
             }));
-            startLiveActivity(liveActivityTodos, snoozeFiresAt).then((activityId) => {
+            startLiveActivity(liveActivityTodos, snoozeFiresAt).then(async (activityId) => {
               if (activityId !== null) {
-                useMorningSessionStore.getState().setLiveActivityId(activityId);
+                // await して AsyncStorage に永続化完了を保証する。
+                // これにより、直後にアプリが kill されても再起動時に
+                // loadSession() → cleanupStaleSession() で endLiveActivity できる。
+                await useMorningSessionStore.getState().setLiveActivityId(activityId);
               }
             });
           });

@@ -17,8 +17,8 @@ interface MorningSessionState {
   clearSession: () => Promise<void>;
   setSnoozeAlarmIds: (ids: readonly string[]) => void;
   setSnoozeFiresAt: (time: string | null) => void;
-  /** liveActivityId を session 内に保存して AsyncStorage に永続化する。 */
-  setLiveActivityId: (id: string | null) => void;
+  /** liveActivityId を session 内に保存して AsyncStorage に永続化する。永続化完了を await できるため、アプリ kill 後も再起動時に endLiveActivity で回収可能。 */
+  setLiveActivityId: (id: string | null) => Promise<void>;
   isActive: () => boolean;
   areAllCompleted: () => boolean;
   getProgress: () => { completed: number; total: number };
@@ -97,18 +97,14 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     set({ snoozeFiresAt: time });
   },
 
-  setLiveActivityId: (id: string | null) => {
+  setLiveActivityId: async (id: string | null) => {
     const { session } = get();
     if (session === null) return;
     const updated: MorningSession = { ...session, liveActivityId: id };
     set({ session: updated });
-    // 永続化して、アプリ再起動後も Live Activity を終了できるようにする。
-    // 失敗時はログのみ。set() で in-memory は更新済みなので、
-    // アプリが kill されなければ endLiveActivity は正常に動作する。
-    persistSession(updated).catch(() => {
-      // biome-ignore lint/suspicious/noConsole: persist 失敗のデバッグ用
-      console.error('[MorningSession] Failed to persist liveActivityId');
-    });
+    // 永続化を await して、アプリ kill 後も再起動時に endLiveActivity で回収できるようにする。
+    // 呼び出し元が await することで「persist 完了後に次の処理」が保証される。
+    await persistSession(updated);
   },
 
   isActive: () => get().session !== null,
