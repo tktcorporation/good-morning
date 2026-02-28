@@ -37,3 +37,21 @@ describe('migrateBedtimeToSleepMinutes', () => {
     expect(migrateBedtimeToSleepMinutes({ hour: 18, minute: 0 }, { hour: 6, minute: 0 })).toBe(600);
   });
 });
+
+describe('migration roundtrip', () => {
+  test('migrate then calculateBedtime returns approximately original bedtime', () => {
+    const originalBedtime = { hour: 23, minute: 0 };
+    const defaultTime = { hour: 6, minute: 0 };
+    const sleepMinutes = migrateBedtimeToSleepMinutes(originalBedtime, defaultTime);
+    const calculatedBedtime = calculateBedtime(defaultTime, sleepMinutes);
+    expect(calculatedBedtime).toEqual(originalBedtime);
+  });
+
+  test('migrate then calculateBedtime with midnight crossover', () => {
+    const originalBedtime = { hour: 1, minute: 0 };
+    const defaultTime = { hour: 8, minute: 0 };
+    const sleepMinutes = migrateBedtimeToSleepMinutes(originalBedtime, defaultTime);
+    const calculatedBedtime = calculateBedtime(defaultTime, sleepMinutes);
+    expect(calculatedBedtime).toEqual(originalBedtime);
+  });
+});

@@ -243,3 +243,56 @@ wakeup 画面が表示される
 | snoozeAlarmIds | アラーム dismiss 時（先行一括スケジュール） | セッションクリア時 | メモリのみ |
 | snoozeFiresAt | アラーム dismiss 時 / スヌーズ発火時 | セッションクリア時 | メモリのみ |
 | liveActivityId | Live Activity 開始時 | セッションクリア時 | AsyncStorage（session 内） |
+
+## 設定UXオーバーホール — ユーザーフロー検証
+
+### フロー1: 初回設定
+1. アプリ初回起動 → メイン画面
+2. アラーム時刻設定済み、目標睡眠時間は未設定
+3. 「目標睡眠時間を設定」リンクが表示される
+4. タップ → ピッカーモーダル → 7h を選択 → 保存
+5. メイン画面に「7h → 23:00 就寝」と表示
+6. 成立
+
+### フロー2: 日付変更ライン変更
+1. 設定画面 → Day Boundary セクション
+2. 現在値「3:00」が表示される
+3. タップ → ボトムシートモーダル → 12:00 を選択 → 保存
+4. 既存の WakeRecord はそのまま保持（date は記録時点の値）
+5. 新しいレコードは 12:00 境界で日付決定
+6. 成立
+
+### フロー3: 海外渡航シナリオ
+1. 日本で dayBoundary=3 で使用
+2. 渡航先で dayBoundary=12 に変更
+3. 既存レコードは消えない（date は記録時点の値）
+4. 新しいレコードは新 boundary で記録
+5. 統計は alarmTriggeredAt ベースで表示可能
+6. 成立
+
+### フロー4: Daily Grade との連携
+1. 目標睡眠時間 7h + アラーム 6:00 → 就寝目標 23:00
+2. HealthKit が 22:50 就寝を検知
+3. evaluateBedtime(22:50, 23, 0) → onTime
+4. morningPass + onTime → excellent
+5. 成立
+
+### フロー5: 機能不全チェック — 曜日オーバーライド
+1. デフォルト 6:00、土曜 8:00 のオーバーライドあり
+2. 金曜夜に見ると SleepDurationCard は resolvedTime（次の日の値）から算出
+3. 土曜のアラーム 8:00 - 7h = 01:00 就寝と表示
+4. 正しい（resolvedTime が曜日ごとに変わる）
+
+### フロー6: アラームOFF時
+1. アラームが無効 → resolvedTime = null
+2. SleepDurationCard は alarmTime=null を受け取る
+3. calculateBedtime は呼ばれない → 就寝時刻なし
+4. 睡眠時間の設定は保持されるが就寝時刻は非表示
+5. 成立
+
+### フロー7: レガシーデータマイグレーション
+1. 旧バージョンのデータ: bedtimeTarget = { hour: 23, minute: 0 }
+2. アプリ更新後、loadTarget が自動マイグレーション
+3. targetSleepMinutes = 420 (7h) に変換
+4. 次の永続化時に新フォーマットで保存
+5. 成立
