@@ -119,39 +119,6 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.enabled).toBe(false);
   });
 
-  test('toggleTodoCompleted flips todo completed state', async () => {
-    await useWakeTargetStore.getState().setTarget({
-      ...DEFAULT_WAKE_TARGET,
-      todos: [{ id: 'todo-1', title: 'Test', completed: false }],
-    });
-    useWakeTargetStore.getState().toggleTodoCompleted('todo-1');
-    expect(useWakeTargetStore.getState().target?.todos[0]?.completed).toBe(true);
-  });
-
-  test('resetTodos sets all todos to not completed', async () => {
-    await useWakeTargetStore.getState().setTarget({
-      ...DEFAULT_WAKE_TARGET,
-      todos: [
-        { id: 'todo-1', title: 'A', completed: true },
-        { id: 'todo-2', title: 'B', completed: true },
-      ],
-    });
-    useWakeTargetStore.getState().resetTodos();
-    const todos = useWakeTargetStore.getState().target?.todos ?? [];
-    expect(todos.every((t) => !t.completed)).toBe(true);
-  });
-
-  test('areAllTodosCompleted returns true when all done', async () => {
-    await useWakeTargetStore.getState().setTarget({
-      ...DEFAULT_WAKE_TARGET,
-      todos: [
-        { id: 'todo-1', title: 'A', completed: true },
-        { id: 'todo-2', title: 'B', completed: true },
-      ],
-    });
-    expect(useWakeTargetStore.getState().areAllTodosCompleted()).toBe(true);
-  });
-
   test('reorderTodos persists new order', async () => {
     const todos = [
       { id: 'todo-1', title: 'A', completed: false },

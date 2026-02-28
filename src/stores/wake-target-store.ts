@@ -30,17 +30,6 @@ interface WakeTargetState {
   setSoundId: (soundId: string) => Promise<void>;
   setBedtimeTarget: (time: AlarmTime | null) => Promise<void>;
   toggleEnabled: () => Promise<void>;
-  /**
-   * メモリのみで永続化されない。MorningSession の todos が実際の完了状態を管理するため、
-   * これはUI表示用の一時的な状態。アプリ再起動でリセットされる。
-   */
-  toggleTodoCompleted: (todoId: string) => void;
-  /**
-   * メモリのみで永続化されない。MorningSession の todos が実際の完了状態を管理するため、
-   * これはUI表示用の一時的な状態。アプリ再起動でリセットされる。
-   */
-  resetTodos: () => void;
-  areAllTodosCompleted: () => boolean;
   setAlarmIds: (ids: readonly string[]) => Promise<void>;
 }
 
@@ -186,32 +175,6 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, enabled: !target.enabled };
     set({ target: updated });
     await persist(updated);
-  },
-
-  toggleTodoCompleted: (todoId: string) => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = {
-      ...target,
-      todos: target.todos.map((t) => (t.id === todoId ? { ...t, completed: !t.completed } : t)),
-    };
-    set({ target: updated });
-  },
-
-  resetTodos: () => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = {
-      ...target,
-      todos: target.todos.map((t) => ({ ...t, completed: false })),
-    };
-    set({ target: updated });
-  },
-
-  areAllTodosCompleted: (): boolean => {
-    const { target } = get();
-    if (target === null || target.todos.length === 0) return true;
-    return target.todos.every((t) => t.completed);
   },
 
   setAlarmIds: async (ids: readonly string[]) => {

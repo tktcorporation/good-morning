@@ -187,10 +187,7 @@ export default function WakeUpScreen() {
   if (target === null) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.errorText}>{t('alarmNotFound')}</Text>
-        <Pressable style={styles.dismissButton} onPress={() => router.replace('/')}>
-          <Text style={styles.dismissButtonText}>{tCommon('goBack')}</Text>
-        </Pressable>
+        <Text style={styles.loadingText}>{tCommon('loading')}</Text>
       </View>
     );
   }
@@ -261,8 +258,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '600',
   },
-  errorText: {
-    color: colors.text,
+  loadingText: {
+    color: colors.textSecondary,
     fontSize: fontSize.lg,
     textAlign: 'center',
     marginTop: spacing.xxl,
