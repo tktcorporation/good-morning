@@ -236,7 +236,8 @@ export async function startLiveActivity(
       snoozeEpoch,
     );
     return result ?? null;
-  } catch {
+  } catch (e) {
+    logError('[AlarmKit] startLiveActivity failed:', e);
     return null;
   }
 }
@@ -266,8 +267,8 @@ export async function updateLiveActivity(
       todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
       snoozeEpoch,
     );
-  } catch {
-    // Non-blocking
+  } catch (e) {
+    logError('[AlarmKit] updateLiveActivity failed:', e);
   }
 }
 
@@ -284,8 +285,8 @@ export async function endLiveActivity(activityId: string): Promise<void> {
     const endFn = (kit as Record<string, unknown>).endLiveActivity;
     if (typeof endFn !== 'function') return;
     await (endFn as (id: string) => Promise<boolean>)(activityId);
-  } catch {
-    // Non-blocking
+  } catch (e) {
+    logError('[AlarmKit] endLiveActivity failed:', e);
   }
 }
 

@@ -30,7 +30,15 @@ interface WakeTargetState {
   setSoundId: (soundId: string) => Promise<void>;
   setBedtimeTarget: (time: AlarmTime | null) => Promise<void>;
   toggleEnabled: () => Promise<void>;
+  /**
+   * メモリのみで永続化されない。MorningSession の todos が実際の完了状態を管理するため、
+   * これはUI表示用の一時的な状態。アプリ再起動でリセットされる。
+   */
   toggleTodoCompleted: (todoId: string) => void;
+  /**
+   * メモリのみで永続化されない。MorningSession の todos が実際の完了状態を管理するため、
+   * これはUI表示用の一時的な状態。アプリ再起動でリセットされる。
+   */
   resetTodos: () => void;
   areAllTodosCompleted: () => boolean;
   setAlarmIds: (ids: readonly string[]) => Promise<void>;
