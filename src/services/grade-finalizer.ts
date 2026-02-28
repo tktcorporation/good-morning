@@ -32,7 +32,8 @@ export function buildGradeRecord(
   bedtimeTarget: AlarmTime | null,
   sleepBedtime: string | null,
 ): DailyGradeRecord {
-  // 朝の判定: WakeRecord があれば result から合否判定、なければ不合格
+  // 朝の判定: WakeRecord があれば result から合否判定。
+  // WakeRecord がない = アラームを dismiss しなかった（missed）→ 不合格。
   const morningPass = record !== undefined ? isMorningPass(record.result) : false;
 
   // 夜の判定: 就寝目標と実際の就寝時刻の両方が必要

@@ -28,7 +28,7 @@ AlarmKit がネイティブアラームを発火
             │    └─ router.push('/wakeup') → wakeup 画面表示
             └─ isSnooze=true (スヌーズ再発火):
                  └─ sessionLoaded.then() で loadSession 完了を待機
-                      └─ handleSnoozeRefire() → 次のスヌーズをスケジュール
+                      └─ handleSnoozeArrival() → 次のスヌーズをスケジュール
                       └─ router.push('/') → ダッシュボードへ
 ```
 
@@ -49,7 +49,7 @@ wakeup 画面が表示される
        │    │    └─ snoozeAlarmIds をセッションストアに保存
        │    └─ Live Activity を開始 (startLiveActivity)
        ├─ TODO がない場合:
-       │    └─ HealthKit から睡眠データを取得・記録
+       │    └─ （HealthKit 睡眠データはダッシュボード表示時に useDailySummary が自動同期）
        ├─ nextOverride をクリア (clearNextOverride)
        │    └─ target が変更 → _layout.tsx の target effect が次回アラームを再スケジュール
        └─ router.replace('/') → ダッシュボードへ
@@ -99,14 +99,15 @@ wakeup 画面が表示される
 ```
 最後の TODO にチェック → areAllCompleted() === true
   └─ completion effect が発火 (index.tsx)
-       ├─ 1. cancelSnoozeAlarms(snoozeAlarmIds) — 残りのスヌーズを一括キャンセル
-       ├─ 2. endLiveActivity(liveActivityId) — ロック画面ウィジェットを終了
+       ├─ 1. cancelAllAlarms() — ネイティブ側の全アラームをキャンセル
+       │    └─ scheduleWakeTargetAlarm() で通常アラームを再スケジュール
+       ├─ 2. endLiveActivity(liveActivityId) — ロック画面ウィジェットを終了 (fire-and-forget)
        ├─ 3. updateRecord() — 完了時刻・所要時間を WakeRecord に保存
-       └─ 4. clearSession() — セッション + snooze/activity ID をクリア
+       └─ 4. .then(() => clearSession()) — セッション + snooze/activity ID をクリア
             └─ ダッシュボードが再レンダリング → テンプレート TODO リストに戻る
 ```
 
-**順序が重要**: snoozeAlarmIds と liveActivityId は clearSession() で消えるため、先に参照してからクリアする。
+**順序が重要**: liveActivityId は clearSession() で消えるため、先に参照してからクリアする。cancelAllAlarms は全アラーム（スヌーズ含む）をキャンセルし、その後 scheduleWakeTargetAlarm で通常アラームを復元する。
 
 **関連ファイル**: `app/(tabs)/index.tsx`, `src/services/alarm-kit.ts`
 

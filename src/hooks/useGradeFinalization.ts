@@ -106,6 +106,10 @@ async function finalizeDay(
 ): Promise<void> {
   if (getGradeForDate(dateStr) !== undefined) return;
 
+  // WakeRecord が見つからない場合、buildGradeRecord は record=undefined として処理する。
+  // これは「アラームが鳴ったが dismiss されなかった（missed）」ケースに相当し、
+  // morningPass: false → grade は fair 以下になる。
+  // WakeRecord の明示的な 'missed' 記録は作成しない（推論で十分なため）。
   const record = records.find((r) => r.date === dateStr);
   const sleepBedtime = await fetchSleepBedtime(dateStr, yesterdayStr, healthKitEnabled, date);
   const gradeRecord = buildGradeRecord(dateStr, record, bedtimeTarget, sleepBedtime);
