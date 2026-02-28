@@ -35,6 +35,25 @@ function isSnoozePayload(payload: { payload: string | null } | null): boolean {
   }
 }
 
+/**
+ * 期限切れセッション（前日以前）が残っている場合にクリーンアップする。
+ * Live Activity が残っていれば終了し、セッションをクリアする。
+ * 初期化 effect 内の複数ブランチで共通して必要なため関数に抽出。
+ */
+function cleanupStaleSession(): void {
+  const state = useMorningSessionStore.getState();
+  if (state.session === null) return;
+
+  const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
+  const today = getLogicalDateString(new Date(), dayBoundaryHour);
+  if (state.session.date === today) return;
+
+  if (state.session.liveActivityId !== null) {
+    endLiveActivity(state.session.liveActivityId);
+  }
+  state.clearSession();
+}
+
 export default function RootLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
@@ -81,42 +100,18 @@ export default function RootLayout() {
         });
       } else {
         // 初回アラーム: 古いセッションが残っていればクリーンアップしてから wakeup 画面へ
-        sessionLoaded.then(() => {
-          const state = useMorningSessionStore.getState();
-          if (state.session !== null) {
-            const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
-            const today = getLogicalDateString(new Date(), dayBoundaryHour);
-            if (state.session.date !== today) {
-              if (state.session.liveActivityId !== null) {
-                endLiveActivity(state.session.liveActivityId);
-              }
-              state.clearSession();
-            }
-          }
-        });
+        sessionLoaded.then(() => cleanupStaleSession());
         router.push('/wakeup');
       }
     } else {
       // アラーム経由でない通常起動の場合
       sessionLoaded.then(() => {
-        const state = useMorningSessionStore.getState();
-        if (state.session === null) return;
-
-        const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
-        const today = getLogicalDateString(new Date(), dayBoundaryHour);
-
-        if (state.session.date !== today) {
-          // 前日以前のセッションが残っている場合はクリーンアップ。
-          // 深夜0時跨ぎや、前回アプリ kill で clearSession が呼ばれなかった場合に発生。
-          if (state.session.liveActivityId !== null) {
-            endLiveActivity(state.session.liveActivityId);
-          }
-          state.clearSession();
-          return;
-        }
+        cleanupStaleSession();
 
         // 当日のセッションで TODO 全完了済みだが Live Activity が残っている場合のクリーンアップ
+        const state = useMorningSessionStore.getState();
         if (
+          state.session !== null &&
           state.areAllCompleted() &&
           state.session.liveActivityId !== null
         ) {

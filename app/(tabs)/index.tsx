@@ -128,7 +128,7 @@ export default function DashboardScreen() {
     // 再スケジュールして翌朝のアラームを復元する。
     void cancelAllAlarms().then(() => {
       const currentTarget = useWakeTargetStore.getState().target;
-      if (currentTarget !== null && currentTarget.enabled) {
+      if (currentTarget?.enabled) {
         scheduleWakeTargetAlarm(currentTarget).then((newIds) => {
           useWakeTargetStore.getState().setAlarmIds(newIds);
         });

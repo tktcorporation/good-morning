@@ -169,10 +169,7 @@ export default function WakeUpScreen() {
           console.error('[WakeUp] Failed to save record:', e);
           // dismiss 自体は完了しているため、ユーザーに通知するが操作はブロックしない。
           // 次回のアラームで新しい WakeRecord が作成される。
-          Alert.alert(
-            t('error.title'),
-            t('error.recordSaveFailed'),
-          );
+          Alert.alert(t('error.title'), t('error.recordSaveFailed'));
         });
     }
 
