@@ -147,6 +147,92 @@ wakeup 画面が表示される
 
 **関連ファイル**: `app/_layout.tsx`, `src/stores/morning-session-store.ts`
 
+## 8. オンボーディングフロー
+
+```
+初回起動（onboarding-completed が AsyncStorage にない）
+  └─ _layout.tsx: onboardingDone === false を検知
+       └─ router.replace('/onboarding')
+  └─ 6ステップのウィザード:
+       1. Welcome — アプリ説明
+       2. Time — デフォルト起床時刻を設定
+       3. Todos — 朝のタスクを登録
+       4. Permission — 通知/HealthKit 権限リクエスト
+       5. Confirm — アラーム有効/無効を選択
+       6. Demo — テストサウンドを再生
+  └─ handleComplete()
+       ├─ setTarget() で WakeTarget を永続化
+       ├─ AsyncStorage に onboarding-completed = 'true' を保存
+       └─ router.replace('/') → ダッシュボードへ
+            └─ _layout.tsx の target effect が発火 → アラームスケジュール
+```
+
+**関連ファイル**: `app/onboarding.tsx`, `src/components/onboarding/`
+
+## 9. 設定画面フロー
+
+```
+タブの「設定」をタップ
+  └─ settings.tsx が表示される:
+       ├─ スケジュール → router.push('/schedule')
+       ├─ アラーム有効/無効スイッチ → toggleEnabled()
+       │    └─ target 変更 → _layout.tsx の target effect でアラーム再スケジュール
+       ├─ アラーム音選択 → setSoundId() + 3秒プレビュー再生
+       ├─ 日付変更ライン (dayBoundaryHour) → setDayBoundaryHour()
+       ├─ 就寝目標時刻 → BedtimePickerModal → setBedtimeTarget()
+       ├─ 権限管理 → 各権限の request() を実行
+       └─ バージョン情報表示
+```
+
+**関連ファイル**: `app/(tabs)/settings.tsx`, `src/stores/settings-store.ts`
+
+## 10. day-review（日次レビュー）フロー
+
+```
+ダッシュボードの週間カレンダーで日付タップ
+  └─ router.push('/day-review?date=YYYY-MM-DD')
+  └─ day-review 画面:
+       ├─ WakeRecord あり: 結果バッジ + 時刻情報 + TODO完了状況
+       ├─ WakeRecord なし + DailyGradeRecord あり: グレードのみ表示
+       ├─ 両方なし: 「記録なし」表示
+       ├─ 睡眠データセクション (SleepDetailSection via useDailySummary)
+       └─ Daily Grade セクション (DailyGradeSection)
+```
+
+**関連ファイル**: `app/day-review.tsx`, `src/hooks/useDailySummary.ts`
+
+## 11. デイリーグレード自動確定フロー
+
+```
+ダッシュボード表示時（useGradeFinalization）
+  └─ 全ストアのロード完了を待機
+  └─ hasFinalized フラグで1セッション1回のみ実行
+  └─ streak.lastGradedDate の翌日 〜 昨日を走査（最大7日分）:
+       ├─ 各日の WakeRecord を検索（getLogicalDateString で dayBoundaryHour 考慮）
+       ├─ 昨日分のみ HealthKit 就寝データを取得
+       ├─ buildGradeRecord() でグレード算出
+       │    ├─ morningPass: WakeRecord.result が great/ok なら合格
+       │    ├─ nightPass: bedtimeTarget 内に就寝なら合格
+       │    └─ grade: 両方合格=excellent, 朝のみ=good, 夜のみ=fair, 両方不合格=poor
+       └─ addGrade() でストリーク更新 + 永続化
+```
+
+**関連ファイル**: `src/hooks/useGradeFinalization.ts`, `src/services/grade-finalizer.ts`, `src/services/grade-calculator.ts`
+
+## 12. バックグラウンド復帰時のスヌーズ検知フロー
+
+```
+アプリがバックグラウンド → フォアグラウンドに復帰
+  └─ _layout.tsx の AppState リスナーが 'active' を検知
+       └─ checkLaunchPayload() でスヌーズ payload を確認
+            ├─ isSnooze=true: handleSnoozeArrival() で Live Activity 更新
+            └─ isSnooze=false or null: 何もしない
+```
+
+**注意**: 初期化 effect（useEffect）は再実行されない。AppState リスナーで対応。
+
+**関連ファイル**: `app/_layout.tsx`
+
 ## 状態のライフサイクルまとめ
 
 | 状態 | 作成タイミング | 破棄タイミング | 永続化 |
