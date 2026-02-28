@@ -58,6 +58,12 @@
     "save": "保存"
   },
   "alarmKitUnavailable": "アラーム機能が利用できません。Development Buildを再ビルドしてください。",
+  "sleep": {
+    "title": "目標睡眠時間",
+    "setup": "目標睡眠時間を設定",
+    "bedtime": "就寝",
+    "clear": "クリア"
+  },
   "enabled": "アラームON",
   "disabled": "アラームOFF"
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
+import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
@@ -75,6 +76,7 @@ export default function DashboardScreen() {
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
+  const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const session = useMorningSessionStore((s) => s.session);
@@ -272,6 +274,13 @@ export default function DashboardScreen() {
           </View>
         )}
       </Pressable>
+
+      {/* Sleep Duration Card -- 目標睡眠時間と就寝目標時刻を表示 */}
+      <SleepDurationCard
+        alarmTime={resolvedTime}
+        targetSleepMinutes={target?.targetSleepMinutes ?? null}
+        onSleepMinutesChange={setTargetSleepMinutes}
+      />
 
       {/* Morning Routine Session (active) OR Todo List (inactive) */}
       {sessionActive && progress !== null ? (

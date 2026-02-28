@@ -58,6 +58,12 @@
     "save": "Save"
   },
   "alarmKitUnavailable": "Alarm features unavailable. Please rebuild the Development Build.",
+  "sleep": {
+    "title": "Sleep Goal",
+    "setup": "Set sleep goal",
+    "bedtime": "bedtime",
+    "clear": "Clear"
+  },
   "enabled": "Alarm on",
   "disabled": "Alarm off"
 }
