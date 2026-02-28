@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { BedtimePickerModal } from '../../src/components/BedtimePickerModal';
-import { DayBoundarySlider } from '../../src/components/DayBoundarySlider';
+import { DayBoundaryPicker } from '../../src/components/DayBoundaryPicker';
 import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
 import {
   APP_PERMISSIONS,
@@ -212,8 +212,7 @@ export default function SettingsScreen() {
       {/* Day Boundary */}
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('settings.dayBoundary')}</Text>
-        <Text style={styles.description}>{t('settings.dayBoundaryDescription')}</Text>
-        <DayBoundarySlider value={dayBoundaryHour} onValueChange={handleDayBoundaryChange} />
+        <DayBoundaryPicker value={dayBoundaryHour} onValueChange={handleDayBoundaryChange} />
       </View>
 
       {/* Bedtime Target — 就寝目標時刻。Daily Grade で ◎ excellent を狙うために必要 */}
