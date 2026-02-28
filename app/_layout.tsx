@@ -12,7 +12,9 @@ import {
   initializeAlarmKit,
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
+import { registerBackgroundSync } from '../src/services/background-sync';
 import { handleSnoozeArrival } from '../src/services/snooze';
+import { syncWidget } from '../src/services/widget-sync';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -71,14 +73,22 @@ export default function RootLayout() {
   useEffect(() => {
     // handleSnoozeRefire() がセッション情報を参照するため、
     // loadSession の Promise を保持してスヌーズ処理前に await する。
-    // 他の load は互いに独立しているため fire-and-forget で問題ない。
+    // 他の load も Promise を保持し、全完了後にウィジェット初回同期を行う。
     const sessionLoaded = loadSession();
-    loadTarget();
-    loadRecords();
-    loadSettings();
+    const targetLoaded = loadTarget();
+    const recordsLoaded = loadRecords();
+    const settingsLoaded = loadSettings();
     // グレード履歴をアプリ起動時にロード。ダッシュボードの useGradeFinalization が
     // loaded フラグを参照するため、ルートレイアウトで先行ロードしておく。
-    useDailyGradeStore.getState().loadGrades();
+    const gradesLoaded = useDailyGradeStore.getState().loadGrades();
+
+    // バックグラウンドフェッチ登録（fire-and-forget）
+    registerBackgroundSync().catch(() => {});
+
+    // 全ストアロード完了後に初回ウィジェットデータ同期
+    Promise.all([sessionLoaded, targetLoaded, recordsLoaded, settingsLoaded, gradesLoaded])
+      .then(() => syncWidget())
+      .catch(() => {});
     // initializeAlarmKit の結果を store に永続化して、設定画面で権限状態を正しく復元する。
     // HealthKit は settings.healthKitEnabled で管理済みだが、AlarmKit は未管理だったため追加。
     initializeAlarmKit().then((status) => {
