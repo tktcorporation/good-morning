@@ -22,6 +22,7 @@ import {
 import { playAlarmSound, stopAlarmSound } from '../../src/services/sound';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
+import { calculateBedtime } from '../../src/utils/sleep';
 
 export default function SettingsScreen() {
   const { t } = useTranslation('common');
@@ -32,7 +33,7 @@ export default function SettingsScreen() {
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
   const soundId = target?.soundId ?? 'default';
   const setSoundId = useWakeTargetStore((s) => s.setSoundId);
-  const setBedtimeTarget = useWakeTargetStore((s) => s.setBedtimeTarget);
+  const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -134,17 +135,32 @@ export default function SettingsScreen() {
 
   const handleBedtimeSave = useCallback(
     async (value: { hour: number; minute: number } | null) => {
-      await setBedtimeTarget(value);
+      if (value === null || target === null) {
+        await setTargetSleepMinutes(null);
+      } else {
+        // BedtimePickerModal が返す就寝時刻を targetSleepMinutes に変換。
+        // alarmTime - bedtime の差分を分数として保存する。
+        const alarmMinutes = target.defaultTime.hour * 60 + target.defaultTime.minute;
+        const bedtimeMinutes = value.hour * 60 + value.minute;
+        let diff = alarmMinutes - bedtimeMinutes;
+        if (diff <= 0) diff += 1440;
+        await setTargetSleepMinutes(diff);
+      }
       setBedtimeModalVisible(false);
     },
-    [setBedtimeTarget],
+    [setTargetSleepMinutes, target],
   );
 
+  // targetSleepMinutes から calculateBedtime で就寝目標時刻を算出して表示
+  const computedBedtime = useMemo(() => {
+    if (target === null || target.targetSleepMinutes === null) return null;
+    return calculateBedtime(target.defaultTime, target.targetSleepMinutes);
+  }, [target]);
+
   const bedtimeDisplay = useMemo(() => {
-    const bt = target?.bedtimeTarget;
-    if (bt == null) return t('settings.bedtimeNotSet');
-    return `${String(bt.hour).padStart(2, '0')}:${String(bt.minute).padStart(2, '0')}`;
-  }, [target?.bedtimeTarget, t]);
+    if (computedBedtime == null) return t('settings.bedtimeNotSet');
+    return `${String(computedBedtime.hour).padStart(2, '0')}:${String(computedBedtime.minute).padStart(2, '0')}`;
+  }, [computedBedtime, t]);
 
   const isEnabled = target?.enabled ?? false;
 
@@ -206,7 +222,7 @@ export default function SettingsScreen() {
         <Pressable style={styles.row} onPress={() => setBedtimeModalVisible(true)}>
           <View>
             <Text style={styles.rowTitle}>{bedtimeDisplay}</Text>
-            {target?.bedtimeTarget == null && (
+            {target?.targetSleepMinutes == null && (
               <Text style={styles.description}>{t('settings.bedtimeTargetDescription')}</Text>
             )}
           </View>
@@ -216,7 +232,7 @@ export default function SettingsScreen() {
 
       <BedtimePickerModal
         visible={bedtimeModalVisible}
-        currentValue={target?.bedtimeTarget ?? null}
+        currentValue={computedBedtime ?? null}
         onSave={handleBedtimeSave}
         onClose={() => setBedtimeModalVisible(false)}
       />

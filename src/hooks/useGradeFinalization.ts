@@ -27,6 +27,7 @@ import type { AlarmTime } from '../types/alarm';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { WakeRecord } from '../types/wake-record';
 import { getLogicalDateString } from '../utils/date';
+import { calculateBedtime } from '../utils/sleep';
 
 /**
  * モジュールスコープのフラグ。
@@ -151,7 +152,12 @@ export function useGradeFinalization(): void {
         // formatDateString は dayBoundaryHour を無視するため深夜帯に不整合が起きていた。
         const yesterdayStr = getLogicalDateString(yesterday, dayBoundaryHour);
         const startDate = resolveStartDate(streak.lastGradedDate, yesterday);
-        const bedtimeTarget = target?.bedtimeTarget ?? null;
+        // targetSleepMinutes から bedtimeTarget を算出。
+        // buildGradeRecord は AlarmTime | null を期待するため、calculateBedtime で変換。
+        const bedtimeTarget =
+          target !== null && target.targetSleepMinutes !== null
+            ? calculateBedtime(target.defaultTime, target.targetSleepMinutes)
+            : null;
 
         // startDate 〜 yesterday の各日を走査
         const current = new Date(startDate);

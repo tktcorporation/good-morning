@@ -210,49 +210,59 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.soundId).toBe(DEFAULT_SOUND_ID);
   });
 
-  test('setBedtimeTarget sets and persists the time', async () => {
+  test('setTargetSleepMinutes sets and persists', async () => {
     await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
     mockSetItem.mockClear();
-    await useWakeTargetStore.getState().setBedtimeTarget({ hour: 23, minute: 0 });
-    expect(useWakeTargetStore.getState().target?.bedtimeTarget).toEqual({
-      hour: 23,
-      minute: 0,
-    });
+    await useWakeTargetStore.getState().setTargetSleepMinutes(420);
+    expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBe(420);
     expect(mockSetItem).toHaveBeenCalledWith(
       'wake-target',
-      expect.stringContaining('"bedtimeTarget":{"hour":23,"minute":0}'),
+      expect.stringContaining('"targetSleepMinutes":420'),
     );
   });
 
-  test('setBedtimeTarget(null) clears the target', async () => {
+  test('setTargetSleepMinutes(null) clears', async () => {
     await useWakeTargetStore.getState().setTarget({
       ...DEFAULT_WAKE_TARGET,
-      bedtimeTarget: { hour: 23, minute: 0 },
+      targetSleepMinutes: 420,
     });
     mockSetItem.mockClear();
-    await useWakeTargetStore.getState().setBedtimeTarget(null);
-    expect(useWakeTargetStore.getState().target?.bedtimeTarget).toBeNull();
-    expect(mockSetItem).toHaveBeenCalledWith(
-      'wake-target',
-      expect.stringContaining('"bedtimeTarget":null'),
-    );
+    await useWakeTargetStore.getState().setTargetSleepMinutes(null);
+    expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBeNull();
   });
 
-  test('loadTarget migrates legacy data without bedtimeTarget to null', async () => {
-    // Simulate a stored target without bedtimeTarget (pre-migration data)
+  test('loadTarget migrates legacy bedtimeTarget to targetSleepMinutes', async () => {
     const legacyTarget = {
-      defaultTime: { hour: 7, minute: 0 },
+      defaultTime: { hour: 6, minute: 0 },
       dayOverrides: {},
       nextOverride: null,
       todos: [],
       enabled: true,
-      soundId: DEFAULT_SOUND_ID,
+      soundId: 'default',
+      bedtimeTarget: { hour: 23, minute: 0 },
     };
     mockGetItem.mockImplementation((key: string) => {
       if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
       return Promise.resolve(null);
     });
     await useWakeTargetStore.getState().loadTarget();
-    expect(useWakeTargetStore.getState().target?.bedtimeTarget).toBeNull();
+    expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBe(420);
+  });
+
+  test('loadTarget handles legacy data without bedtimeTarget or targetSleepMinutes', async () => {
+    const legacyTarget = {
+      defaultTime: { hour: 7, minute: 0 },
+      dayOverrides: {},
+      nextOverride: null,
+      todos: [],
+      enabled: true,
+      soundId: 'default',
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBeNull();
   });
 });
