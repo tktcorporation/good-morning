@@ -97,17 +97,26 @@ export default function RootLayout() {
         router.push('/wakeup');
       }
     } else {
-      // アラーム経由でない通常起動（ホーム画面タップ等）の場合。
-      // 先行スケジュール方式ではスヌーズはアラーム設定時に一括スケジュール済みのため、
-      // 復元処理は不要。
-      //
-      // セッションがアクティブだがTODO全完了済みの場合、
-      // 前回のアプリ kill で endLiveActivity が呼ばれなかった可能性がある。
-      // その場合はここで Live Activity を終了してロック画面から除去する。
+      // アラーム経由でない通常起動の場合
       sessionLoaded.then(() => {
         const state = useMorningSessionStore.getState();
+        if (state.session === null) return;
+
+        const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
+        const today = getLogicalDateString(new Date(), dayBoundaryHour);
+
+        if (state.session.date !== today) {
+          // 前日以前のセッションが残っている場合はクリーンアップ。
+          // 深夜0時跨ぎや、前回アプリ kill で clearSession が呼ばれなかった場合に発生。
+          if (state.session.liveActivityId !== null) {
+            endLiveActivity(state.session.liveActivityId);
+          }
+          state.clearSession();
+          return;
+        }
+
+        // 当日のセッションで TODO 全完了済みだが Live Activity が残っている場合のクリーンアップ
         if (
-          state.session !== null &&
           state.areAllCompleted() &&
           state.session.liveActivityId !== null
         ) {
