@@ -162,7 +162,7 @@ export const SNOOZE_MAX_COUNT = 20;
  * アラーム設定時にまとめてスケジュールし、ネイティブ側で確実に発火させる。
  *
  * 呼び出し元: app/wakeup.tsx (アラーム dismiss 後のセッション開始時)
- * 対になる関数: cancelSnoozeAlarms() (TODO全完了時に残りを一括取消)
+ * 対になる関数: cancelAllAlarms() (TODO全完了時に全アラームをキャンセル後、通常アラームを再スケジュール)
  *
  * @param baseTime スヌーズ起算時刻（通常はアラーム dismiss 時刻）
  * @param count スケジュールする本数（デフォルト SNOOZE_MAX_COUNT）
@@ -195,18 +195,6 @@ export async function scheduleSnoozeAlarms(
     }
   }
   return ids;
-}
-
-/**
- * 先行スケジュール済みのスヌーズアラームを一括取り消す。
- *
- * 呼び出し元: app/(tabs)/index.tsx (TODO全完了時)
- * TODO が全て完了すればスヌーズは不要なため、残りを全てキャンセルする。
- */
-export async function cancelSnoozeAlarms(ids: readonly string[]): Promise<void> {
-  const kit = getAlarmKit();
-  if (kit === null) return;
-  await Promise.all(ids.map((id) => kit.cancelAlarm(id)));
 }
 
 export async function cancelAllAlarms(): Promise<void> {

@@ -26,7 +26,7 @@ import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmTime } from '../types/alarm';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { WakeRecord } from '../types/wake-record';
-import { formatDateString } from '../types/wake-record';
+import { getLogicalDateString } from '../utils/date';
 
 /**
  * モジュールスコープのフラグ。
@@ -129,6 +129,7 @@ export function useGradeFinalization(): void {
   const targetLoaded = useWakeTargetStore((s) => s.loaded);
 
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   // useRef で finalize 中かどうかを追跡し、並行実行を防止する
   const finalizingRef = useRef(false);
@@ -145,14 +146,17 @@ export function useGradeFinalization(): void {
       try {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = formatDateString(yesterday);
+        // WakeRecord.date は getLogicalDateString で保存されるため、
+        // グレード確定の日付走査でも同じ関数で変換する。
+        // formatDateString は dayBoundaryHour を無視するため深夜帯に不整合が起きていた。
+        const yesterdayStr = getLogicalDateString(yesterday, dayBoundaryHour);
         const startDate = resolveStartDate(streak.lastGradedDate, yesterday);
         const bedtimeTarget = target?.bedtimeTarget ?? null;
 
         // startDate 〜 yesterday の各日を走査
         const current = new Date(startDate);
         while (current <= yesterday) {
-          const dateStr = formatDateString(current);
+          const dateStr = getLogicalDateString(current, dayBoundaryHour);
           await finalizeDay(
             dateStr,
             yesterdayStr,
@@ -179,6 +183,7 @@ export function useGradeFinalization(): void {
     records,
     target,
     healthKitEnabled,
+    dayBoundaryHour,
     addGrade,
     getGradeForDate,
   ]);

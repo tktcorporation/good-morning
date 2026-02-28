@@ -3,7 +3,6 @@ import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
   cancelAllAlarms,
-  cancelSnoozeAlarms,
   checkLaunchPayload,
   endLiveActivity,
   initializeAlarmKit,
@@ -256,22 +255,6 @@ describe('alarm-kit service', () => {
       const ids = await scheduleSnoozeAlarms(new Date());
       expect(ids).toHaveLength(SNOOZE_MAX_COUNT);
       expect(mockScheduleAlarm).toHaveBeenCalledTimes(SNOOZE_MAX_COUNT);
-    });
-  });
-
-  describe('cancelSnoozeAlarms', () => {
-    test('cancels all alarm IDs', async () => {
-      mockCancelAlarm.mockResolvedValue(true);
-      await cancelSnoozeAlarms(['snooze-1', 'snooze-2', 'snooze-3']);
-      expect(mockCancelAlarm).toHaveBeenCalledTimes(3);
-      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-1');
-      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-2');
-      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-3');
-    });
-
-    test('handles empty array gracefully', async () => {
-      await cancelSnoozeAlarms([]);
-      expect(mockCancelAlarm).not.toHaveBeenCalled();
     });
   });
 

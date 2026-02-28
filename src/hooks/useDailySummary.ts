@@ -4,7 +4,7 @@ import { getSleepSummary, initHealthKit } from '../services/health';
 import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { WakeRecord } from '../types/wake-record';
-import { formatDateString } from '../types/wake-record';
+import { getLogicalDateString } from '../utils/date';
 
 export interface DailySummary {
   readonly date: string;
@@ -29,7 +29,10 @@ export function useDailySummary(date: Date): DailySummary {
   const [sleep, setSleep] = useState<SleepSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const dateStr = formatDateString(date);
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
+  // WakeRecord.date は getLogicalDateString で保存されるため、同じ関数で変換して検索する。
+  // formatDateString は dayBoundaryHour を無視するため、深夜帯にレコードが見つからない不具合があった。
+  const dateStr = getLogicalDateString(date, dayBoundaryHour);
   const records = useWakeRecordStore((s) => s.records);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
