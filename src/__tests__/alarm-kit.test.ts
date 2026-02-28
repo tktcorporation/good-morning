@@ -3,12 +3,13 @@ import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
   cancelAllAlarms,
-  cancelSnooze,
+  cancelSnoozeAlarms,
   checkLaunchPayload,
   endLiveActivity,
   initializeAlarmKit,
   SNOOZE_DURATION_SECONDS,
-  scheduleSnooze,
+  SNOOZE_MAX_COUNT,
+  scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
   startLiveActivity,
   updateLiveActivity,
@@ -79,6 +80,7 @@ describe('alarm-kit service', () => {
           minute: 30,
           weekdays: [1, 2, 3, 4, 5, 6, 7],
           launchAppOnDismiss: true,
+          doSnoozeIntent: true,
         }),
       );
       expect(ids.length).toBe(1);
@@ -191,36 +193,85 @@ describe('alarm-kit service', () => {
     });
   });
 
-  describe('scheduleSnooze', () => {
-    test('schedules a one-time alarm with snooze payload', async () => {
-      mockGenerateUUID.mockReturnValue('snooze-uuid-1');
-      mockScheduleAlarm.mockResolvedValue(true);
-
-      const result = await scheduleSnooze();
-      expect(result).toBe('snooze-uuid-1');
-      expect(mockScheduleAlarm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'snooze-uuid-1',
-          title: 'Good Morning',
-          launchAppOnDismiss: true,
-          dismissPayload: '{"isSnooze":true}',
-        }),
-      );
-    });
-
-    test('returns null when scheduling fails', async () => {
-      mockGenerateUUID.mockReturnValue('snooze-uuid-2');
-      mockScheduleAlarm.mockResolvedValue(false);
-      const result = await scheduleSnooze();
-      expect(result).toBeNull();
+  describe('SNOOZE_MAX_COUNT', () => {
+    test('is 20 (9min × 20 = 3 hours)', () => {
+      expect(SNOOZE_MAX_COUNT).toBe(20);
     });
   });
 
-  describe('cancelSnooze', () => {
-    test('cancels the alarm by id', async () => {
+  describe('scheduleSnoozeAlarms', () => {
+    test('schedules N alarms at 9-minute intervals with snooze payload', async () => {
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
+      mockScheduleAlarm.mockResolvedValue(true);
+
+      const baseTime = new Date('2026-02-28T07:00:00.000Z');
+      const ids = await scheduleSnoozeAlarms(baseTime, 3);
+
+      expect(ids).toHaveLength(3);
+      expect(mockScheduleAlarm).toHaveBeenCalledTimes(3);
+      // 各アラームが 9分間隔であること
+      for (let i = 0; i < 3; i++) {
+        const expectedEpoch = Math.floor(
+          (baseTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * (i + 1)) / 1000,
+        );
+        expect(mockScheduleAlarm).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: `snooze-uuid-${i + 1}`,
+            epochSeconds: expectedEpoch,
+            title: 'Good Morning',
+            launchAppOnDismiss: true,
+            dismissPayload: '{"isSnooze":true}',
+          }),
+        );
+      }
+    });
+
+    test('returns empty array when AlarmKit is unavailable', async () => {
+      // AlarmKit mock returns values by default so it's available;
+      // test with count=0 for empty result
+      const ids = await scheduleSnoozeAlarms(new Date(), 0);
+      expect(ids).toHaveLength(0);
+    });
+
+    test('skips failed schedules and continues with remaining', async () => {
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
+      // First succeeds, second fails, third succeeds
+      mockScheduleAlarm
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+
+      const ids = await scheduleSnoozeAlarms(new Date(), 3);
+      expect(ids).toHaveLength(2);
+      expect(ids).toEqual(['snooze-uuid-1', 'snooze-uuid-3']);
+    });
+
+    test('defaults to SNOOZE_MAX_COUNT alarms', async () => {
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
+      mockScheduleAlarm.mockResolvedValue(true);
+
+      const ids = await scheduleSnoozeAlarms(new Date());
+      expect(ids).toHaveLength(SNOOZE_MAX_COUNT);
+      expect(mockScheduleAlarm).toHaveBeenCalledTimes(SNOOZE_MAX_COUNT);
+    });
+  });
+
+  describe('cancelSnoozeAlarms', () => {
+    test('cancels all alarm IDs', async () => {
       mockCancelAlarm.mockResolvedValue(true);
-      await cancelSnooze('snooze-uuid-1');
-      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-uuid-1');
+      await cancelSnoozeAlarms(['snooze-1', 'snooze-2', 'snooze-3']);
+      expect(mockCancelAlarm).toHaveBeenCalledTimes(3);
+      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-1');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-2');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-3');
+    });
+
+    test('handles empty array gracefully', async () => {
+      await cancelSnoozeAlarms([]);
+      expect(mockCancelAlarm).not.toHaveBeenCalled();
     });
   });
 

@@ -4,8 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { cancelAllAlarms, startLiveActivity } from '../src/services/alarm-kit';
-import { scheduleAndStoreSnooze } from '../src/services/snooze';
+import {
+  cancelAllAlarms,
+  SNOOZE_DURATION_SECONDS,
+  scheduleSnoozeAlarms,
+  startLiveActivity,
+} from '../src/services/alarm-kit';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -133,11 +137,17 @@ export default function WakeUpScreen() {
           }));
           startSession(record.id, dateStr, sessionTodos);
 
-          // セッション開始直後にスヌーズをスケジュール。TODOが全完了する前に
-          // ユーザーがアプリを離れても、9分後にアラームで呼び戻す。
-          // scheduleAndStoreSnooze を await して返り値の snoozeFiresAt を
-          // Live Activity に渡すことで、二重計算を防ぎ一貫した値を使う。
-          scheduleAndStoreSnooze().then((snoozeFiresAt) => {
+          // セッション開始直後にスヌーズを先行スケジュール。
+          // 先行スケジュール方式: dismiss 時点から9分間隔で最大20本（3時間分）を一括スケジュール。
+          // iOS がアプリを起動しないケースでもネイティブ側で確実に発火する。
+          const dismissTime = now;
+          const snoozeFiresAt = new Date(
+            dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
+          ).toISOString();
+          scheduleSnoozeAlarms(dismissTime).then((snoozeIds) => {
+            useMorningSessionStore.getState().setSnoozeAlarmIds(snoozeIds);
+            useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+
             const liveActivityTodos = todos.map((td) => ({
               id: td.id,
               title: td.title,

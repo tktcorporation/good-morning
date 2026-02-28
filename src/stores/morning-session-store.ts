@@ -7,15 +7,15 @@ const STORAGE_KEY = 'morning-session';
 interface MorningSessionState {
   readonly session: MorningSession | null;
   readonly loaded: boolean;
-  /** スケジュール済みスヌーズの AlarmKit ID。キャンセル時に使用。メモリのみ（永続化しない）。 */
-  readonly snoozeAlarmId: string | null;
+  /** 先行スケジュール済みスヌーズの AlarmKit ID 配列。TODO全完了時に残りを一括キャンセルする。メモリのみ（永続化しない）。 */
+  readonly snoozeAlarmIds: readonly string[];
   /** 次のスヌーズ発火予定時刻（ISO文字列）。ダッシュボードのカウントダウン表示に使用。メモリのみ。 */
   readonly snoozeFiresAt: string | null;
   loadSession: () => Promise<void>;
   startSession: (recordId: string, date: string, todos: readonly SessionTodo[]) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
-  setSnoozeAlarmId: (id: string | null) => void;
+  setSnoozeAlarmIds: (ids: readonly string[]) => void;
   setSnoozeFiresAt: (time: string | null) => void;
   /** liveActivityId を session 内に保存して AsyncStorage に永続化する。 */
   setLiveActivityId: (id: string | null) => void;
@@ -35,14 +35,17 @@ async function persistSession(session: MorningSession | null): Promise<void> {
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
   session: null,
   loaded: false,
-  snoozeAlarmId: null,
+  snoozeAlarmIds: [],
   snoozeFiresAt: null,
 
   loadSession: async () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw) as MorningSession;
-      set({ session: parsed, loaded: true });
+      // マイグレーション: liveActivityId が追加される前の既存データでは
+      // フィールドが undefined になる。undefined のまま使うと
+      // endLiveActivity(undefined) でクラッシュするため null にフォールバック。
+      set({ session: { ...parsed, liveActivityId: parsed.liveActivityId ?? null }, loaded: true });
     } else {
       set({ loaded: true });
     }
@@ -82,12 +85,12 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
 
   /** セッションと全てのエフェメラル状態（snooze）をクリアする。liveActivityId は session 内に含まれるため自動的にクリアされる。 */
   clearSession: async () => {
-    set({ session: null, snoozeAlarmId: null, snoozeFiresAt: null });
+    set({ session: null, snoozeAlarmIds: [], snoozeFiresAt: null });
     await persistSession(null);
   },
 
-  setSnoozeAlarmId: (id: string | null) => {
-    set({ snoozeAlarmId: id });
+  setSnoozeAlarmIds: (ids: readonly string[]) => {
+    set({ snoozeAlarmIds: ids });
   },
 
   setSnoozeFiresAt: (time: string | null) => {

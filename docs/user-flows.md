@@ -44,7 +44,9 @@ wakeup 画面が表示される
        ├─ WakeRecord を作成 (addRecord)
        ├─ TODO がある場合:
        │    ├─ MorningSession を作成 (startSession)
-       │    ├─ 初回スヌーズをスケジュール (scheduleAndStoreSnooze)
+       │    ├─ スヌーズを先行スケジュール (scheduleSnoozeAlarms)
+       │    │    └─ dismiss 時点から9分間隔 × 20本（3時間分）を一括スケジュール
+       │    │    └─ snoozeAlarmIds をセッションストアに保存
        │    └─ Live Activity を開始 (startLiveActivity)
        ├─ TODO がない場合:
        │    └─ HealthKit から睡眠データを取得・記録
@@ -97,34 +99,34 @@ wakeup 画面が表示される
 ```
 最後の TODO にチェック → areAllCompleted() === true
   └─ completion effect が発火 (index.tsx)
-       ├─ 1. cancelSnooze(snoozeAlarmId) — 次のスヌーズをキャンセル
+       ├─ 1. cancelSnoozeAlarms(snoozeAlarmIds) — 残りのスヌーズを一括キャンセル
        ├─ 2. endLiveActivity(liveActivityId) — ロック画面ウィジェットを終了
        ├─ 3. updateRecord() — 完了時刻・所要時間を WakeRecord に保存
        └─ 4. clearSession() — セッション + snooze/activity ID をクリア
             └─ ダッシュボードが再レンダリング → テンプレート TODO リストに戻る
 ```
 
-**順序が重要**: snoozeAlarmId と liveActivityId は clearSession() で消えるため、先に参照してからクリアする。
+**順序が重要**: snoozeAlarmIds と liveActivityId は clearSession() で消えるため、先に参照してからクリアする。
 
 **関連ファイル**: `app/(tabs)/index.tsx`, `src/services/alarm-kit.ts`
 
 ## 6. スヌーズ再発火フロー
 
 ```
-スヌーズアラームが発火（前回 dismiss から9分後）
+先行スケジュール済みスヌーズアラームが発火
   └─ アプリが foreground に遷移
   └─ _layout.tsx 初期化 → isSnooze=true を検出
        └─ sessionLoaded を await
-       └─ handleSnoozeRefire()
+       └─ handleSnoozeArrival()
             ├─ session が存在 & 未完了 TODO あり:
-            │    ├─ 次のスヌーズをスケジュール (scheduleAndStoreSnooze)
+            │    ├─ snoozeFiresAt を次の発火時刻に更新（カウントダウン表示用）
             │    └─ Live Activity を更新 (updateLiveActivity)
             └─ session なし or TODO 全完了:
-                 └─ スヌーズなし（何もしない）
+                 └─ 何もしない（残りのスヌーズは TODO 全完了時にキャンセル済み）
        └─ router.push('/') → ダッシュボードへ
 ```
 
-**注意**: スヌーズ再発火は wakeup 画面を表示しない。ネイティブアラームが既にユーザーを起こしているため、アプリ側では自動的に次のスヌーズをスケジュールするだけ。
+**注意**: 先行スケジュール方式のため、発火時の再スケジュールは不要。Live Activity の更新のみ行う。
 
 **関連ファイル**: `app/_layout.tsx`, `src/services/snooze.ts`
 
@@ -135,7 +137,9 @@ wakeup 画面が表示される
   └─ _layout.tsx 初期化
        ├─ loadSession() — AsyncStorage からセッションを復元
        │    └─ セッションがあれば「今朝のルーティン」セクションを表示
-       │       （ただし snoozeAlarmId, snoozeFiresAt, liveActivityId はメモリのみのため消失）
+       │    └─ liveActivityId マイグレーション: 旧データの undefined → null
+       │       （snoozeAlarmIds, snoozeFiresAt はメモリのみのため消失。
+       │        ただし先行スケジュール済みスヌーズはネイティブ側で発火し続ける）
        ├─ loadTarget() — 期限切れ nextOverride を自動クリア
        └─ checkLaunchPayload() → null（通常起動なので payload なし）
 ```
@@ -149,6 +153,6 @@ wakeup 画面が表示される
 | WakeTarget | 初回起動時 (DEFAULT) | 削除されない | AsyncStorage |
 | WakeRecord | アラーム dismiss 時 | 削除されない | AsyncStorage |
 | MorningSession | アラーム dismiss 時（TODO あり） | TODO 全完了時 | AsyncStorage |
-| snoozeAlarmId | スヌーズスケジュール時 | セッションクリア時 | メモリのみ |
-| snoozeFiresAt | スヌーズスケジュール時 | セッションクリア時 | メモリのみ |
-| liveActivityId | Live Activity 開始時 | セッションクリア時 | メモリのみ |
+| snoozeAlarmIds | アラーム dismiss 時（先行一括スケジュール） | セッションクリア時 | メモリのみ |
+| snoozeFiresAt | アラーム dismiss 時 / スヌーズ発火時 | セッションクリア時 | メモリのみ |
+| liveActivityId | Live Activity 開始時 | セッションクリア時 | AsyncStorage（session 内） |

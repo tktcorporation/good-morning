@@ -12,7 +12,7 @@ import {
   initializeAlarmKit,
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
-import { handleSnoozeRefire, restoreSnoozeIfNeeded } from '../src/services/snooze';
+import { handleSnoozeArrival } from '../src/services/snooze';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -72,13 +72,10 @@ export default function RootLayout() {
       if (isSnoozePayload(payload)) {
         // スヌーズ再発火: wakeup 画面を表示せず自動処理する。
         // ネイティブアラームが既にユーザーを起こしているため、アプリ側では
-        // TODO状態に基づいて次のスヌーズをスケジュールし、ダッシュボードへ遷移する。
-        //
-        // handleSnoozeRefire() は useMorningSessionStore.getState().session を
-        // 直接参照するため、loadSession() の完了（AsyncStorage → set()）を待つ必要がある。
-        // 待たないと session === null で判定され、スヌーズが再スケジュールされない。
+        // Live Activity を更新してダッシュボードへ遷移するだけ。
+        // 先行スケジュール方式により再スケジュールは不要。
         sessionLoaded.then(() => {
-          handleSnoozeRefire();
+          handleSnoozeArrival();
           router.push('/');
         });
       } else {
@@ -86,20 +83,14 @@ export default function RootLayout() {
         router.push('/wakeup');
       }
     } else {
-      // アラーム経由でない通常起動（ホーム画面タップ等）の場合、
-      // アプリ kill → 再起動でスヌーズが失われている可能性があるため復元する。
-      // snoozeAlarmId は AlarmKit のネイティブ ID で再起動後は無効なので、
-      // 永続化ではなく毎回再スケジュールするアプローチを取る。
+      // アラーム経由でない通常起動（ホーム画面タップ等）の場合。
+      // 先行スケジュール方式ではスヌーズはアラーム設定時に一括スケジュール済みのため、
+      // 復元処理は不要。
       //
-      // また、セッション内に永続化された liveActivityId があれば状態を復元する。
-      // セッションがないのに liveActivityId が残ることはない（session ごと永続化）ため、
-      // セッションなしの場合のクリーンアップは不要。
+      // セッションがアクティブだがTODO全完了済みの場合、
+      // 前回のアプリ kill で endLiveActivity が呼ばれなかった可能性がある。
+      // その場合はここで Live Activity を終了してロック画面から除去する。
       sessionLoaded.then(() => {
-        restoreSnoozeIfNeeded();
-
-        // セッションがアクティブだがTODO全完了済みの場合、
-        // 前回のアプリ kill で endLiveActivity が呼ばれなかった可能性がある。
-        // その場合はここで Live Activity を終了してロック画面から除去する。
         const state = useMorningSessionStore.getState();
         if (
           state.session !== null &&
@@ -125,8 +116,8 @@ export default function RootLayout() {
   // バックグラウンド → フォアグラウンド復帰時にスヌーズ状態を確認する。
   // AlarmKit がアプリを起動する場合は初期化 effect（上）で処理されるが、
   // アプリが kill されずバックグラウンドにいた場合は初期化 effect が再実行されない。
-  // そのケースでは checkLaunchPayload でスヌーズ再発火を検知し、
-  // payload がなければ restoreSnoozeIfNeeded で漏れを補完する。
+  // そのケースでは checkLaunchPayload でスヌーズ再発火を検知し、Live Activity を更新する。
+  // 先行スケジュール方式のため再スケジュールは不要。
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
@@ -137,11 +128,7 @@ export default function RootLayout() {
 
       const resumePayload = checkLaunchPayload();
       if (isSnoozePayload(resumePayload)) {
-        handleSnoozeRefire();
-      } else {
-        // payload がない復帰（ユーザーが手動でアプリを開いた等）でも、
-        // スヌーズが期限切れになっていれば再スケジュールする。
-        restoreSnoozeIfNeeded();
+        handleSnoozeArrival();
       }
     });
     return () => subscription.remove();

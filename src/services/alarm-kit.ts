@@ -113,6 +113,9 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
       title: alarmTitle,
       soundName: target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined,
       launchAppOnDismiss: true,
+      // ネイティブ Snooze ボタンを有効化。先行スケジュール済みスヌーズに加え、
+      // ユーザーが即座にスヌーズしたい場合のフォールバックとして機能する。
+      doSnoozeIntent: true,
     });
     if (success) ids.push(id);
   }
@@ -148,48 +151,62 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
  */
 export const SNOOZE_DURATION_SECONDS = 540;
 
+/** 先行スケジュールするスヌーズの最大本数。9分 × 20 = 3時間分。 */
+export const SNOOZE_MAX_COUNT = 20;
+
 /**
- * スヌーズアラームを9分後にスケジュールする。
+ * メインアラームの dismissTime を基準に、9分間隔でスヌーズアラームを先行スケジュールする。
  *
- * 背景: TODO完了まで繰り返しスヌーズを鳴らすことで、ユーザーが二度寝するのを防ぐ。
- * dismissPayload に isSnooze フラグを含め、再起動時にスヌーズ経由と判別する。
+ * 背景: iOS ではロック画面から dismiss するとアプリが起動しない場合がある。
+ * JS 側で1本ずつスケジュールする方式だとスヌーズが途切れるため、
+ * アラーム設定時にまとめてスケジュールし、ネイティブ側で確実に発火させる。
  *
- * 呼び出し元: app/wakeup.tsx (アラーム解除時・スヌーズ再発火時)
- * 対になる関数: cancelSnooze() (TODO全完了時に取消)
+ * 呼び出し元: app/wakeup.tsx (アラーム dismiss 後のセッション開始時)
+ * 対になる関数: cancelSnoozeAlarms() (TODO全完了時に残りを一括取消)
+ *
+ * @param baseTime スヌーズ起算時刻（通常はアラーム dismiss 時刻）
+ * @param count スケジュールする本数（デフォルト SNOOZE_MAX_COUNT）
+ * @returns スケジュールに成功したアラーム ID の配列
  */
-export async function scheduleSnooze(): Promise<string | null> {
+export async function scheduleSnoozeAlarms(
+  baseTime: Date,
+  count: number = SNOOZE_MAX_COUNT,
+): Promise<readonly string[]> {
   const kit = getAlarmKit();
-  if (kit === null) return null;
+  if (kit === null) return [];
 
-  const id = kit.generateUUID();
-  const now = new Date();
-  const snoozeDate = new Date(now.getTime() + SNOOZE_DURATION_SECONDS * 1000);
-  const epochSeconds = Math.floor(snoozeDate.getTime() / 1000);
+  const ids: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    const id = kit.generateUUID();
+    const snoozeDate = new Date(baseTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * i);
+    const epochSeconds = Math.floor(snoozeDate.getTime() / 1000);
 
-  try {
-    const success = await kit.scheduleAlarm({
-      id,
-      epochSeconds,
-      title: 'Good Morning',
-      launchAppOnDismiss: true,
-      dismissPayload: JSON.stringify({ isSnooze: true }),
-    });
-    return success ? id : null;
-  } catch {
-    return null;
+    try {
+      const success = await kit.scheduleAlarm({
+        id,
+        epochSeconds,
+        title: 'Good Morning',
+        launchAppOnDismiss: true,
+        dismissPayload: JSON.stringify({ isSnooze: true }),
+      });
+      if (success) ids.push(id);
+    } catch {
+      // 個別のスケジュール失敗はスキップして残りを続行
+    }
   }
+  return ids;
 }
 
 /**
- * スケジュール済みのスヌーズアラームを取り消す。
+ * 先行スケジュール済みのスヌーズアラームを一括取り消す。
  *
  * 呼び出し元: app/(tabs)/index.tsx (TODO全完了時)
- * TODO が全て完了すればスヌーズは不要なため、次の発火前にキャンセルする。
+ * TODO が全て完了すればスヌーズは不要なため、残りを全てキャンセルする。
  */
-export async function cancelSnooze(alarmId: string): Promise<void> {
+export async function cancelSnoozeAlarms(ids: readonly string[]): Promise<void> {
   const kit = getAlarmKit();
   if (kit === null) return;
-  await kit.cancelAlarm(alarmId);
+  await Promise.all(ids.map((id) => kit.cancelAlarm(id)));
 }
 
 export async function cancelAllAlarms(): Promise<void> {

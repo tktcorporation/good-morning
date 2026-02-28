@@ -51,7 +51,12 @@ export function calculateWakeResult(diffMinutes: number): WakeResult {
 export function calculateDiffMinutes(targetTime: AlarmTime, actualTime: Date): number {
   const targetMinutes = targetTime.hour * 60 + targetTime.minute;
   const actualMinutes = actualTime.getHours() * 60 + actualTime.getMinutes();
-  return actualMinutes - targetMinutes;
+  let diff = actualMinutes - targetMinutes;
+  // 深夜跨ぎ補正: 23:50 target → 0:10 actual で diff=-1420 になるのを +20 に修正。
+  // ±720分（12時間）を閾値にする。evaluateBedtime と同じパターン。
+  if (diff < -720) diff += 1440;
+  if (diff > 720) diff -= 1440;
+  return diff;
 }
 
 export function formatDateString(date: Date): string {

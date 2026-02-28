@@ -10,7 +10,7 @@ import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import {
-  cancelSnooze,
+  cancelSnoozeAlarms,
   endLiveActivity,
   isAlarmKitAvailable,
   updateLiveActivity,
@@ -122,14 +122,14 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
 
-    // レコード更新前にスヌーズをキャンセルする。
+    // レコード更新前にスヌーズを一括キャンセルする。
     // updateRecord → clearSession の順で処理するため、先にキャンセルしないと
-    // clearSession でストアの snoozeAlarmId が消えて参照できなくなる。
-    const snoozeId = useMorningSessionStore.getState().snoozeAlarmId;
-    if (snoozeId !== null) {
+    // clearSession でストアの snoozeAlarmIds が消えて参照できなくなる。
+    const snoozeIds = useMorningSessionStore.getState().snoozeAlarmIds;
+    if (snoozeIds.length > 0) {
       // 意図的な fire-and-forget: useEffect は同期コールバックのため await 不可。
       // キャンセルの成否はユーザー操作に影響しないので非同期で問題ない。
-      void cancelSnooze(snoozeId);
+      void cancelSnoozeAlarms(snoozeIds);
     }
 
     const now = new Date();
