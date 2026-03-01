@@ -11,12 +11,10 @@ import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import {
-  cancelAllAlarms,
-  endLiveActivity,
   isAlarmKitAvailable,
-  scheduleWakeTargetAlarm,
   updateLiveActivity,
 } from '../../src/services/alarm-kit';
+import { completeMorningSession } from '../../src/services/session-lifecycle';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
@@ -24,7 +22,6 @@ import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
-import type { WakeTodoRecord } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 
@@ -74,14 +71,12 @@ export default function DashboardScreen() {
   const removeTodo = useWakeTargetStore((s) => s.removeTodo);
 
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
-  const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
-  const clearSession = useMorningSessionStore((s) => s.clearSession);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
   const snoozeFiresAt = useMorningSessionStore((s) => s.snoozeFiresAt);
@@ -124,53 +119,10 @@ export default function DashboardScreen() {
   // Complete session when all todos are done
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
-
-    // アプリ再起動後は snoozeAlarmIds が消失するため、ID ベースのキャンセルではなく
-    // ネイティブ側の全アラームをキャンセルする。その後、通常の wake target アラームを
-    // 再スケジュールして翌朝のアラームを復元する。
-    void cancelAllAlarms().then(() => {
-      const currentTarget = useWakeTargetStore.getState().target;
-      if (currentTarget?.enabled) {
-        scheduleWakeTargetAlarm(currentTarget).then((newIds) => {
-          useWakeTargetStore.getState().setAlarmIds(newIds);
-        });
-      }
-    });
-
-    const now = new Date();
-    const todosCompletedAt = now.toISOString();
-    const todoCompletionSeconds = Math.round(
-      (now.getTime() - new Date(session.startedAt).getTime()) / 1000,
-    );
-
-    const todoRecords: readonly WakeTodoRecord[] = session.todos.map((todo, index) => ({
-      id: todo.id,
-      title: todo.title,
-      completedAt: todo.completedAt,
-      orderCompleted: todo.completed ? index + 1 : null,
-    }));
-
-    // clearSession でセッションの liveActivityId が消える前に Live Activity を終了する
-    const activityId = useMorningSessionStore.getState().session?.liveActivityId ?? null;
-    if (activityId !== null) {
-      endLiveActivity(activityId);
-    }
-
-    updateRecord(session.recordId, {
-      todosCompleted: true,
-      todosCompletedAt,
-      todoCompletionSeconds,
-      todos: todoRecords,
-    })
-      .then(() => clearSession())
-      .catch(() => {
-        // updateRecord 失敗時でもセッションをクリアする。
-        // レコード更新は失われるが、セッションが残り続けると completion effect が
-        // 無限に再発火し、ユーザーが朝ルーティンから抜け出せなくなる。
-        // cleanupStaleSession は翌日にしか発動しないため、即座にクリアが必要。
-        clearSession();
-      });
-  }, [session, areAllCompleted, updateRecord, clearSession]);
+    // 全ライフサイクル操作を session-lifecycle サービスに委譲する。
+    // cancelAlarms → endLA → updateRecord → clearSession → reschedule を逐次実行。
+    completeMorningSession(session).catch(() => {});
+  }, [session, areAllCompleted]);
 
   // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。
   // snoozeFiresAt が null になった時点（TODO全完了 or セッションクリア）でタイマーを停止。
