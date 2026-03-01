@@ -27,6 +27,13 @@ export interface WakeRecord {
   readonly alarmLabel: string;
   readonly todosCompleted: boolean;
   readonly todosCompletedAt: string | null;
+  /**
+   * 起床目標デッドライン（ISO datetime）。
+   * アラーム時刻 + wakeUpGoalBufferMinutes で算出。
+   * TODOがある場合、この時刻までに全TODO完了で morningPass = true。
+   * null の場合はレガシーデータ or TODOなし（従来の diffMinutes ベース判定にフォールバック）。
+   */
+  readonly goalDeadline: string | null;
 }
 
 export interface WakeStats {

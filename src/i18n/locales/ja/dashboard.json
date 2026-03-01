@@ -16,7 +16,13 @@
     "progress": "{{completed}} / {{total}} 完了",
     "banner": "朝のルーティン: {{completed}}/{{total}} 完了",
     "snoozeCountdown": "次のスヌーズまで {{time}}",
+    "goalCountdown": "目標まで {{time}}",
     "allDone": "全タスク完了!"
+  },
+  "goalBuffer": {
+    "title": "起床目標バッファ",
+    "value": "{{minutes}}分",
+    "description": "{{goalTime}} までにタスク完了で起床成功"
   },
   "week": {
     "title": "今週",

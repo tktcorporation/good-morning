@@ -13,7 +13,12 @@ interface MorningSessionState {
   /** 次のスヌーズ発火予定時刻（ISO文字列）。ダッシュボードのカウントダウン表示に使用。メモリのみ。 */
   readonly snoozeFiresAt: string | null;
   loadSession: () => Promise<void>;
-  startSession: (recordId: string, date: string, todos: readonly SessionTodo[]) => Promise<void>;
+  startSession: (
+    recordId: string,
+    date: string,
+    todos: readonly SessionTodo[],
+    goalDeadline: string | null,
+  ) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
   setSnoozeAlarmIds: (ids: readonly string[]) => void;
@@ -43,22 +48,34 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw) as MorningSession;
-      // マイグレーション: liveActivityId が追加される前の既存データでは
-      // フィールドが undefined になる。undefined のまま使うと
-      // endLiveActivity(undefined) でクラッシュするため null にフォールバック。
-      set({ session: { ...parsed, liveActivityId: parsed.liveActivityId ?? null }, loaded: true });
+      // マイグレーション: liveActivityId / goalDeadline が追加される前の既存データでは
+      // フィールドが undefined になる。undefined のまま使うとクラッシュするため null にフォールバック。
+      set({
+        session: {
+          ...parsed,
+          liveActivityId: parsed.liveActivityId ?? null,
+          goalDeadline: parsed.goalDeadline ?? null,
+        },
+        loaded: true,
+      });
     } else {
       set({ loaded: true });
     }
   },
 
-  startSession: async (recordId: string, date: string, todos: readonly SessionTodo[]) => {
+  startSession: async (
+    recordId: string,
+    date: string,
+    todos: readonly SessionTodo[],
+    goalDeadline: string | null,
+  ) => {
     const session: MorningSession = {
       recordId,
       date,
       startedAt: new Date().toISOString(),
       todos,
       liveActivityId: null,
+      goalDeadline,
     };
     set({ session });
     await persistSession(session);

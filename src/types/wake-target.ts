@@ -29,6 +29,15 @@ export interface WakeTarget {
    * 就寝目標時刻は calculateBedtime(defaultTime, targetSleepMinutes) で算出。
    */
   readonly targetSleepMinutes: number | null;
+  /**
+   * 起床目標バッファ（分）。アラーム時刻からこの分数後が「起床目標時刻」になる。
+   * この時刻までに全TODOを完了すれば「起きられた」判定（morningPass）となる。
+   *
+   * 背景: アラームを止めただけでは起床とみなさず、朝ルーティン（TODO）を
+   * 一定時間内に完了できたかどうかで起床成功を判定する。
+   * デフォルト30分は「アラーム後に顔を洗って身支度する一般的な所要時間」として設定。
+   */
+  readonly wakeUpGoalBufferMinutes: number;
 }
 
 /**
@@ -85,6 +94,9 @@ export function computeOverrideTargetDate(time: AlarmTime, now: Date = new Date(
   return `${y}-${m}-${d}`;
 }
 
+/** デフォルトの起床目標バッファ（分）。アラーム後30分以内にTODO完了で成功。 */
+export const DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES = 30;
+
 export const DEFAULT_WAKE_TARGET: WakeTarget = {
   defaultTime: { hour: 7, minute: 0 },
   dayOverrides: {},
@@ -93,4 +105,5 @@ export const DEFAULT_WAKE_TARGET: WakeTarget = {
   enabled: true,
   soundId: DEFAULT_SOUND_ID,
   targetSleepMinutes: null,
+  wakeUpGoalBufferMinutes: DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
 };

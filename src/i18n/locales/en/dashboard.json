@@ -16,7 +16,13 @@
     "progress": "{{completed}} / {{total}} completed",
     "banner": "Morning Routine: {{completed}}/{{total}} done",
     "snoozeCountdown": "Next snooze in {{time}}",
+    "goalCountdown": "Goal in {{time}}",
     "allDone": "All tasks done!"
+  },
+  "goalBuffer": {
+    "title": "Wake-up Goal Buffer",
+    "value": "{{minutes}} min",
+    "description": "Complete tasks by {{goalTime}} to succeed"
   },
   "week": {
     "title": "This Week",

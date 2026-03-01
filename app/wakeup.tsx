@@ -115,6 +115,20 @@ export default function WakeUpScreen() {
         orderCompleted: null,
       }));
 
+      // 起床目標デッドライン: アラーム時刻 + バッファ分数
+      // TODOがある場合のみ設定（TODOなし = バッファ不要、従来の判定を維持）
+      const bufferMinutes = target.wakeUpGoalBufferMinutes;
+      const goalDeadline = hasTodos
+        ? new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            resolvedTime.hour,
+            resolvedTime.minute + bufferMinutes,
+            0,
+          ).toISOString()
+        : null;
+
       addRecord({
         alarmId: 'wake-target',
         date: dateStr,
@@ -129,6 +143,7 @@ export default function WakeUpScreen() {
         alarmLabel: '',
         todosCompleted: !hasTodos,
         todosCompletedAt: hasTodos ? null : now.toISOString(),
+        goalDeadline,
       })
         .then(async (record) => {
           if (!hasTodos) return;
@@ -139,7 +154,7 @@ export default function WakeUpScreen() {
             completed: false,
             completedAt: null,
           }));
-          await startSession(record.id, dateStr, sessionTodos);
+          await startSession(record.id, dateStr, sessionTodos, goalDeadline);
 
           // セッション開始直後にスヌーズを先行スケジュール。
           // 先行スケジュール方式: dismiss 時点から9分間隔で最大20本（3時間分）を一括スケジュール。

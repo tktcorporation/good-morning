@@ -8,20 +8,50 @@ import type { StreakState } from '../types/streak';
 import { MAX_FREEZES } from '../types/streak';
 
 describe('isMorningPass', () => {
-  it('returns true for "great"', () => {
-    expect(isMorningPass('great')).toBe(true);
+  describe('without goalDeadline (legacy fallback)', () => {
+    it('returns true for "great"', () => {
+      expect(isMorningPass('great')).toBe(true);
+    });
+
+    it('returns true for "ok"', () => {
+      expect(isMorningPass('ok')).toBe(true);
+    });
+
+    it('returns false for "late"', () => {
+      expect(isMorningPass('late')).toBe(false);
+    });
+
+    it('returns false for "missed"', () => {
+      expect(isMorningPass('missed')).toBe(false);
+    });
+
+    it('returns true for "great" with goalDeadline=null (explicit)', () => {
+      expect(isMorningPass('great', null, true, '2026-02-26T07:30:00.000Z')).toBe(true);
+    });
   });
 
-  it('returns true for "ok"', () => {
-    expect(isMorningPass('ok')).toBe(true);
-  });
+  describe('with goalDeadline (buffer-based)', () => {
+    const deadline = '2026-02-26T07:30:00.000Z';
 
-  it('returns false for "late"', () => {
-    expect(isMorningPass('late')).toBe(false);
-  });
+    it('returns true when todos completed before deadline', () => {
+      expect(isMorningPass('late', deadline, true, '2026-02-26T07:25:00.000Z')).toBe(true);
+    });
 
-  it('returns false for "missed"', () => {
-    expect(isMorningPass('missed')).toBe(false);
+    it('returns true when todos completed exactly at deadline', () => {
+      expect(isMorningPass('late', deadline, true, deadline)).toBe(true);
+    });
+
+    it('returns false when todos completed after deadline', () => {
+      expect(isMorningPass('great', deadline, true, '2026-02-26T07:31:00.000Z')).toBe(false);
+    });
+
+    it('returns false when todos not completed', () => {
+      expect(isMorningPass('great', deadline, false, null)).toBe(false);
+    });
+
+    it('returns false when todosCompletedAt is null', () => {
+      expect(isMorningPass('great', deadline, true, null)).toBe(false);
+    });
   });
 });
 

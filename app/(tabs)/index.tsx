@@ -24,7 +24,7 @@ import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
-import type { WakeTodoRecord } from '../../src/types/wake-record';
+import type { WakeResult, WakeTodoRecord } from '../../src/types/wake-record';
 import { resolveTimeForDate } from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 
@@ -77,6 +77,7 @@ export default function DashboardScreen() {
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);
 
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
+  const setWakeUpGoalBufferMinutes = useWakeTargetStore((s) => s.setWakeUpGoalBufferMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const session = useMorningSessionStore((s) => s.session);
@@ -88,6 +89,7 @@ export default function DashboardScreen() {
 
   const [newTodoText, setNewTodoText] = useState('');
   const [snoozeRemaining, setSnoozeRemaining] = useState<string | null>(null);
+  const [goalRemaining, setGoalRemaining] = useState<string | null>(null);
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
 
   const today = useMemo(() => new Date(), []);
@@ -156,11 +158,22 @@ export default function DashboardScreen() {
       endLiveActivity(activityId);
     }
 
+    // goalDeadline がある場合、TODO完了時刻がデッドライン以内かで result を再判定。
+    // デッドライン内に完了 → 'great'、超過 → 'late'。
+    // goalDeadline がない（レガシー or TODO なし）場合は従来の result を維持。
+    const goalBasedResult: WakeResult | undefined =
+      session.goalDeadline !== null
+        ? now.getTime() <= new Date(session.goalDeadline).getTime()
+          ? 'great'
+          : 'late'
+        : undefined;
+
     updateRecord(session.recordId, {
       todosCompleted: true,
       todosCompletedAt,
       todoCompletionSeconds,
       todos: todoRecords,
+      ...(goalBasedResult !== undefined ? { result: goalBasedResult } : {}),
     })
       .then(() => clearSession())
       .catch(() => {
@@ -193,6 +206,29 @@ export default function DashboardScreen() {
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
   }, [snoozeFiresAt]);
+
+  // 起床目標デッドラインまでのカウントダウンタイマー。MM:SS 形式で表示する。
+  // セッション中のみ表示。デッドライン超過後は "超過" 表示。
+  useEffect(() => {
+    const deadline = session?.goalDeadline ?? null;
+    if (deadline === null) {
+      setGoalRemaining(null);
+      return;
+    }
+    const updateGoalCountdown = () => {
+      const diff = new Date(deadline).getTime() - Date.now();
+      if (diff <= 0) {
+        setGoalRemaining(null);
+        return;
+      }
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+    };
+    updateGoalCountdown();
+    const timer = setInterval(updateGoalCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [session?.goalDeadline]);
 
   const handleToggleTodo = useCallback(
     async (todoId: string) => {
@@ -280,6 +316,50 @@ export default function DashboardScreen() {
         onSleepMinutesChange={setTargetSleepMinutes}
       />
 
+      {/* Wake-up Goal Buffer -- 起床目標バッファ設定 */}
+      {target !== null && !sessionActive && (
+        <View style={commonStyles.section}>
+          <Text style={commonStyles.sectionTitle}>{t('goalBuffer.title')}</Text>
+          <View style={styles.bufferRow}>
+            <Pressable
+              style={styles.bufferButton}
+              onPress={() =>
+                setWakeUpGoalBufferMinutes(Math.max(10, target.wakeUpGoalBufferMinutes - 5))
+              }
+            >
+              <Text style={styles.bufferButtonText}>{'-'}</Text>
+            </Pressable>
+            <Text style={styles.bufferValue}>
+              {t('goalBuffer.value', { minutes: target.wakeUpGoalBufferMinutes })}
+            </Text>
+            <Pressable
+              style={styles.bufferButton}
+              onPress={() =>
+                setWakeUpGoalBufferMinutes(Math.min(120, target.wakeUpGoalBufferMinutes + 5))
+              }
+            >
+              <Text style={styles.bufferButtonText}>{'+'}</Text>
+            </Pressable>
+          </View>
+          {resolvedTime !== null && (
+            <Text style={styles.bufferDescription}>
+              {t('goalBuffer.description', {
+                goalTime: formatTime({
+                  hour:
+                    Math.floor(
+                      (resolvedTime.hour * 60 +
+                        resolvedTime.minute +
+                        target.wakeUpGoalBufferMinutes) /
+                        60,
+                    ) % 24,
+                  minute: (resolvedTime.minute + target.wakeUpGoalBufferMinutes) % 60,
+                }),
+              })}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Morning Routine Session (active) OR Todo List (inactive) */}
       {sessionActive && progress !== null ? (
         <View style={commonStyles.section}>
@@ -302,6 +382,11 @@ export default function DashboardScreen() {
               })}
             </Text>
           </View>
+          {goalRemaining !== null && (
+            <Text style={styles.goalCountdownText}>
+              {t('morningRoutine.goalCountdown', { time: goalRemaining })}
+            </Text>
+          )}
           {snoozeRemaining !== null && (
             <Text style={styles.snoozeCountdownText}>
               {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
@@ -483,9 +568,53 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
   },
+  goalCountdownText: {
+    fontSize: fontSize.md,
+    color: colors.primaryLight,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   snoozeCountdownText: {
     fontSize: fontSize.sm,
     color: colors.warning,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+
+  // Goal Buffer
+  bufferRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  bufferButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bufferButtonText: {
+    color: colors.text,
+    fontSize: fontSize.xl,
+    fontWeight: '300',
+  },
+  bufferValue: {
+    color: colors.text,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    minWidth: 80,
+    textAlign: 'center',
+  },
+  bufferDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.xs,
   },

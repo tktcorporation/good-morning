@@ -8,6 +8,7 @@ import type { DayOverride, WakeTarget } from '../types/wake-target';
 import {
   computeOverrideTargetDate,
   DEFAULT_WAKE_TARGET,
+  DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
   isNextOverrideExpired,
 } from '../types/wake-target';
 import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
@@ -31,6 +32,7 @@ interface WakeTargetState {
   reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
   setSoundId: (soundId: string) => Promise<void>;
   setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
+  setWakeUpGoalBufferMinutes: (minutes: number) => Promise<void>;
   toggleEnabled: () => Promise<void>;
   setAlarmIds: (ids: readonly string[]) => Promise<void>;
 }
@@ -57,10 +59,18 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
     targetSleepMinutes = migrateBedtimeToSleepMinutes(bt, dt);
   }
 
+  // wakeUpGoalBufferMinutes マイグレーション:
+  // フィールドが存在しない旧データにはデフォルト値（30分）を適用
+  const wakeUpGoalBufferMinutes =
+    typeof parsed.wakeUpGoalBufferMinutes === 'number'
+      ? (parsed.wakeUpGoalBufferMinutes as number)
+      : DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES;
+
   return {
     ...(parsed as unknown as WakeTarget),
     soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
     targetSleepMinutes,
+    wakeUpGoalBufferMinutes,
   };
 }
 
@@ -197,6 +207,19 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const { target } = get();
     if (target === null) return;
     const updated: WakeTarget = { ...target, targetSleepMinutes: minutes };
+    set({ target: updated });
+    await persist(updated);
+  },
+
+  /**
+   * 起床目標バッファ（分）を設定する。
+   * アラーム時刻 + この分数が起床目標時刻となり、
+   * その時刻までに全TODO完了で morningPass 判定。
+   */
+  setWakeUpGoalBufferMinutes: async (minutes: number) => {
+    const { target } = get();
+    if (target === null) return;
+    const updated: WakeTarget = { ...target, wakeUpGoalBufferMinutes: minutes };
     set({ target: updated });
     await persist(updated);
   },
