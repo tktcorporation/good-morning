@@ -16,10 +16,14 @@ import type { WakeTodoRecord } from '../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
 import type { WakeTarget } from '../types/wake-target';
 import { getLogicalDateString } from '../utils/date';
+import { useWakeTargetStore } from '../stores/wake-target-store';
 import {
   SNOOZE_DURATION_SECONDS,
   SNOOZE_MAX_COUNT,
+  cancelAllAlarms,
+  endLiveActivity,
   scheduleSnoozeAlarms,
+  scheduleWakeTargetAlarm,
   startLiveActivity,
   updateLiveActivity,
 } from './alarm-kit';
@@ -204,8 +208,51 @@ export async function startMorningSession(params: StartSessionParams): Promise<v
  * 呼び出し元: app/(tabs)/index.tsx（TODO 全完了検知時）
  * 実装予定: Task 4
  */
-export async function completeMorningSession(_session: MorningSession): Promise<void> {
-  throw new Error('Not implemented');
+export async function completeMorningSession(session: MorningSession): Promise<void> {
+  const now = new Date();
+
+  // 1. 全アラームキャンセル（スヌーズ含む）
+  await cancelAllAlarms();
+
+  // 2. Live Activity 終了（clearSession で liveActivityId が消える前に）
+  if (session.liveActivityId !== null) {
+    await endLiveActivity(session.liveActivityId);
+  }
+
+  // 3. WakeRecord 更新
+  const todoCompletionSeconds = Math.round(
+    (now.getTime() - new Date(session.startedAt).getTime()) / 1000,
+  );
+  const todoRecords: readonly WakeTodoRecord[] = session.todos.map((todo, index) => ({
+    id: todo.id,
+    title: todo.title,
+    completedAt: todo.completedAt,
+    orderCompleted: todo.completed ? index + 1 : null,
+  }));
+
+  const { updateRecord } = useWakeRecordStore.getState();
+  try {
+    await updateRecord(session.recordId, {
+      todosCompleted: true,
+      todosCompletedAt: now.toISOString(),
+      todoCompletionSeconds,
+      todos: todoRecords,
+    });
+  } catch {
+    // updateRecord 失敗時でもセッションをクリアする。
+    // レコード更新は失われるが、セッションが残り続けると completion effect が
+    // 無限に再発火し、ユーザーが朝ルーティンから抜け出せなくなる。
+  }
+
+  // 4. セッションクリア
+  await useMorningSessionStore.getState().clearSession();
+
+  // 5. 通常アラーム再スケジュール
+  const { target, setAlarmIds } = useWakeTargetStore.getState();
+  if (target?.enabled) {
+    const newIds = await scheduleWakeTargetAlarm(target);
+    await setAlarmIds(newIds);
+  }
 }
 
 /**

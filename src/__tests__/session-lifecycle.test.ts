@@ -11,16 +11,26 @@ jest.mock('../services/alarm-kit', () => ({
   SNOOZE_MAX_COUNT: 20,
 }));
 
-import { scheduleSnoozeAlarms, startLiveActivity } from '../services/alarm-kit';
 import {
+  cancelAllAlarms,
+  endLiveActivity,
+  scheduleSnoozeAlarms,
+  scheduleWakeTargetAlarm,
+  startLiveActivity,
+} from '../services/alarm-kit';
+import {
+  completeMorningSession,
   handleSnoozeArrival,
+  restoreSessionOnLaunch,
   restoreSnoozeCountdown,
   startMorningSession,
 } from '../services/session-lifecycle';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
+import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
 import type { WakeTarget } from '../types/wake-target';
+import { getLogicalDateString } from '../utils/date';
 
 /**
  * セッションストアにテスト用のアクティブセッション（TODO未完了）をセットする。
@@ -268,6 +278,125 @@ describe('session-lifecycle service', () => {
 
       // スヌーズは正常に設定されている
       expect(useMorningSessionStore.getState().snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+    });
+  });
+
+  describe('completeMorningSession', () => {
+    const completedSession: MorningSession = {
+      recordId: 'rec-1',
+      date: '2026-03-01',
+      startedAt: '2026-03-01T07:00:00.000Z',
+      todos: [
+        {
+          id: 'todo-1',
+          title: 'Stretch',
+          completed: true,
+          completedAt: '2026-03-01T07:05:00.000Z',
+        },
+        {
+          id: 'todo-2',
+          title: 'Drink water',
+          completed: true,
+          completedAt: '2026-03-01T07:06:00.000Z',
+        },
+      ],
+      liveActivityId: 'la-1',
+    };
+
+    beforeEach(() => {
+      // WakeRecord ストアにレコードを設定
+      useWakeRecordStore.setState({
+        records: [
+          {
+            id: 'rec-1',
+            alarmId: 'wake-target',
+            date: '2026-03-01',
+            targetTime: { hour: 7, minute: 0 },
+            alarmTriggeredAt: '2026-03-01T06:59:55.000Z',
+            dismissedAt: '2026-03-01T07:00:00.000Z',
+            healthKitWakeTime: null,
+            result: 'great',
+            diffMinutes: 0,
+            todos: [],
+            todoCompletionSeconds: 0,
+            alarmLabel: '',
+            todosCompleted: false,
+            todosCompletedAt: null,
+          },
+        ],
+        loaded: true,
+      });
+
+      // WakeTarget ストアに有効なターゲットを設定
+      useWakeTargetStore.setState({
+        target: {
+          defaultTime: { hour: 7, minute: 0 },
+          dayOverrides: {},
+          nextOverride: null,
+          todos: [
+            { id: 'todo-1', title: 'Stretch', completed: false },
+            { id: 'todo-2', title: 'Drink water', completed: false },
+          ],
+          enabled: true,
+          soundId: 'default',
+          targetSleepMinutes: null,
+        },
+        loaded: true,
+        alarmIds: [],
+      });
+
+      // セッションをアクティブにする
+      useMorningSessionStore.setState({ session: completedSession, loaded: true });
+    });
+
+    test('cancels alarms, ends LA, updates record, clears session, reschedules', async () => {
+      await completeMorningSession(completedSession);
+
+      // cancelAllAlarms が呼ばれている
+      expect(cancelAllAlarms).toHaveBeenCalled();
+
+      // endLiveActivity が liveActivityId 付きで呼ばれている
+      expect(endLiveActivity).toHaveBeenCalledWith('la-1');
+
+      // レコードが更新されている
+      const records = useWakeRecordStore.getState().records;
+      const updatedRecord = records.find((r) => r.id === 'rec-1');
+      expect(updatedRecord?.todosCompleted).toBe(true);
+      expect(updatedRecord?.todosCompletedAt).not.toBeNull();
+
+      // セッションがクリアされている
+      expect(useMorningSessionStore.getState().session).toBeNull();
+
+      // scheduleWakeTargetAlarm が呼ばれている
+      expect(scheduleWakeTargetAlarm).toHaveBeenCalled();
+    });
+
+    test('skips endLiveActivity when liveActivityId is null', async () => {
+      const sessionNoLA: MorningSession = { ...completedSession, liveActivityId: null };
+      useMorningSessionStore.setState({ session: sessionNoLA, loaded: true });
+
+      await completeMorningSession(sessionNoLA);
+
+      // endLiveActivity は呼ばれない
+      expect(endLiveActivity).not.toHaveBeenCalled();
+
+      // セッションはクリアされている
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+
+    test('clears session even when updateRecord fails', async () => {
+      // updateRecord をモックして reject させる
+      const originalUpdateRecord = useWakeRecordStore.getState().updateRecord;
+      const mockUpdateRecord = jest.fn().mockRejectedValue(new Error('persist failed'));
+      useWakeRecordStore.setState({ updateRecord: mockUpdateRecord });
+
+      await completeMorningSession(completedSession);
+
+      // セッションはクリアされている（fail-safe）
+      expect(useMorningSessionStore.getState().session).toBeNull();
+
+      // updateRecord を元に戻す
+      useWakeRecordStore.setState({ updateRecord: originalUpdateRecord });
     });
   });
 });
