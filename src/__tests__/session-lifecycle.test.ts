@@ -399,4 +399,85 @@ describe('session-lifecycle service', () => {
       useWakeRecordStore.setState({ updateRecord: originalUpdateRecord });
     });
   });
+
+  describe('restoreSessionOnLaunch', () => {
+    test('cleans up stale session (different day) and ends Live Activity', () => {
+      setActiveSession({
+        date: '2026-02-27',
+        startedAt: '2026-02-27T07:00:00.000Z',
+        liveActivityId: 'la-stale',
+      });
+
+      restoreSessionOnLaunch(4);
+
+      // endLiveActivity が呼ばれている
+      expect(endLiveActivity).toHaveBeenCalledWith('la-stale');
+
+      // セッションがクリアされている
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+
+    test('restores snooze countdown for active session with incomplete todos', () => {
+      const today = getLogicalDateString(new Date(), 4);
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+      setActiveSession({
+        date: today,
+        startedAt: fiveMinutesAgo,
+        todos: [
+          { id: 'todo-1', title: 'Stretch', completed: false, completedAt: null },
+          { id: 'todo-2', title: 'Drink water', completed: false, completedAt: null },
+        ],
+      });
+
+      restoreSessionOnLaunch(4);
+
+      // snoozeFiresAt が設定されている（スヌーズカウントダウンが復元された）
+      expect(useMorningSessionStore.getState().snoozeFiresAt).not.toBeNull();
+
+      // セッションはまだ存在する
+      expect(useMorningSessionStore.getState().session).not.toBeNull();
+    });
+
+    test('ends Live Activity for completed session that still has active LA', () => {
+      const today = getLogicalDateString(new Date(), 4);
+
+      setActiveSession({
+        date: today,
+        startedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        todos: [
+          {
+            id: 'todo-1',
+            title: 'Stretch',
+            completed: true,
+            completedAt: '2026-03-01T07:05:00.000Z',
+          },
+          {
+            id: 'todo-2',
+            title: 'Drink water',
+            completed: true,
+            completedAt: '2026-03-01T07:06:00.000Z',
+          },
+        ],
+        liveActivityId: 'la-dangling',
+      });
+
+      restoreSessionOnLaunch(4);
+
+      // endLiveActivity が呼ばれている
+      expect(endLiveActivity).toHaveBeenCalledWith('la-dangling');
+    });
+
+    test('does nothing when no session exists', () => {
+      // セッションなし（beforeEach でクリア済み）
+
+      restoreSessionOnLaunch(4);
+
+      // endLiveActivity は呼ばれない
+      expect(endLiveActivity).not.toHaveBeenCalled();
+
+      // セッションは null のまま
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+  });
 });

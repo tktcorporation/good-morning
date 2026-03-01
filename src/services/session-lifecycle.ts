@@ -10,18 +10,18 @@
 
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
+import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmTime } from '../types/alarm';
 import type { MorningSession, SessionTodo } from '../types/morning-session';
 import type { WakeTodoRecord } from '../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
 import type { WakeTarget } from '../types/wake-target';
 import { getLogicalDateString } from '../utils/date';
-import { useWakeTargetStore } from '../stores/wake-target-store';
 import {
-  SNOOZE_DURATION_SECONDS,
-  SNOOZE_MAX_COUNT,
   cancelAllAlarms,
   endLiveActivity,
+  SNOOZE_DURATION_SECONDS,
+  SNOOZE_MAX_COUNT,
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
   startLiveActivity,
@@ -265,6 +265,28 @@ export async function completeMorningSession(session: MorningSession): Promise<v
  * 呼び出し元: app/_layout.tsx（アプリ起動時）
  * 実装予定: Task 5
  */
-export function restoreSessionOnLaunch(_dayBoundaryHour: number): void {
-  throw new Error('Not implemented');
+export function restoreSessionOnLaunch(dayBoundaryHour: number): void {
+  const state = useMorningSessionStore.getState();
+  if (state.session === null) return;
+
+  // 1. 期限切れセッション（前日以前）のクリーンアップ
+  const today = getLogicalDateString(new Date(), dayBoundaryHour);
+  if (state.session.date !== today) {
+    if (state.session.liveActivityId !== null) {
+      endLiveActivity(state.session.liveActivityId);
+    }
+    state.clearSession();
+    return;
+  }
+
+  // 2. アクティブセッション（TODO未完了）のスヌーズカウントダウン復元
+  if (!state.areAllCompleted()) {
+    restoreSnoozeCountdown(state.session.startedAt);
+    return;
+  }
+
+  // 3. TODO全完了済みだが Live Activity が残っている場合のクリーンアップ
+  if (state.session.liveActivityId !== null) {
+    endLiveActivity(state.session.liveActivityId);
+  }
 }
