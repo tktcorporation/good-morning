@@ -90,6 +90,8 @@ export default function DashboardScreen() {
   const [newTodoText, setNewTodoText] = useState('');
   const [snoozeRemaining, setSnoozeRemaining] = useState<string | null>(null);
   const [goalRemaining, setGoalRemaining] = useState<string | null>(null);
+  /** goalDeadline を超過しているかどうか。超過中もセッション・スヌーズは継続し、警告表示に切り替える。 */
+  const [goalExceeded, setGoalExceeded] = useState(false);
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
 
   const today = useMemo(() => new Date(), []);
@@ -208,22 +210,30 @@ export default function DashboardScreen() {
   }, [snoozeFiresAt]);
 
   // 起床目標デッドラインまでのカウントダウンタイマー。MM:SS 形式で表示する。
-  // セッション中のみ表示。デッドライン超過後は "超過" 表示。
+  // セッション中のみ表示。デッドライン超過後は経過時間を警告表示に切り替える。
+  // セッション・スヌーズは超過後も継続する。
   useEffect(() => {
     const deadline = session?.goalDeadline ?? null;
     if (deadline === null) {
       setGoalRemaining(null);
+      setGoalExceeded(false);
       return;
     }
     const updateGoalCountdown = () => {
       const diff = new Date(deadline).getTime() - Date.now();
       if (diff <= 0) {
-        setGoalRemaining(null);
-        return;
+        // 超過: 経過時間を表示し続ける
+        const elapsed = -diff;
+        const mins = Math.floor(elapsed / 60000);
+        const secs = Math.floor((elapsed % 60000) / 1000);
+        setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+        setGoalExceeded(true);
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+        setGoalExceeded(false);
       }
-      const mins = Math.floor(diff / 60000);
-      const secs = Math.floor((diff % 60000) / 1000);
-      setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
     };
     updateGoalCountdown();
     const timer = setInterval(updateGoalCountdown, 1000);
@@ -382,11 +392,16 @@ export default function DashboardScreen() {
               })}
             </Text>
           </View>
-          {goalRemaining !== null && (
-            <Text style={styles.goalCountdownText}>
-              {t('morningRoutine.goalCountdown', { time: goalRemaining })}
-            </Text>
-          )}
+          {goalRemaining !== null &&
+            (goalExceeded ? (
+              <Text style={styles.goalExceededText}>
+                {t('morningRoutine.goalExceeded', { time: goalRemaining })}
+              </Text>
+            ) : (
+              <Text style={styles.goalCountdownText}>
+                {t('morningRoutine.goalCountdown', { time: goalRemaining })}
+              </Text>
+            ))}
           {snoozeRemaining !== null && (
             <Text style={styles.snoozeCountdownText}>
               {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
@@ -574,6 +589,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
     fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  /** 目標超過時の警告テキスト。赤系の目立つ色でユーザーに超過を伝える。 */
+  goalExceededText: {
+    fontSize: fontSize.md,
+    color: colors.primary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   snoozeCountdownText: {

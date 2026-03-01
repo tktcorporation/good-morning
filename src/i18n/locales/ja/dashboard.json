@@ -17,6 +17,7 @@
     "banner": "朝のルーティン: {{completed}}/{{total}} 完了",
     "snoozeCountdown": "次のスヌーズまで {{time}}",
     "goalCountdown": "目標まで {{time}}",
+    "goalExceeded": "{{time}} 超過",
     "allDone": "全タスク完了!"
   },
   "goalBuffer": {

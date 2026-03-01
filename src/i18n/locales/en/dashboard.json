@@ -17,6 +17,7 @@
     "banner": "Morning Routine: {{completed}}/{{total}} done",
     "snoozeCountdown": "Next snooze in {{time}}",
     "goalCountdown": "Goal in {{time}}",
+    "goalExceeded": "{{time}} over goal",
     "allDone": "All tasks done!"
   },
   "goalBuffer": {
