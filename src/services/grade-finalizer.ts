@@ -32,9 +32,18 @@ export function buildGradeRecord(
   bedtimeTarget: AlarmTime | null,
   sleepBedtime: string | null,
 ): DailyGradeRecord {
-  // 朝の判定: WakeRecord があれば result から合否判定。
+  // 朝の判定: WakeRecord があれば goalDeadline + TODO完了時刻で合否判定。
+  // goalDeadline がない（レガシーデータ or TODOなし）場合は result ベースにフォールバック。
   // WakeRecord がない = アラームを dismiss しなかった（missed）→ 不合格。
-  const morningPass = record !== undefined ? isMorningPass(record.result) : false;
+  const morningPass =
+    record !== undefined
+      ? isMorningPass(
+          record.result,
+          record.goalDeadline,
+          record.todosCompleted,
+          record.todosCompletedAt,
+        )
+      : false;
 
   // 夜の判定: 就寝目標と実際の就寝時刻の両方が必要
   let bedtimeResult: BedtimeResult = 'noData';

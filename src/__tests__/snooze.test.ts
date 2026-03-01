@@ -17,11 +17,13 @@ function setActiveSession(overrides?: Partial<MorningSession>): void {
       { id: 'todo-2', title: 'Drink water', completed: false, completedAt: null },
     ] as const,
     liveActivityId: null as string | null,
+    goalDeadline: null as string | null,
     ...overrides,
   };
   const session: MorningSession = {
     ...base,
     liveActivityId: base.liveActivityId ?? null,
+    goalDeadline: base.goalDeadline ?? null,
   };
   useMorningSessionStore.setState({ session, loaded: true });
 }

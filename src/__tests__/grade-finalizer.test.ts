@@ -22,6 +22,7 @@ function createTestRecord(overrides: Partial<WakeRecord> = {}): WakeRecord {
     alarmLabel: 'Test Alarm',
     todosCompleted: true,
     todosCompletedAt: null,
+    goalDeadline: null,
     ...overrides,
   };
 }
@@ -162,6 +163,50 @@ describe('buildGradeRecord', () => {
     it('sets actualBedtime to null when no sleep data', () => {
       const grade = buildGradeRecord(testDate, undefined, null, null);
       expect(grade.actualBedtime).toBeNull();
+    });
+  });
+
+  describe('goalDeadline-based morningPass', () => {
+    it('sets morningPass=true when todos completed before goalDeadline', () => {
+      const record = createTestRecord({
+        result: 'late',
+        goalDeadline: '2026-02-26T07:30:00.000Z',
+        todosCompleted: true,
+        todosCompletedAt: '2026-02-26T07:20:00.000Z',
+      });
+      const grade = buildGradeRecord(testDate, record, null, null);
+      expect(grade.morningPass).toBe(true);
+    });
+
+    it('sets morningPass=false when todos completed after goalDeadline', () => {
+      const record = createTestRecord({
+        result: 'great',
+        goalDeadline: '2026-02-26T07:30:00.000Z',
+        todosCompleted: true,
+        todosCompletedAt: '2026-02-26T07:45:00.000Z',
+      });
+      const grade = buildGradeRecord(testDate, record, null, null);
+      expect(grade.morningPass).toBe(false);
+    });
+
+    it('sets morningPass=false when todos not completed with goalDeadline', () => {
+      const record = createTestRecord({
+        result: 'great',
+        goalDeadline: '2026-02-26T07:30:00.000Z',
+        todosCompleted: false,
+        todosCompletedAt: null,
+      });
+      const grade = buildGradeRecord(testDate, record, null, null);
+      expect(grade.morningPass).toBe(false);
+    });
+
+    it('falls back to result-based when goalDeadline is null', () => {
+      const record = createTestRecord({
+        result: 'great',
+        goalDeadline: null,
+      });
+      const grade = buildGradeRecord(testDate, record, null, null);
+      expect(grade.morningPass).toBe(true);
     });
   });
 

@@ -27,4 +27,11 @@ export interface MorningSession {
    * メモリのみだとアプリ kill 後にロック画面に残り続ける問題があった。
    */
   readonly liveActivityId: string | null;
+  /**
+   * 起床目標デッドライン（ISO datetime）。
+   * アラーム時刻 + wakeUpGoalBufferMinutes で算出。
+   * この時刻までに全TODOを完了すれば「起きられた」判定（morningPass）。
+   * null の場合はレガシーデータ（バッファ未設定時代のセッション）。
+   */
+  readonly goalDeadline: string | null;
 }

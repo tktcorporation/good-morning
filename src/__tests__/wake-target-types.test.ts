@@ -14,6 +14,7 @@ describe('resolveTimeForDate', () => {
     enabled: true,
     soundId: 'default',
     targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
   };
 
   test('returns defaultTime when no overrides', () => {

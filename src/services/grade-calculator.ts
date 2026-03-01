@@ -17,11 +17,30 @@ import type { WakeResult } from '../types/wake-record';
 /**
  * 朝の起床が「合格」かどうかを判定する。
  *
- * WakeResult が 'great' または 'ok' なら合格（true）。
- * 'late' や 'missed' は不合格（false）。
- * calculateDailyGrade の入力として使われる。
+ * goalDeadline がある場合（バッファ設定あり＋TODOあり）:
+ *   全TODOが完了 かつ 完了時刻が goalDeadline 以内 → 合格。
+ *   TODOが未完了 or デッドライン超過 → 不合格。
+ *
+ * goalDeadline がない場合（レガシーデータ or TODOなし）:
+ *   従来どおり WakeResult が 'great' or 'ok' なら合格。
+ *
+ * @param result - WakeRecord.result（アラーム解除時の判定結果）
+ * @param goalDeadline - 起床目標デッドライン（ISO datetime）。null = バッファ未設定
+ * @param todosCompleted - 全TODOが完了したか
+ * @param todosCompletedAt - TODO完了時刻（ISO datetime）。null = 未完了
  */
-export function isMorningPass(result: WakeResult): boolean {
+export function isMorningPass(
+  result: WakeResult,
+  goalDeadline?: string | null,
+  todosCompleted?: boolean,
+  todosCompletedAt?: string | null,
+): boolean {
+  // goalDeadline がある場合: TODO完了 + デッドライン内で判定
+  if (goalDeadline != null) {
+    if (todosCompleted !== true || todosCompletedAt == null) return false;
+    return new Date(todosCompletedAt).getTime() <= new Date(goalDeadline).getTime();
+  }
+  // フォールバック: 従来の WakeResult ベース判定
   return result === 'great' || result === 'ok';
 }
 

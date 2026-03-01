@@ -27,6 +27,7 @@ const sampleRecord: Omit<WakeRecord, 'id'> = {
   alarmLabel: 'Morning',
   todosCompleted: true,
   todosCompletedAt: '2026-02-22T07:03:00.000Z',
+  goalDeadline: null,
 };
 
 describe('wake-record store', () => {
