@@ -9,10 +9,20 @@
  */
 
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { AlarmTime } from '../types/alarm';
-import type { MorningSession } from '../types/morning-session';
+import type { MorningSession, SessionTodo } from '../types/morning-session';
+import type { WakeTodoRecord } from '../types/wake-record';
+import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
 import type { WakeTarget } from '../types/wake-target';
-import { SNOOZE_DURATION_SECONDS, SNOOZE_MAX_COUNT, updateLiveActivity } from './alarm-kit';
+import { getLogicalDateString } from '../utils/date';
+import {
+  SNOOZE_DURATION_SECONDS,
+  SNOOZE_MAX_COUNT,
+  scheduleSnoozeAlarms,
+  startLiveActivity,
+  updateLiveActivity,
+} from './alarm-kit';
 
 // ---------------------------------------------------------------------------
 // 移植済み関数（元: snooze.ts）
@@ -112,8 +122,76 @@ export interface StartSessionParams {
  * 呼び出し元: app/wakeup.tsx（handleDismiss）
  * 実装予定: Task 3
  */
-export async function startMorningSession(_params: StartSessionParams): Promise<void> {
-  throw new Error('Not implemented');
+export async function startMorningSession(params: StartSessionParams): Promise<void> {
+  const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
+  const hasTodos = target.todos.length > 0;
+  const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
+  const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
+  const result = calculateWakeResult(diffMinutes);
+
+  const todoRecords: readonly WakeTodoRecord[] = target.todos.map((todo) => ({
+    id: todo.id,
+    title: todo.title,
+    completedAt: null,
+    orderCompleted: null,
+  }));
+
+  // 1. WakeRecord 作成（失敗時は throw — レコードなしで続行は不整合）
+  const { addRecord } = useWakeRecordStore.getState();
+  const record = await addRecord({
+    alarmId: 'wake-target',
+    date: dateStr,
+    targetTime: resolvedTime,
+    alarmTriggeredAt: mountedAt.toISOString(),
+    dismissedAt: dismissTime.toISOString(),
+    healthKitWakeTime: null,
+    result,
+    diffMinutes,
+    todos: todoRecords,
+    todoCompletionSeconds: 0,
+    alarmLabel: '',
+    todosCompleted: !hasTodos,
+    todosCompletedAt: hasTodos ? null : dismissTime.toISOString(),
+  });
+
+  // TODO がなければセッション不要
+  if (!hasTodos) return;
+
+  // 2. セッション作成 + AsyncStorage 永続化
+  const sessionTodos: readonly SessionTodo[] = target.todos.map((todo) => ({
+    id: todo.id,
+    title: todo.title,
+    completed: false,
+    completedAt: null,
+  }));
+  const store = useMorningSessionStore.getState();
+  await store.startSession(record.id, dateStr, sessionTodos);
+
+  // 3. スヌーズ先行スケジュール（失敗してもセッション自体は有効）
+  let snoozeFiresAt: string | null = null;
+  try {
+    const snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+    snoozeFiresAt = new Date(dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+    useMorningSessionStore.getState().setSnoozeAlarmIds(snoozeIds);
+    useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+  } catch {
+    // スヌーズ失敗はログのみ — セッションは続行
+  }
+
+  // 4. Live Activity 開始（失敗してもセッション自体は有効）
+  try {
+    const liveActivityTodos = target.todos.map((td) => ({
+      id: td.id,
+      title: td.title,
+      completed: false,
+    }));
+    const activityId = await startLiveActivity(liveActivityTodos, snoozeFiresAt);
+    if (activityId !== null) {
+      await useMorningSessionStore.getState().setLiveActivityId(activityId);
+    }
+  } catch {
+    // Live Activity 失敗はログのみ — セッションは続行
+  }
 }
 
 /**

@@ -11,9 +11,16 @@ jest.mock('../services/alarm-kit', () => ({
   SNOOZE_MAX_COUNT: 20,
 }));
 
-import { handleSnoozeArrival, restoreSnoozeCountdown } from '../services/session-lifecycle';
+import { scheduleSnoozeAlarms, startLiveActivity } from '../services/alarm-kit';
+import {
+  handleSnoozeArrival,
+  restoreSnoozeCountdown,
+  startMorningSession,
+} from '../services/session-lifecycle';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { MorningSession } from '../types/morning-session';
+import type { WakeTarget } from '../types/wake-target';
 
 /**
  * セッションストアにテスト用のアクティブセッション（TODO未完了）をセットする。
@@ -144,6 +151,123 @@ describe('session-lifecycle service', () => {
       // 実際の動作: nextFireMs === nowMs なのでスキップ
       // しかし直後のスヌーズ（18分目）がすぐ発火するため問題なし
       expect(state.snoozeFiresAt).toBeNull();
+    });
+  });
+
+  describe('startMorningSession', () => {
+    const baseTarget: WakeTarget = {
+      defaultTime: { hour: 7, minute: 0 },
+      dayOverrides: {},
+      nextOverride: null,
+      todos: [
+        { id: 'todo-1', title: 'Stretch', completed: false },
+        { id: 'todo-2', title: 'Drink water', completed: false },
+      ],
+      enabled: true,
+      soundId: 'default',
+      targetSleepMinutes: null,
+    };
+
+    const dismissTime = new Date('2026-03-01T07:01:00.000Z');
+    const mountedAt = new Date('2026-03-01T07:00:55.000Z');
+    const resolvedTime = { hour: 7, minute: 0 };
+    const dayBoundaryHour = 4;
+
+    beforeEach(() => {
+      useWakeRecordStore.setState({ records: [], loaded: true });
+    });
+
+    test('creates record, starts session, schedules snooze, and starts Live Activity', async () => {
+      await startMorningSession({
+        target: baseTarget,
+        resolvedTime,
+        dismissTime,
+        mountedAt,
+        dayBoundaryHour,
+      });
+
+      // レコードが作成されている
+      const records = useWakeRecordStore.getState().records;
+      expect(records).toHaveLength(1);
+      expect(records[0]?.todosCompleted).toBe(false);
+
+      // セッションが作成されている
+      const session = useMorningSessionStore.getState().session;
+      expect(session).not.toBeNull();
+      expect(session?.todos).toHaveLength(2);
+
+      // スヌーズがスケジュールされている
+      expect(scheduleSnoozeAlarms).toHaveBeenCalled();
+      const state = useMorningSessionStore.getState();
+      expect(state.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+      expect(state.snoozeFiresAt).not.toBeNull();
+
+      // Live Activity が開始されている
+      expect(startLiveActivity).toHaveBeenCalled();
+      expect(session?.liveActivityId).toBe('activity-1');
+    });
+
+    test('creates only record when target has no todos', async () => {
+      const noTodoTarget: WakeTarget = { ...baseTarget, todos: [] };
+
+      await startMorningSession({
+        target: noTodoTarget,
+        resolvedTime,
+        dismissTime,
+        mountedAt,
+        dayBoundaryHour,
+      });
+
+      // レコードは作成される（todosCompleted = true）
+      const records = useWakeRecordStore.getState().records;
+      expect(records).toHaveLength(1);
+      expect(records[0]?.todosCompleted).toBe(true);
+
+      // セッションは作成されない
+      expect(useMorningSessionStore.getState().session).toBeNull();
+
+      // スヌーズも Live Activity も呼ばれない
+      expect(scheduleSnoozeAlarms).not.toHaveBeenCalled();
+      expect(startLiveActivity).not.toHaveBeenCalled();
+    });
+
+    test('session is created even when snooze scheduling fails', async () => {
+      (scheduleSnoozeAlarms as jest.Mock).mockRejectedValueOnce(new Error('Snooze failed'));
+
+      await startMorningSession({
+        target: baseTarget,
+        resolvedTime,
+        dismissTime,
+        mountedAt,
+        dayBoundaryHour,
+      });
+
+      // セッションは作成されている
+      const session = useMorningSessionStore.getState().session;
+      expect(session).not.toBeNull();
+
+      // スヌーズ ID は空
+      expect(useMorningSessionStore.getState().snoozeAlarmIds).toEqual([]);
+    });
+
+    test('session and snooze are valid even when Live Activity fails', async () => {
+      (startLiveActivity as jest.Mock).mockRejectedValueOnce(new Error('LA failed'));
+
+      await startMorningSession({
+        target: baseTarget,
+        resolvedTime,
+        dismissTime,
+        mountedAt,
+        dayBoundaryHour,
+      });
+
+      // セッションは作成されている（liveActivityId は null）
+      const session = useMorningSessionStore.getState().session;
+      expect(session).not.toBeNull();
+      expect(session?.liveActivityId).toBeNull();
+
+      // スヌーズは正常に設定されている
+      expect(useMorningSessionStore.getState().snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
     });
   });
 });
