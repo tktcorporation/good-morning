@@ -10,10 +10,7 @@ import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
-import {
-  isAlarmKitAvailable,
-  updateLiveActivity,
-} from '../../src/services/alarm-kit';
+import { isAlarmKitAvailable, updateLiveActivity } from '../../src/services/alarm-kit';
 import { completeMorningSession } from '../../src/services/session-lifecycle';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
