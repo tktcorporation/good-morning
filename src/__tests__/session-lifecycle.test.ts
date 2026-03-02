@@ -5,12 +5,12 @@
  * 個別にテストする。alarm-kit はモック化して副作用を排除し、ストアの状態変化を検証する。
  */
 
+import type { StartSessionParams } from '../services/session-lifecycle';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
 import type { WakeTarget } from '../types/wake-target';
-import type { StartSessionParams } from '../services/session-lifecycle';
 
 // alarm-kit をモック化: ネイティブモジュールに依存せずオーケストレーションロジックをテスト
 jest.mock('../services/alarm-kit', () => ({
@@ -39,10 +39,10 @@ const {
 };
 
 import {
-  startMorningSession,
   completeMorningSession,
-  restoreSessionOnLaunch,
   handleSnoozeArrival,
+  restoreSessionOnLaunch,
+  startMorningSession,
 } from '../services/session-lifecycle';
 
 /**
@@ -248,7 +248,8 @@ describe('completeMorningSession', () => {
       ],
     });
 
-    const session = useMorningSessionStore.getState().session!;
+    const session = useMorningSessionStore.getState().session;
+    if (session === null) throw new Error('session should not be null');
     await completeMorningSession(session);
 
     // cancelAlarmsByIds が snoozeAlarmIds で呼ばれること
@@ -296,7 +297,8 @@ describe('completeMorningSession', () => {
       snoozeAlarmIds: [],
     });
 
-    const session = useMorningSessionStore.getState().session!;
+    const session = useMorningSessionStore.getState().session;
+    if (session === null) throw new Error('session should not be null');
     await completeMorningSession(session);
 
     // endLiveActivity が呼ばれないこと
@@ -319,7 +321,8 @@ describe('completeMorningSession', () => {
       liveActivityId: 'activity-1',
     });
 
-    const session = useMorningSessionStore.getState().session!;
+    const session = useMorningSessionStore.getState().session;
+    if (session === null) throw new Error('session should not be null');
 
     // エラーが throw されないこと
     await expect(completeMorningSession(session)).resolves.not.toThrow();

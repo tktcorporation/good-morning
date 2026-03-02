@@ -8,24 +8,24 @@
  * 設計: docs/plans/2026-03-01-session-lifecycle-service-design.md
  */
 
+import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
+import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmTime } from '../types/alarm';
 import type { MorningSession, SessionTodo } from '../types/morning-session';
 import type { WakeTodoRecord } from '../types/wake-record';
+import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
 import type { WakeTarget } from '../types/wake-target';
+import { getLogicalDateString } from '../utils/date';
 import {
-  SNOOZE_DURATION_SECONDS,
   cancelAlarmsByIds,
   endLiveActivity,
+  SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
   startLiveActivity,
   updateLiveActivity,
 } from './alarm-kit';
-import { useMorningSessionStore } from '../stores/morning-session-store';
-import { useWakeRecordStore } from '../stores/wake-record-store';
-import { useWakeTargetStore } from '../stores/wake-target-store';
-import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
-import { getLogicalDateString } from '../utils/date';
 
 /**
  * startMorningSession に渡すパラメータ。
@@ -109,7 +109,9 @@ export async function startMorningSession(params: StartSessionParams): Promise<v
     completed: false,
     completedAt: null,
   }));
-  await useMorningSessionStore.getState().startSession(record.id, dateStr, sessionTodos, goalDeadline);
+  await useMorningSessionStore
+    .getState()
+    .startSession(record.id, dateStr, sessionTodos, goalDeadline);
 
   // 3. スヌーズスケジュール（失敗してもセッション続行）
   try {
