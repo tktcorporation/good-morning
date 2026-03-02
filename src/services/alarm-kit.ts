@@ -91,9 +91,19 @@ function groupDaysByTime(
   return groups;
 }
 
-export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<readonly string[]> {
-  // Cancel all existing alarms first
-  await cancelAllAlarms();
+/**
+ * WakeTarget の設定に基づいてアラームをスケジュールする。
+ *
+ * @param target アラーム設定
+ * @param previousIds 前回スケジュールした wake-target アラーム ID。これらのみキャンセルする。
+ *                    空配列の場合はキャンセルせずに新規スケジュールのみ行う。
+ */
+export async function scheduleWakeTargetAlarm(
+  target: WakeTarget,
+  previousIds: readonly string[] = [],
+): Promise<readonly string[]> {
+  // Cancel only previous wake-target alarms (not snooze alarms)
+  await cancelAlarmsByIds(previousIds);
 
   const kit = getAlarmKit();
   if (kit === null || !target.enabled) return [];
@@ -204,6 +214,24 @@ export async function cancelAllAlarms(): Promise<void> {
   const existing = kit.getAllAlarms();
   const cancellations = existing.map((id) => kit.cancelAlarm(id));
   await Promise.all(cancellations);
+}
+
+/**
+ * 指定された AlarmKit ID のアラームのみをキャンセルする。
+ *
+ * 背景: cancelAllAlarms() は全アラームを無差別にキャンセルするため、
+ * スヌーズアラームとウェイクターゲットアラームを区別できなかった。
+ * snoozeAlarmIds を永続化したことで、種別ごとの選択的キャンセルが可能になった。
+ *
+ * 用途:
+ *   - completeMorningSession(): snoozeAlarmIds のみキャンセル
+ *   - scheduleWakeTargetAlarm(): 前回の wake-target ID のみキャンセル
+ */
+export async function cancelAlarmsByIds(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  await Promise.all(ids.map((id) => kit.cancelAlarm(id)));
 }
 
 /**
