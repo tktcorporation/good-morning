@@ -6,8 +6,6 @@ beforeEach(() => {
   useMorningSessionStore.setState({
     session: null,
     loaded: false,
-    snoozeAlarmIds: [],
-    snoozeFiresAt: null,
   });
 });
 
@@ -107,47 +105,100 @@ describe('morning-session-store', () => {
   });
 
   describe('snooze state', () => {
-    it('stores snoozeAlarmIds when set', async () => {
-      await useMorningSessionStore
-        .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
-      useMorningSessionStore.getState().setSnoozeAlarmIds(['snooze-1', 'snooze-2']);
-      expect(useMorningSessionStore.getState().snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
-    });
-
-    it('clears snoozeAlarmIds on clearSession', async () => {
-      await useMorningSessionStore
-        .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
-      useMorningSessionStore.getState().setSnoozeAlarmIds(['snooze-1', 'snooze-2']);
-      await useMorningSessionStore.getState().clearSession();
-      expect(useMorningSessionStore.getState().snoozeAlarmIds).toEqual([]);
-    });
-
-    it('stores snoozeFiresAt timestamp', async () => {
+    it('sets snoozeAlarmIds and snoozeFiresAt atomically via setSnoozeState', async () => {
       await useMorningSessionStore
         .getState()
         .startSession('wake_123', '2026-02-22', sampleTodos, null);
       const fireTime = '2026-02-22T07:09:00.000Z';
-      useMorningSessionStore.getState().setSnoozeFiresAt(fireTime);
-      expect(useMorningSessionStore.getState().snoozeFiresAt).toBe(fireTime);
+      await useMorningSessionStore.getState().setSnoozeState(['snooze-1', 'snooze-2'], fireTime);
+      const session = useMorningSessionStore.getState().session;
+      expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+      expect(session?.snoozeFiresAt).toBe(fireTime);
     });
 
-    it('clears snoozeFiresAt on clearSession', async () => {
+    it('clears snooze state on clearSession (session becomes null)', async () => {
       await useMorningSessionStore
         .getState()
         .startSession('wake_123', '2026-02-22', sampleTodos, null);
-      useMorningSessionStore.getState().setSnoozeFiresAt('2026-02-22T07:09:00.000Z');
+      await useMorningSessionStore
+        .getState()
+        .setSnoozeState(['snooze-1', 'snooze-2'], '2026-02-22T07:09:00.000Z');
       await useMorningSessionStore.getState().clearSession();
-      expect(useMorningSessionStore.getState().snoozeFiresAt).toBeNull();
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+
+    it('stores snoozeFiresAt timestamp via setSnoozeFiresAt', async () => {
+      await useMorningSessionStore
+        .getState()
+        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      const fireTime = '2026-02-22T07:09:00.000Z';
+      await useMorningSessionStore.getState().setSnoozeFiresAt(fireTime);
+      expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBe(fireTime);
+    });
+
+    it('clears snoozeFiresAt via setSnoozeFiresAt(null)', async () => {
+      await useMorningSessionStore
+        .getState()
+        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      await useMorningSessionStore.getState().setSnoozeFiresAt('2026-02-22T07:09:00.000Z');
+      await useMorningSessionStore.getState().setSnoozeFiresAt(null);
+      expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBeNull();
     });
 
     it('initializes snooze state as empty/null in new session', async () => {
       await useMorningSessionStore
         .getState()
         .startSession('wake_123', '2026-02-22', sampleTodos, null);
-      expect(useMorningSessionStore.getState().snoozeAlarmIds).toEqual([]);
-      expect(useMorningSessionStore.getState().snoozeFiresAt).toBeNull();
+      expect(useMorningSessionStore.getState().session?.snoozeAlarmIds).toEqual([]);
+      expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBeNull();
+    });
+
+    it('does nothing when setSnoozeState is called without session', async () => {
+      await useMorningSessionStore
+        .getState()
+        .setSnoozeState(['snooze-1'], '2026-02-22T07:09:00.000Z');
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+
+    it('does nothing when setSnoozeFiresAt is called without session', async () => {
+      await useMorningSessionStore.getState().setSnoozeFiresAt('2026-02-22T07:09:00.000Z');
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+
+    it('persists snooze state and restores on reload', async () => {
+      await useMorningSessionStore
+        .getState()
+        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      const fireTime = '2026-02-22T07:09:00.000Z';
+      await useMorningSessionStore.getState().setSnoozeState(['snooze-1', 'snooze-2'], fireTime);
+
+      // リセットしてリロード
+      useMorningSessionStore.setState({ session: null, loaded: false });
+      await useMorningSessionStore.getState().loadSession();
+
+      const session = useMorningSessionStore.getState().session;
+      expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+      expect(session?.snoozeFiresAt).toBe(fireTime);
+    });
+
+    it('migrates snooze fields to defaults when loading legacy data without them', async () => {
+      // レガシーデータ: snoozeAlarmIds / snoozeFiresAt フィールドが存在しない
+      const legacyData = {
+        recordId: 'wake_legacy',
+        date: '2026-02-22',
+        startedAt: '2026-02-22T07:00:00.000Z',
+        todos: [{ id: 'todo_1', title: 'Test', completed: false, completedAt: null }],
+        liveActivityId: null,
+        goalDeadline: null,
+      };
+      await AsyncStorage.setItem('morning-session', JSON.stringify(legacyData));
+
+      await useMorningSessionStore.getState().loadSession();
+      const session = useMorningSessionStore.getState().session;
+      expect(session).not.toBeNull();
+      // undefined ではなくデフォルト値にマイグレーションされていること
+      expect(session?.snoozeAlarmIds).toEqual([]);
+      expect(session?.snoozeFiresAt).toBeNull();
     });
   });
 

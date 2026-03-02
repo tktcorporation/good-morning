@@ -85,7 +85,7 @@ export default function DashboardScreen() {
   const clearSession = useMorningSessionStore((s) => s.clearSession);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
-  const snoozeFiresAt = useMorningSessionStore((s) => s.snoozeFiresAt);
+  const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
 
   const [newTodoText, setNewTodoText] = useState('');
   const [snoozeRemaining, setSnoozeRemaining] = useState<string | null>(null);
@@ -253,7 +253,7 @@ export default function DashboardScreen() {
         updateLiveActivity(
           activityId,
           state.session.todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
-          state.snoozeFiresAt,
+          state.session?.snoozeFiresAt ?? null,
         );
       }
     },

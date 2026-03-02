@@ -28,8 +28,6 @@ beforeEach(() => {
   useMorningSessionStore.setState({
     session: null,
     loaded: false,
-    snoozeAlarmIds: [],
-    snoozeFiresAt: null,
   });
   useDailyGradeStore.setState({
     grades: [],

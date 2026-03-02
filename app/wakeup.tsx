@@ -173,8 +173,7 @@ export default function WakeUpScreen() {
             dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
           ).toISOString();
           scheduleSnoozeAlarms(dismissTime).then((snoozeIds) => {
-            useMorningSessionStore.getState().setSnoozeAlarmIds(snoozeIds);
-            useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
+            useMorningSessionStore.getState().setSnoozeState(snoozeIds, snoozeFiresAt);
 
             const liveActivityTodos = todos.map((td) => ({
               id: td.id,

@@ -61,7 +61,7 @@ export function buildWidgetData(): WidgetData {
         title: t.title,
         completed: t.completed,
       })),
-      snoozeFiresAt: sessionState.snoozeFiresAt,
+      snoozeFiresAt: sessionState.session.snoozeFiresAt,
       progress: { completed, total },
     };
   }
