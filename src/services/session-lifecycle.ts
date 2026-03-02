@@ -1,0 +1,271 @@
+/**
+ * セッションのライフサイクル操作を一元管理するオーケストレーション層。
+ *
+ * 背景: セッション操作が wakeup.tsx（開始）→ index.tsx（完了）→ _layout.tsx（復元）に
+ * 散在していたため、全操作をこのモジュールに集約した。各関数が alarm-kit, stores を
+ * 協調させ、コンポーネントは1行の呼び出しで済む。
+ *
+ * 設計: docs/plans/2026-03-01-session-lifecycle-service-design.md
+ */
+
+import type { AlarmTime } from '../types/alarm';
+import type { MorningSession, SessionTodo } from '../types/morning-session';
+import type { WakeTodoRecord } from '../types/wake-record';
+import type { WakeTarget } from '../types/wake-target';
+import {
+  SNOOZE_DURATION_SECONDS,
+  cancelAlarmsByIds,
+  endLiveActivity,
+  scheduleSnoozeAlarms,
+  scheduleWakeTargetAlarm,
+  startLiveActivity,
+  updateLiveActivity,
+} from './alarm-kit';
+import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
+import { useWakeTargetStore } from '../stores/wake-target-store';
+import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
+import { getLogicalDateString } from '../utils/date';
+
+/**
+ * startMorningSession に渡すパラメータ。
+ * wakeup.tsx のアラーム dismiss ハンドラーから呼ばれる。
+ */
+export interface StartSessionParams {
+  /** 現在有効な WakeTarget（TODO リスト含む） */
+  readonly target: WakeTarget;
+  /** 解決済みアラーム時刻（曜日オーバーライド適用後） */
+  readonly resolvedTime: AlarmTime;
+  /** ユーザーがアラームを dismiss した時刻 */
+  readonly dismissTime: Date;
+  /** wakeup 画面がマウントされた時刻（alarmTriggeredAt として記録） */
+  readonly mountedAt: Date;
+  /** 日付変更ラインの時刻（getLogicalDateString に渡す） */
+  readonly dayBoundaryHour: number;
+}
+
+/**
+ * アラーム dismiss 時にセッションを開始する。
+ *
+ * 処理順序:
+ * 1. WakeRecord 作成（失敗時は throw — 記録なしで続行するのは危険）
+ * 2. MorningSession 作成（TODO がある場合のみ）
+ * 3. スヌーズアラーム先行スケジュール（失敗してもセッション続行）
+ * 4. Live Activity 開始（失敗してもセッション続行）
+ *
+ * 呼び出し元: app/wakeup.tsx (handleDismiss)
+ */
+export async function startMorningSession(params: StartSessionParams): Promise<void> {
+  const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
+  const hasTodos = target.todos.length > 0;
+  const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
+  const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
+  const result = calculateWakeResult(diffMinutes);
+
+  const todoRecords: readonly WakeTodoRecord[] = target.todos.map((todo) => ({
+    id: todo.id,
+    title: todo.title,
+    completedAt: null,
+    orderCompleted: null,
+  }));
+
+  // 起床目標デッドライン: アラーム時刻 + wakeUpGoalBufferMinutes
+  const goalDeadline = hasTodos
+    ? new Date(
+        dismissTime.getFullYear(),
+        dismissTime.getMonth(),
+        dismissTime.getDate(),
+        resolvedTime.hour,
+        resolvedTime.minute + target.wakeUpGoalBufferMinutes,
+        0,
+      ).toISOString()
+    : null;
+
+  // 1. WakeRecord 作成（失敗時は throw）
+  const { addRecord } = useWakeRecordStore.getState();
+  const record = await addRecord({
+    alarmId: 'wake-target',
+    date: dateStr,
+    targetTime: resolvedTime,
+    alarmTriggeredAt: mountedAt.toISOString(),
+    dismissedAt: dismissTime.toISOString(),
+    healthKitWakeTime: null,
+    result,
+    diffMinutes,
+    todos: todoRecords,
+    todoCompletionSeconds: 0,
+    alarmLabel: '',
+    todosCompleted: !hasTodos,
+    todosCompletedAt: hasTodos ? null : dismissTime.toISOString(),
+    goalDeadline,
+  });
+
+  if (!hasTodos) return;
+
+  // 2. セッション作成
+  const sessionTodos: readonly SessionTodo[] = target.todos.map((todo) => ({
+    id: todo.id,
+    title: todo.title,
+    completed: false,
+    completedAt: null,
+  }));
+  await useMorningSessionStore.getState().startSession(record.id, dateStr, sessionTodos, goalDeadline);
+
+  // 3. スヌーズスケジュール（失敗してもセッション続行）
+  try {
+    const snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+    const snoozeFiresAt = new Date(
+      dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
+    ).toISOString();
+    await useMorningSessionStore.getState().setSnoozeState(snoozeIds, snoozeFiresAt);
+  } catch {
+    // スヌーズ失敗はログのみ — セッション自体は有効に保つ
+  }
+
+  // 4. Live Activity 開始（失敗してもセッション続行）
+  try {
+    const { session: currentSession } = useMorningSessionStore.getState();
+    const liveActivityTodos = target.todos.map((td) => ({
+      id: td.id,
+      title: td.title,
+      completed: false,
+    }));
+    const activityId = await startLiveActivity(
+      liveActivityTodos,
+      currentSession?.snoozeFiresAt ?? null,
+    );
+    if (activityId !== null) {
+      await useMorningSessionStore.getState().setLiveActivityId(activityId);
+    }
+  } catch {
+    // LA 失敗はログのみ — セッション自体は有効に保つ
+  }
+}
+
+/**
+ * TODO 全完了時にセッションを完了する。
+ *
+ * 処理順序:
+ * 1. スヌーズアラームのみキャンセル（wake-target アラームは残す）
+ * 2. Live Activity 終了
+ * 3. WakeRecord 更新（失敗してもセッションクリア — 無限再発火防止）
+ * 4. セッションクリア
+ * 5. 通常アラーム再スケジュール
+ *
+ * 呼び出し元: app/(tabs)/index.tsx (全TODO完了検知時)
+ */
+export async function completeMorningSession(session: MorningSession): Promise<void> {
+  const now = new Date();
+
+  // 1. スヌーズアラームのみキャンセル
+  await cancelAlarmsByIds(session.snoozeAlarmIds);
+
+  // 2. Live Activity 終了
+  if (session.liveActivityId !== null) {
+    await endLiveActivity(session.liveActivityId);
+  }
+
+  // 3. WakeRecord 更新
+  const todoCompletionSeconds = Math.round(
+    (now.getTime() - new Date(session.startedAt).getTime()) / 1000,
+  );
+  const todoRecords: readonly WakeTodoRecord[] = session.todos.map((todo, index) => ({
+    id: todo.id,
+    title: todo.title,
+    completedAt: todo.completedAt,
+    orderCompleted: todo.completed ? index + 1 : null,
+  }));
+
+  const goalBasedResult =
+    session.goalDeadline !== null
+      ? now.getTime() <= new Date(session.goalDeadline).getTime()
+        ? ('great' as const)
+        : ('late' as const)
+      : undefined;
+
+  const { updateRecord } = useWakeRecordStore.getState();
+  try {
+    await updateRecord(session.recordId, {
+      todosCompleted: true,
+      todosCompletedAt: now.toISOString(),
+      todoCompletionSeconds,
+      todos: todoRecords,
+      ...(goalBasedResult !== undefined ? { result: goalBasedResult } : {}),
+    });
+  } catch {
+    // レコード更新失敗でもセッションはクリア（無限再発火防止）
+  }
+
+  // 4. セッションクリア
+  await useMorningSessionStore.getState().clearSession();
+
+  // 5. 通常アラーム再スケジュール
+  const { target, alarmIds, setAlarmIds } = useWakeTargetStore.getState();
+  if (target?.enabled) {
+    const newIds = await scheduleWakeTargetAlarm(target, alarmIds);
+    await setAlarmIds(newIds);
+  }
+}
+
+/**
+ * アプリ起動時にセッション状態を復元・クリーンアップする。
+ *
+ * - 別日のセッション → stale として破棄（Live Activity も終了）
+ * - 当日の完了済みセッション → dangling Live Activity を回収
+ * - 当日の未完了セッション → snoozeFiresAt が永続化済みなので何もしない
+ *
+ * 呼び出し元: app/_layout.tsx（初期化時）
+ */
+export function restoreSessionOnLaunch(dayBoundaryHour: number): void {
+  const state = useMorningSessionStore.getState();
+  if (state.session === null) return;
+
+  const today = getLogicalDateString(new Date(), dayBoundaryHour);
+  if (state.session.date !== today) {
+    // 別日のセッションは stale — Live Activity を終了してクリア
+    if (state.session.liveActivityId !== null) {
+      endLiveActivity(state.session.liveActivityId);
+    }
+    state.clearSession();
+    return;
+  }
+
+  // 当日の完了済みセッションで Live Activity が残っている場合は回収
+  if (state.areAllCompleted() && state.session.liveActivityId !== null) {
+    endLiveActivity(state.session.liveActivityId);
+  }
+}
+
+/**
+ * スヌーズアラーム発火時の処理。再スケジュールは不要（先行スケジュール済み）。
+ * Live Activity のカウントダウンを次のスヌーズ時刻に更新する。
+ *
+ * 背景: snooze.ts から移植。セッションライフサイクルの一部として集約。
+ *
+ * @returns true if session is active with incomplete todos, false otherwise
+ */
+export function handleSnoozeArrival(): boolean {
+  const sessionState = useMorningSessionStore.getState();
+  if (sessionState.session === null || sessionState.areAllCompleted()) {
+    return false;
+  }
+
+  // 次のスヌーズ発火時刻を計算してストアに保存（カウントダウン表示用）
+  const nextSnoozeFiresAt = new Date(Date.now() + SNOOZE_DURATION_SECONDS * 1000).toISOString();
+  useMorningSessionStore.getState().setSnoozeFiresAt(nextSnoozeFiresAt);
+
+  // Live Activity を更新（カウントダウン表示を次のスヌーズ時刻に）
+  const activityId = sessionState.session.liveActivityId;
+  if (activityId !== null) {
+    updateLiveActivity(
+      activityId,
+      sessionState.session.todos.map((t) => ({
+        id: t.id,
+        title: t.title,
+        completed: t.completed,
+      })),
+      nextSnoozeFiresAt,
+    );
+  }
+  return true;
+}
