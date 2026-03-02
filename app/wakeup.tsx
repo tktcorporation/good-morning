@@ -146,15 +146,24 @@ export default function WakeUpScreen() {
         goalDeadline,
       })
         .then(async (record) => {
-          if (!hasTodos) return;
+          if (hasTodos) {
+            const sessionTodos: readonly SessionTodo[] = todos.map((todo) => ({
+              id: todo.id,
+              title: todo.title,
+              completed: false,
+              completedAt: null,
+            }));
+            await startSession(record.id, dateStr, sessionTodos, goalDeadline);
+          }
 
-          const sessionTodos: readonly SessionTodo[] = todos.map((todo) => ({
-            id: todo.id,
-            title: todo.title,
-            completed: false,
-            completedAt: null,
-          }));
-          await startSession(record.id, dateStr, sessionTodos, goalDeadline);
+          // startSession 完了後に clearNextOverride を実行する。
+          // clearNextOverride() が target を更新すると _layout.tsx のアラーム再スケジュール
+          // effect が再発火するが、startSession 後なら isActive() === true となり
+          // scheduleWakeTargetAlarm（内部で cancelAllAlarms を呼ぶ）がスキップされる。
+          // これにより、スヌーズアラームが巻き添えでキャンセルされる競合を防ぐ。
+          await clearNextOverride();
+
+          if (!hasTodos) return;
 
           // セッション開始直後にスヌーズを先行スケジュール。
           // 先行スケジュール方式: dismiss 時点から9分間隔で最大20本（3時間分）を一括スケジュール。
@@ -188,12 +197,14 @@ export default function WakeUpScreen() {
           // dismiss 自体は完了しているため、ユーザーに通知するが操作はブロックしない。
           // 次回のアラームで新しい WakeRecord が作成される。
           Alert.alert(t('error.title'), t('error.recordSaveFailed'));
+          // エラー時も nextOverride をクリアする（.then 内に移動済みのため、エラーパスでも実行が必要）
+          void clearNextOverride();
         });
     }
 
-    // 意図的な fire-and-forget: handleDismiss は同期コールバックのため await 不可。
-    // AsyncStorage への永続化が遅延しても画面遷移に影響しない。
-    void clearNextOverride();
+    // clearNextOverride は .then() 内で startSession 完了後に呼ぶ。
+    // ここで呼ぶと target 変更 → _layout.tsx のアラーム effect 再発火 →
+    // isActive() === false（セッション未作成）→ cancelAllAlarms でスヌーズが消える。
     router.replace('/');
   }, [
     dismissing,
