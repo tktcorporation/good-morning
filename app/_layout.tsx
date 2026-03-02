@@ -8,19 +8,17 @@ import { colors } from '../src/constants/theme';
 import {
   cancelAllAlarms,
   checkLaunchPayload,
-  endLiveActivity,
   initializeAlarmKit,
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
 import { registerBackgroundSync } from '../src/services/background-sync';
-import { handleSnoozeArrival, restoreSnoozeCountdown } from '../src/services/snooze';
+import { handleSnoozeArrival, restoreSessionOnLaunch } from '../src/services/session-lifecycle';
 import { syncWidget } from '../src/services/widget-sync';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
-import { getLogicalDateString } from '../src/utils/date';
 
 /**
  * AlarmKit の LaunchPayload からスヌーズ経由かどうかを判定する。
@@ -35,25 +33,6 @@ function isSnoozePayload(payload: { payload: string | null } | null): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * 期限切れセッション（前日以前）が残っている場合にクリーンアップする。
- * Live Activity が残っていれば終了し、セッションをクリアする。
- * 初期化 effect 内の複数ブランチで共通して必要なため関数に抽出。
- */
-function cleanupStaleSession(): void {
-  const state = useMorningSessionStore.getState();
-  if (state.session === null) return;
-
-  const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
-  const today = getLogicalDateString(new Date(), dayBoundaryHour);
-  if (state.session.date === today) return;
-
-  if (state.session.liveActivityId !== null) {
-    endLiveActivity(state.session.liveActivityId);
-  }
-  state.clearSession();
 }
 
 export default function RootLayout() {
@@ -98,7 +77,7 @@ export default function RootLayout() {
       }
     });
 
-    // cleanupStaleSession は dayBoundaryHour を参照するため、設定ロード完了を待つ。
+    // restoreSessionOnLaunch は dayBoundaryHour を参照するため、設定ロード完了を待つ。
     // 設定ロード前にデフォルト値で判定すると、ユーザーが dayBoundaryHour を変更していた場合に
     // 同日のセッションを誤って「期限切れ」と判定してクリアしてしまう。
     const coreLoaded = Promise.all([sessionLoaded, settingsLoaded]);
@@ -106,40 +85,23 @@ export default function RootLayout() {
     const payload = checkLaunchPayload();
     if (payload !== null) {
       if (isSnoozePayload(payload)) {
-        // スヌーズ再発火: wakeup 画面を表示せず自動処理する。
-        // ネイティブアラームが既にユーザーを起こしているため、アプリ側では
-        // Live Activity を更新してダッシュボードへ遷移するだけ。
-        // 先行スケジュール方式により再スケジュールは不要。
+        // スヌーズ再発火: ネイティブアラームがユーザーを起こし済み。
+        // Live Activity を更新してダッシュボードへ。
         sessionLoaded.then(() => {
           handleSnoozeArrival();
           router.push('/');
         });
       } else {
-        // 初回アラーム: 古いセッションが残っていればクリーンアップしてから wakeup 画面へ
-        coreLoaded.then(() => cleanupStaleSession());
+        // 初回アラーム: stale セッションをクリーンアップしてから wakeup 画面へ
+        coreLoaded.then(() => {
+          restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
+        });
         router.push('/wakeup');
       }
     } else {
-      // アラーム経由でない通常起動の場合
+      // アラーム経由でない通常起動
       coreLoaded.then(() => {
-        cleanupStaleSession();
-
-        // アクティブセッションのスヌーズカウントダウンを復元する。
-        // snoozeFiresAt はメモリのみ（永続化しない）ため、アプリ再起動時に消失する。
-        // セッション開始時刻から現在までの経過時間で次のスヌーズ時刻を逆算する。
-        const state = useMorningSessionStore.getState();
-        if (state.session !== null && !state.areAllCompleted()) {
-          restoreSnoozeCountdown(state.session.startedAt);
-        }
-
-        // 当日のセッションで TODO 全完了済みだが Live Activity が残っている場合のクリーンアップ
-        if (
-          state.session !== null &&
-          state.areAllCompleted() &&
-          state.session.liveActivityId !== null
-        ) {
-          endLiveActivity(state.session.liveActivityId);
-        }
+        restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
       });
     }
 
@@ -178,19 +140,14 @@ export default function RootLayout() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reacting to target and sessionStoreLoaded changes only
   useEffect(() => {
     if (target === null) return;
-
-    // セッションストアのロードを待つ。ロード前に scheduleWakeTargetAlarm を呼ぶと
-    // cancelAllAlarms() がスヌーズアラームを巻き添えでキャンセルしてしまう。
-    // セッションがロードされれば isActive() で正しく判定できる。
     if (!sessionStoreLoaded) return;
-
-    // アクティブセッション中は target 変更によるアラーム再スケジュールをスキップ。
-    // cancelAllAlarms がスヌーズを巻き添えでキャンセルしてしまうのを防ぐ。
-    // セッション完了後の completion effect (index.tsx) で再スケジュールされる。
     if (useMorningSessionStore.getState().isActive()) return;
 
+    // previousIds を渡して wake-target のみ選択的にキャンセル。
+    // cancelAllAlarms() を使わないため、アクティブなスヌーズアラームが巻き添えにならない。
+    const { alarmIds } = useWakeTargetStore.getState();
     if (target.enabled) {
-      scheduleWakeTargetAlarm(target).then((newIds) => {
+      scheduleWakeTargetAlarm(target, alarmIds).then((newIds) => {
         setAlarmIds(newIds);
       });
     } else {

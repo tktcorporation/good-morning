@@ -34,4 +34,17 @@ export interface MorningSession {
    * null の場合はレガシーデータ（バッファ未設定時代のセッション）。
    */
   readonly goalDeadline: string | null;
+  /**
+   * 先行スケジュール済みスヌーズの AlarmKit ID 配列。
+   * TODO全完了時に cancelAlarmsByIds() で残りをキャンセルする。
+   * 従来はメモリのみだったが、アプリ kill → 再起動後も ID ベースキャンセルを
+   * 可能にするため MorningSession に含めて永続化する。
+   */
+  readonly snoozeAlarmIds: readonly string[];
+  /**
+   * 次のスヌーズ発火予定時刻（ISO文字列）。カウントダウン表示に使用。
+   * 従来はメモリのみで restoreSnoozeCountdown() による逆算が必要だったが、
+   * 永続化により再起動後もそのまま読み込める。
+   */
+  readonly snoozeFiresAt: string | null;
 }

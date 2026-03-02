@@ -4,23 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import {
-  cancelAllAlarms,
-  SNOOZE_DURATION_SECONDS,
-  scheduleSnoozeAlarms,
-  startLiveActivity,
-} from '../src/services/alarm-kit';
+import { cancelAllAlarms } from '../src/services/alarm-kit';
+import { startMorningSession } from '../src/services/session-lifecycle';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
-import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
-import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import { formatTime } from '../src/types/alarm';
-import type { SessionTodo } from '../src/types/morning-session';
-import type { WakeTodoRecord } from '../src/types/wake-record';
-import { calculateDiffMinutes, calculateWakeResult } from '../src/types/wake-record';
 import { resolveTimeForDate } from '../src/types/wake-target';
-import { getLogicalDateString } from '../src/utils/date';
 
 const VIBRATION_PATTERN = [500, 1000, 500, 1000];
 const DEMO_SOUND_DURATION_MS = 3000;
@@ -38,13 +28,8 @@ export default function WakeUpScreen() {
   const alarmIds = useWakeTargetStore((s) => s.alarmIds);
   const setAlarmIds = useWakeTargetStore((s) => s.setAlarmIds);
 
-  const addRecord = useWakeRecordStore((s) => s.addRecord);
-
-  const startSession = useMorningSessionStore((s) => s.startSession);
-
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
-  const todos = target?.todos ?? [];
   const resolvedTime = target !== null ? resolveTimeForDate(target, new Date()) : null;
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -102,110 +87,35 @@ export default function WakeUpScreen() {
     }
 
     if (target !== null && resolvedTime !== null) {
-      const now = new Date();
-      const diffMinutes = calculateDiffMinutes(resolvedTime, now);
-      const result = calculateWakeResult(diffMinutes);
-      const dateStr = getLogicalDateString(now, dayBoundaryHour);
-      const hasTodos = todos.length > 0;
-
-      const todoRecords: readonly WakeTodoRecord[] = todos.map((todo) => ({
-        id: todo.id,
-        title: todo.title,
-        completedAt: null,
-        orderCompleted: null,
-      }));
-
-      // 起床目標デッドライン: アラーム時刻 + バッファ分数
-      // TODOがある場合のみ設定（TODOなし = バッファ不要、従来の判定を維持）
-      const bufferMinutes = target.wakeUpGoalBufferMinutes;
-      const goalDeadline = hasTodos
-        ? new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            resolvedTime.hour,
-            resolvedTime.minute + bufferMinutes,
-            0,
-          ).toISOString()
-        : null;
-
-      addRecord({
-        alarmId: 'wake-target',
-        date: dateStr,
-        targetTime: resolvedTime,
-        alarmTriggeredAt: mountedAt.current.toISOString(),
-        dismissedAt: now.toISOString(),
-        healthKitWakeTime: null,
-        result,
-        diffMinutes,
-        todos: todoRecords,
-        todoCompletionSeconds: 0,
-        alarmLabel: '',
-        todosCompleted: !hasTodos,
-        todosCompletedAt: hasTodos ? null : now.toISOString(),
-        goalDeadline,
-      })
-        .then(async (record) => {
-          if (!hasTodos) return;
-
-          const sessionTodos: readonly SessionTodo[] = todos.map((todo) => ({
-            id: todo.id,
-            title: todo.title,
-            completed: false,
-            completedAt: null,
-          }));
-          await startSession(record.id, dateStr, sessionTodos, goalDeadline);
-
-          // セッション開始直後にスヌーズを先行スケジュール。
-          // 先行スケジュール方式: dismiss 時点から9分間隔で最大20本（3時間分）を一括スケジュール。
-          // iOS がアプリを起動しないケースでもネイティブ側で確実に発火する。
-          const dismissTime = now;
-          const snoozeFiresAt = new Date(
-            dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
-          ).toISOString();
-          scheduleSnoozeAlarms(dismissTime).then((snoozeIds) => {
-            useMorningSessionStore.getState().setSnoozeAlarmIds(snoozeIds);
-            useMorningSessionStore.getState().setSnoozeFiresAt(snoozeFiresAt);
-
-            const liveActivityTodos = todos.map((td) => ({
-              id: td.id,
-              title: td.title,
-              completed: false,
-            }));
-            startLiveActivity(liveActivityTodos, snoozeFiresAt).then(async (activityId) => {
-              if (activityId !== null) {
-                // await して AsyncStorage に永続化完了を保証する。
-                // これにより、直後にアプリが kill されても再起動時に
-                // loadSession() → cleanupStaleSession() で endLiveActivity できる。
-                await useMorningSessionStore.getState().setLiveActivityId(activityId);
-              }
-            });
-          });
-        })
-        .catch((e: unknown) => {
-          // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
-          console.error('[WakeUp] Failed to save record:', e);
-          // dismiss 自体は完了しているため、ユーザーに通知するが操作はブロックしない。
-          // 次回のアラームで新しい WakeRecord が作成される。
-          Alert.alert(t('error.title'), t('error.recordSaveFailed'));
-        });
+      // セッション開始処理を session-lifecycle に委譲。
+      // fire-and-forget: UI はブロックせず即座にダッシュボードへ遷移する。
+      // エラー時はアラートで通知するが、dismiss 自体は完了扱い。
+      startMorningSession({
+        target,
+        resolvedTime,
+        dismissTime: new Date(),
+        mountedAt: mountedAt.current,
+        dayBoundaryHour,
+      }).catch((e: unknown) => {
+        // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
+        console.error('[WakeUp] Failed to start session:', e);
+        Alert.alert(t('error.title'), t('error.recordSaveFailed'));
+      });
     }
 
-    // 意図的な fire-and-forget: handleDismiss は同期コールバックのため await 不可。
-    // AsyncStorage への永続化が遅延しても画面遷移に影響しない。
+    // startMorningSession は fire-and-forget だが、cancelAlarmsByIds による
+    // 名前空間分離により、clearNextOverride が target 変更 → アラーム再スケジュール
+    // effect を発火させても、スヌーズアラームが巻き添えでキャンセルされない。
     void clearNextOverride();
     router.replace('/');
   }, [
     dismissing,
     target,
     resolvedTime,
-    todos,
     isDemo,
     dayBoundaryHour,
     alarmIds,
     setAlarmIds,
-    addRecord,
-    startSession,
     clearNextOverride,
     router,
     t,

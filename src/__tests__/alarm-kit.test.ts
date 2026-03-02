@@ -2,6 +2,7 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
+  cancelAlarmsByIds,
   cancelAllAlarms,
   checkLaunchPayload,
   endLiveActivity,
@@ -56,8 +57,7 @@ describe('alarm-kit service', () => {
   });
 
   describe('scheduleWakeTargetAlarm', () => {
-    test('cancels existing alarms and schedules repeating alarm for enabled days', async () => {
-      mockGetAllAlarms.mockReturnValue(['old-alarm-1']);
+    test('schedules repeating alarm for enabled days without cancelling when no previousIds', async () => {
       let uuidCounter = 0;
       mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
 
@@ -69,8 +69,8 @@ describe('alarm-kit service', () => {
 
       const ids = await scheduleWakeTargetAlarm(target);
 
-      // Should cancel the old alarm
-      expect(mockCancelAlarm).toHaveBeenCalledWith('old-alarm-1');
+      // No previousIds passed — should not cancel any alarms
+      expect(mockCancelAlarm).not.toHaveBeenCalled();
       // Should schedule one repeating alarm with all 7 weekdays
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(1);
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledWith(
@@ -82,6 +82,28 @@ describe('alarm-kit service', () => {
           doSnoozeIntent: true,
         }),
       );
+      expect(ids.length).toBe(1);
+    });
+
+    test('cancels only previousIds and schedules new alarms', async () => {
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+
+      const target: WakeTarget = {
+        ...DEFAULT_WAKE_TARGET,
+        defaultTime: { hour: 7, minute: 30 },
+        enabled: true,
+      };
+
+      const ids = await scheduleWakeTargetAlarm(target, ['old-wake-1', 'old-wake-2']);
+
+      // Should cancel only the previous wake-target IDs
+      expect(mockCancelAlarm).toHaveBeenCalledWith('old-wake-1');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('old-wake-2');
+      expect(mockCancelAlarm).toHaveBeenCalledTimes(2);
+      // Should not call getAllAlarms (that's cancelAllAlarms behavior)
+      expect(mockGetAllAlarms).not.toHaveBeenCalled();
+      // Should schedule new alarm
       expect(ids.length).toBe(1);
     });
 
@@ -171,6 +193,20 @@ describe('alarm-kit service', () => {
       await cancelAllAlarms();
       expect(mockCancelAlarm).toHaveBeenCalledWith('alarm-1');
       expect(mockCancelAlarm).toHaveBeenCalledWith('alarm-2');
+    });
+  });
+
+  describe('cancelAlarmsByIds', () => {
+    test('cancels only the specified alarm IDs', async () => {
+      await cancelAlarmsByIds(['snooze-1', 'snooze-2']);
+      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-1');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-2');
+      expect(mockCancelAlarm).toHaveBeenCalledTimes(2);
+    });
+
+    test('does nothing when given an empty array', async () => {
+      await cancelAlarmsByIds([]);
+      expect(mockCancelAlarm).not.toHaveBeenCalled();
     });
   });
 

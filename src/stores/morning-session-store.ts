@@ -8,10 +8,6 @@ const STORAGE_KEY = 'morning-session';
 interface MorningSessionState {
   readonly session: MorningSession | null;
   readonly loaded: boolean;
-  /** 先行スケジュール済みスヌーズの AlarmKit ID 配列。TODO全完了時に残りを一括キャンセルする。メモリのみ（永続化しない）。 */
-  readonly snoozeAlarmIds: readonly string[];
-  /** 次のスヌーズ発火予定時刻（ISO文字列）。ダッシュボードのカウントダウン表示に使用。メモリのみ。 */
-  readonly snoozeFiresAt: string | null;
   loadSession: () => Promise<void>;
   startSession: (
     recordId: string,
@@ -21,8 +17,16 @@ interface MorningSessionState {
   ) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
-  setSnoozeAlarmIds: (ids: readonly string[]) => void;
-  setSnoozeFiresAt: (time: string | null) => void;
+  /**
+   * snoozeAlarmIds と snoozeFiresAt をアトミックに更新し、session を AsyncStorage に永続化する。
+   * 従来の setSnoozeAlarmIds + setSnoozeFiresAt を統合。session が null の場合は何もしない。
+   */
+  setSnoozeState: (ids: readonly string[], firesAt: string | null) => Promise<void>;
+  /**
+   * snoozeFiresAt のみを更新し、session を AsyncStorage に永続化する。
+   * カウントダウン表示の更新用。session が null の場合は何もしない。
+   */
+  setSnoozeFiresAt: (time: string | null) => Promise<void>;
   /** liveActivityId を session 内に保存して AsyncStorage に永続化する。永続化完了を await できるため、アプリ kill 後も再起動時に endLiveActivity で回収可能。 */
   setLiveActivityId: (id: string | null) => Promise<void>;
   isActive: () => boolean;
@@ -41,20 +45,20 @@ async function persistSession(session: MorningSession | null): Promise<void> {
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
   session: null,
   loaded: false,
-  snoozeAlarmIds: [],
-  snoozeFiresAt: null,
 
   loadSession: async () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw) as MorningSession;
-      // マイグレーション: liveActivityId / goalDeadline が追加される前の既存データでは
-      // フィールドが undefined になる。undefined のまま使うとクラッシュするため null にフォールバック。
+      // マイグレーション: 後から追加されたフィールドが undefined になるレガシーデータに対応。
+      // undefined のまま使うとクラッシュするため、デフォルト値にフォールバックする。
       set({
         session: {
           ...parsed,
           liveActivityId: parsed.liveActivityId ?? null,
           goalDeadline: parsed.goalDeadline ?? null,
+          snoozeAlarmIds: parsed.snoozeAlarmIds ?? [],
+          snoozeFiresAt: parsed.snoozeFiresAt ?? null,
         },
         loaded: true,
       });
@@ -76,6 +80,8 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
       todos,
       liveActivityId: null,
       goalDeadline,
+      snoozeAlarmIds: [],
+      snoozeFiresAt: null,
     };
     set({ session });
     await persistSession(session);
@@ -105,20 +111,32 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     syncWidget().catch(() => {});
   },
 
-  /** セッションと全てのエフェメラル状態（snooze）をクリアする。liveActivityId は session 内に含まれるため自動的にクリアされる。 */
+  /** セッションをクリアする。snooze state は session 内に含まれるため、session = null で自動的にクリアされる。 */
   clearSession: async () => {
-    set({ session: null, snoozeAlarmIds: [], snoozeFiresAt: null });
+    set({ session: null });
     await persistSession(null);
     // ウィジェットにセッション終了を反映（fire-and-forget）
     syncWidget().catch(() => {});
   },
 
-  setSnoozeAlarmIds: (ids: readonly string[]) => {
-    set({ snoozeAlarmIds: ids });
+  setSnoozeState: async (ids: readonly string[], firesAt: string | null) => {
+    const { session } = get();
+    if (session === null) return;
+    const updated: MorningSession = {
+      ...session,
+      snoozeAlarmIds: ids,
+      snoozeFiresAt: firesAt,
+    };
+    set({ session: updated });
+    await persistSession(updated);
   },
 
-  setSnoozeFiresAt: (time: string | null) => {
-    set({ snoozeFiresAt: time });
+  setSnoozeFiresAt: async (time: string | null) => {
+    const { session } = get();
+    if (session === null) return;
+    const updated: MorningSession = { ...session, snoozeFiresAt: time };
+    set({ session: updated });
+    await persistSession(updated);
   },
 
   setLiveActivityId: async (id: string | null) => {
