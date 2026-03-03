@@ -25,6 +25,11 @@ interface WakeTargetState {
   updateDefaultTime: (time: AlarmTime) => Promise<void>;
   setNextOverride: (time: AlarmTime) => Promise<void>;
   clearNextOverride: () => Promise<void>;
+  /**
+   * 期限切れの nextOverride のみをクリアする。
+   * 通常起動時に呼び出す（アラーム起動時は wakeup 画面が参照するためクリアしない）。
+   */
+  clearExpiredOverride: () => Promise<void>;
   setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>;
   removeDayOverride: (day: DayOfWeek) => Promise<void>;
   addTodo: (title: string) => Promise<void>;
@@ -87,12 +92,11 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const alarmIds: readonly string[] = rawIds !== null ? (JSON.parse(rawIds) as string[]) : [];
     if (raw !== null) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      let migrated = migrateStoredTarget(parsed);
-      // 期限切れの nextOverride を自動クリア（レガシーデータの targetDate 欠落も含む）
-      if (migrated.nextOverride !== null && isNextOverrideExpired(migrated.nextOverride)) {
-        migrated = { ...migrated, nextOverride: null };
-        await persist(migrated);
-      }
+      const migrated = migrateStoredTarget(parsed);
+      // 期限切れの nextOverride は loadTarget では自動クリアしない。
+      // アラーム経由の起動時に wakeup 画面が resolvedTime を計算する前に
+      // クリアされてしまい、セッション・WakeRecord が作成されない不具合を防ぐため。
+      // 通常起動時は _layout.tsx から clearExpiredOverride() を呼ぶ。
       set({ target: migrated, loaded: true, alarmIds });
     } else {
       const fallback: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
@@ -135,6 +139,16 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     set({ target: updated });
     await persist(updated);
     // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
+    syncWidget().catch(() => {});
+  },
+
+  clearExpiredOverride: async () => {
+    const { target } = get();
+    if (target === null || target.nextOverride === null) return;
+    if (!isNextOverrideExpired(target.nextOverride)) return;
+    const updated: WakeTarget = { ...target, nextOverride: null };
+    set({ target: updated });
+    await persist(updated);
     syncWidget().catch(() => {});
   },
 

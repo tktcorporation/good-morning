@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
 import { colors } from '../src/constants/theme';
 import {
+  cancelAlarmsByIds,
   cancelAllAlarms,
   checkLaunchPayload,
   initializeAlarmKit,
@@ -99,9 +100,12 @@ export default function RootLayout() {
         router.push('/wakeup');
       }
     } else {
-      // アラーム経由でない通常起動
-      coreLoaded.then(() => {
+      // アラーム経由でない通常起動。
+      // targetLoaded を含めて、期限切れの nextOverride をクリアする。
+      // アラーム起動時は wakeup 画面が resolvedTime を参照するためクリアしない。
+      Promise.all([coreLoaded, targetLoaded]).then(() => {
         restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
+        useWakeTargetStore.getState().clearExpiredOverride();
       });
     }
 
@@ -143,18 +147,31 @@ export default function RootLayout() {
     if (!sessionStoreLoaded) return;
     if (useMorningSessionStore.getState().isActive()) return;
 
-    // previousIds を渡して wake-target のみ選択的にキャンセル。
-    // cancelAllAlarms() を使わないため、アクティブなスヌーズアラームが巻き添えにならない。
+    // target が短期間に複数回変更された場合、前回の非同期スケジュールが完了する前に
+    // 次のスケジュールが開始される。cancelled フラグで前回の結果を無効化し、
+    // 孤立アラーム（追跡されないアラーム）の蓄積を防ぐ。
+    let cancelled = false;
     const { alarmIds } = useWakeTargetStore.getState();
     if (target.enabled) {
       scheduleWakeTargetAlarm(target, alarmIds).then((newIds) => {
+        if (cancelled) {
+          // 新しい effect が既に走っている — この結果は破棄してアラームもキャンセル
+          void cancelAlarmsByIds(newIds);
+          return;
+        }
         setAlarmIds(newIds);
       });
     } else {
       cancelAllAlarms().then(() => {
-        setAlarmIds([]);
+        if (!cancelled) {
+          setAlarmIds([]);
+        }
       });
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [target, sessionStoreLoaded]);
 
   return (
