@@ -160,7 +160,7 @@ describe('alarm-kit service', () => {
 
       const target: WakeTarget = {
         ...DEFAULT_WAKE_TARGET,
-        nextOverride: { time: { hour: 6, minute: 0 }, targetDate: '2026-02-27' },
+        nextOverride: { time: { hour: 6, minute: 0 }, targetDate: '2099-12-31' },
         enabled: true,
       };
 

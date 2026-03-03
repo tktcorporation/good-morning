@@ -61,7 +61,7 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
   });
 
-  test('loadTarget auto-clears expired nextOverride', async () => {
+  test('loadTarget preserves expired nextOverride (cleared by clearExpiredOverride instead)', async () => {
     const stored: WakeTarget = {
       ...DEFAULT_WAKE_TARGET,
       nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2020-01-01' },
@@ -71,15 +71,32 @@ describe('useWakeTargetStore', () => {
       return Promise.resolve(null);
     });
     await useWakeTargetStore.getState().loadTarget();
+    // loadTarget は期限切れの override をクリアしない（wakeup 画面が参照するため）
+    expect(useWakeTargetStore.getState().target?.nextOverride).toEqual({
+      time: { hour: 7, minute: 0 },
+      targetDate: '2020-01-01',
+    });
+  });
+
+  test('clearExpiredOverride clears expired nextOverride', async () => {
+    const stored: WakeTarget = {
+      ...DEFAULT_WAKE_TARGET,
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2020-01-01' },
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    await useWakeTargetStore.getState().clearExpiredOverride();
     expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
-    // Should persist the cleared override
     expect(mockSetItem).toHaveBeenCalledWith(
       'wake-target',
       expect.stringContaining('"nextOverride":null'),
     );
   });
 
-  test('loadTarget auto-clears legacy nextOverride without targetDate', async () => {
+  test('clearExpiredOverride clears legacy nextOverride without targetDate', async () => {
     const stored = {
       ...DEFAULT_WAKE_TARGET,
       nextOverride: { time: { hour: 7, minute: 0 } },
@@ -89,6 +106,7 @@ describe('useWakeTargetStore', () => {
       return Promise.resolve(null);
     });
     await useWakeTargetStore.getState().loadTarget();
+    await useWakeTargetStore.getState().clearExpiredOverride();
     expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
   });
 

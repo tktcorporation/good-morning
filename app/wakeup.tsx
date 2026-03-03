@@ -67,7 +67,7 @@ export default function WakeUpScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleDismiss = useCallback(() => {
+  const handleDismiss = useCallback(async () => {
     if (dismissing) return;
     setDismissing(true);
 
@@ -87,25 +87,27 @@ export default function WakeUpScreen() {
     }
 
     if (target !== null && resolvedTime !== null) {
-      // セッション開始処理を session-lifecycle に委譲。
-      // fire-and-forget: UI はブロックせず即座にダッシュボードへ遷移する。
-      // エラー時はアラートで通知するが、dismiss 自体は完了扱い。
-      startMorningSession({
-        target,
-        resolvedTime,
-        dismissTime: new Date(),
-        mountedAt: mountedAt.current,
-        dayBoundaryHour,
-      }).catch((e: unknown) => {
+      // セッション作成を await して、clearNextOverride → target 変更 →
+      // _layout のアラーム再スケジュール effect が isActive() で正しく
+      // ガードされるようにする。fire-and-forget だと session 未作成のまま
+      // effect が走り、不要な再スケジュールや孤立アラームが発生していた。
+      try {
+        await startMorningSession({
+          target,
+          resolvedTime,
+          dismissTime: new Date(),
+          mountedAt: mountedAt.current,
+          dayBoundaryHour,
+        });
+      } catch (e: unknown) {
         // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
         console.error('[WakeUp] Failed to start session:', e);
         Alert.alert(t('error.title'), t('error.recordSaveFailed'));
-      });
+      }
     }
 
-    // startMorningSession は fire-and-forget だが、cancelAlarmsByIds による
-    // 名前空間分離により、clearNextOverride が target 変更 → アラーム再スケジュール
-    // effect を発火させても、スヌーズアラームが巻き添えでキャンセルされない。
+    // cancelAlarmsByIds による名前空間分離により、clearNextOverride が target 変更
+    // → アラーム再スケジュール effect を発火させても、スヌーズアラームが巻き添えでキャンセルされない。
     void clearNextOverride();
     router.replace('/');
   }, [

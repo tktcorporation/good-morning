@@ -1,5 +1,6 @@
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
+import { isNextOverrideExpired } from '../types/wake-target';
 
 export const APP_GROUP_ID = 'group.com.tktcorporation.goodmorning';
 
@@ -130,8 +131,8 @@ export async function scheduleWakeTargetAlarm(
     if (success) ids.push(id);
   }
 
-  // Schedule one-time alarm for nextOverride
-  if (target.nextOverride !== null) {
+  // Schedule one-time alarm for nextOverride（期限切れは除外）
+  if (target.nextOverride !== null && !isNextOverrideExpired(target.nextOverride)) {
     const id = kit.generateUUID();
     const now = new Date();
     const alarmDate = new Date(now);
