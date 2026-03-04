@@ -362,3 +362,55 @@ export async function reloadWidgetTimelines(): Promise<void> {
     logError('[AlarmKit] reloadWidgetTimelines failed:', e);
   }
 }
+
+/**
+ * ネイティブ AlarmDismissIntent.perform() が App Groups に記録する dismiss イベント。
+ *
+ * 背景: iOS ではアラーム dismiss 時にアプリが起動しない場合がある。
+ * ネイティブ側で dismiss タイムスタンプを永続化し、次回アプリ起動時に
+ * recoverMissedDismiss() が読み取って WakeRecord を作成する。
+ *
+ * ライフサイクル: ネイティブ dismiss 時に作成 → JS recoverMissedDismiss() で消費 → clearDismissEvents() で削除
+ */
+export interface NativeDismissEvent {
+  readonly alarmId: string;
+  readonly dismissedAt: string; // ISO 8601
+  readonly payload: string; // "" or JSON (e.g. '{"isSnooze":true}')
+}
+
+/**
+ * App Groups UserDefaults から未処理の dismiss イベントを取得する。
+ * ネイティブモジュールが利用不可の場合は空配列を返す。
+ *
+ * 呼び出し元: recoverMissedDismiss() (session-lifecycle.ts)
+ */
+export async function getDismissEvents(): Promise<readonly NativeDismissEvent[]> {
+  const kit = getAlarmKit();
+  if (kit === null) return [];
+  const fn = (kit as Record<string, unknown>).getDismissEvents;
+  if (typeof fn !== 'function') return [];
+  try {
+    return (fn as () => NativeDismissEvent[])();
+  } catch (e) {
+    logError('[AlarmKit] getDismissEvents failed:', e);
+    return [];
+  }
+}
+
+/**
+ * 処理済みの dismiss イベントを App Groups から削除する。
+ * recoverMissedDismiss() の最後に呼ばれる。
+ *
+ * 呼び出し元: recoverMissedDismiss() (session-lifecycle.ts)
+ */
+export async function clearDismissEvents(): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  const fn = (kit as Record<string, unknown>).clearDismissEvents;
+  if (typeof fn !== 'function') return;
+  try {
+    (fn as () => void)();
+  } catch (e) {
+    logError('[AlarmKit] clearDismissEvents failed:', e);
+  }
+}

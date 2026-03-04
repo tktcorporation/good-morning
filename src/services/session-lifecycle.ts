@@ -16,10 +16,14 @@ import type { MorningSession, SessionTodo } from '../types/morning-session';
 import type { WakeTodoRecord } from '../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../types/wake-record';
 import type { WakeTarget } from '../types/wake-target';
+import { resolveTimeForDate } from '../types/wake-target';
 import { getLogicalDateString } from '../utils/date';
 import {
   cancelAlarmsByIds,
+  clearDismissEvents,
   endLiveActivity,
+  getDismissEvents,
+  type NativeDismissEvent,
   SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
@@ -270,4 +274,90 @@ export function handleSnoozeArrival(): boolean {
     );
   }
   return true;
+}
+
+/**
+ * アプリ起動時にネイティブ dismiss イベントを確認し、未処理のものから
+ * WakeRecord + MorningSession を復元する。
+ *
+ * 背景: iOS ではアラーム dismiss 時にアプリが起動しない場合がある。
+ * ネイティブ側が App Groups に記録した dismiss タイムスタンプを使い、
+ * 正確な起床データを復元する。セッション開始後はスヌーズと Live Activity も
+ * 開始して通常の朝フローに合流する。
+ *
+ * 呼び出し元: app/_layout.tsx（初期化時、通常起動 + バックグラウンド復帰時）
+ *
+ * @returns true if a session was recovered, false otherwise
+ */
+export async function recoverMissedDismiss(dayBoundaryHour: number): Promise<boolean> {
+  // セッションが既にアクティブなら何もしない
+  if (useMorningSessionStore.getState().isActive()) {
+    await clearDismissEvents();
+    return false;
+  }
+
+  const events = await getDismissEvents();
+  if (events.length === 0) return false;
+
+  // スヌーズ dismiss はスキップ（セッション既存のため handleSnoozeArrival で処理済み）
+  const primaryEvents = events.filter((e) => !isSnoozeEvent(e));
+  if (primaryEvents.length === 0) {
+    await clearDismissEvents();
+    return false;
+  }
+
+  // 最新のプライマリ dismiss イベントを使用
+  // primaryEvents.length > 0 は上の early return で保証済み
+  const event = primaryEvents[primaryEvents.length - 1] as NativeDismissEvent;
+  const dismissTime = new Date(event.dismissedAt);
+  const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
+
+  // 同日のレコードが既にある場合はスキップ（wakeup 画面経由で作成済み）
+  const { records } = useWakeRecordStore.getState();
+  if (records.some((r) => r.date === dateStr)) {
+    await clearDismissEvents();
+    return false;
+  }
+
+  // WakeTarget を取得（復元に必要な TODO リスト等）
+  const { target } = useWakeTargetStore.getState();
+  if (target === null) {
+    await clearDismissEvents();
+    return false;
+  }
+
+  // resolvedTime: dismiss 時点の曜日に対応するアラーム時刻
+  const resolvedTime = resolveTimeForDate(target, dismissTime);
+  if (resolvedTime === null) {
+    await clearDismissEvents();
+    return false;
+  }
+
+  // startMorningSession と同等のロジックで WakeRecord + セッションを作成。
+  // mountedAt は不明（wakeup 画面を経由していない）ため dismissTime で近似する。
+  // alarmTriggeredAt = dismissedAt になるが、正確な dismiss タイムスタンプが残る。
+  await startMorningSession({
+    target,
+    resolvedTime,
+    dismissTime,
+    mountedAt: dismissTime,
+    dayBoundaryHour,
+  });
+
+  await clearDismissEvents();
+  return true;
+}
+
+/**
+ * NativeDismissEvent がスヌーズ由来かどうかを判定する。
+ * スヌーズアラームは dismissPayload に { isSnooze: true } を埋め込んでいる。
+ */
+function isSnoozeEvent(event: NativeDismissEvent): boolean {
+  if (event.payload === '') return false;
+  try {
+    const parsed = JSON.parse(event.payload) as { isSnooze?: boolean };
+    return parsed.isSnooze === true;
+  } catch {
+    return false;
+  }
 }

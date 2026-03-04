@@ -2,7 +2,7 @@ diff --git a/ios/ExpoAlarmKitModule.swift b/ios/ExpoAlarmKitModule.swift
 index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b28f23756 100644
 --- a/ios/ExpoAlarmKitModule.swift
 +++ b/ios/ExpoAlarmKitModule.swift
-@@ -3,6 +3,7 @@ import AlarmKit
+@@ -3,6 +3,7 @@
  import ActivityKit
  import AppIntents
  import SwiftUI
@@ -10,10 +10,94 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b
  
  // MARK: - Storage Keys
  private let alarmKeyPrefix = "ExpoAlarmKit.alarm:"
-@@ -576,5 +577,25 @@ public class ExpoAlarmKitModule: Module {
+@@ -61,6 +62,32 @@
+     public static func removeLaunchAppOnDismiss(alarmId: String) {
+         sharedDefaults?.removeObject(forKey: launchAppKeyPrefix + alarmId)
+     }
++
++    // MARK: - Dismiss Event Recording
++    private static let dismissEventsKey = "ExpoAlarmKit.dismissEvents"
++
++    /// alarm dismiss 時に呼ばれる。アプリ未起動でも App Groups に永続化される。
++    /// JS 側が getDismissEvents() で取得し、処理後に clearDismissEvents() でクリアする。
++    public static func recordDismissEvent(alarmId: String, payload: String?) {
++        let formatter = ISO8601DateFormatter()
++        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
++        let event: [String: String] = [
++            "alarmId": alarmId,
++            "dismissedAt": formatter.string(from: Date()),
++            "payload": payload ?? "",
++        ]
++        var events = sharedDefaults?.array(forKey: dismissEventsKey) as? [[String: String]] ?? []
++        events.append(event)
++        sharedDefaults?.set(events, forKey: dismissEventsKey)
++    }
++
++    public static func getDismissEvents() -> [[String: String]] {
++        return sharedDefaults?.array(forKey: dismissEventsKey) as? [[String: String]] ?? []
++    }
++
++    public static func clearDismissEvents() {
++        sharedDefaults?.removeObject(forKey: dismissEventsKey)
++    }
+ }
+ 
+ // MARK: - Record Structs for Expo Module
+@@ -147,13 +174,16 @@
+     }
+     
+     public func perform() async throws -> some IntentResult {
++        // dismiss イベントを永続化（removeAlarm より前に実行）
++        ExpoAlarmKitStorage.recordDismissEvent(alarmId: self.alarmId, payload: self.payload)
++
+         // Store payload for JS to retrieve
+         ExpoAlarmKitModule.launchPayload = buildLaunchPayload(alarmId: self.alarmId, payload: self.payload)
+-        
++
+         // Clean up App Group storage
+         ExpoAlarmKitStorage.removeAlarm(id: self.alarmId)
+         ExpoAlarmKitStorage.removeLaunchAppOnDismiss(alarmId: self.alarmId)
+-        
++
+         return .result()
+     }
+ }
+@@ -179,13 +209,16 @@
+     }
+     
+     public func perform() async throws -> some IntentResult {
++        // dismiss イベントを永続化（removeAlarm より前に実行）
++        ExpoAlarmKitStorage.recordDismissEvent(alarmId: self.alarmId, payload: self.payload)
++
+         // Store payload for JS to retrieve
+         ExpoAlarmKitModule.launchPayload = buildLaunchPayload(alarmId: self.alarmId, payload: self.payload)
+-        
++
+         // Clean up App Group storage
+         ExpoAlarmKitStorage.removeAlarm(id: self.alarmId)
+         ExpoAlarmKitStorage.removeLaunchAppOnDismiss(alarmId: self.alarmId)
+-        
++
+         return .result()
+     }
+ }
+@@ -576,5 +609,38 @@
              ExpoAlarmKitModule.launchPayload = nil
              return payload
          }
++
++        // MARK: - Get Dismiss Events
++        // App Groups から未処理の dismiss イベントを取得する。
++        // JS 側の recoverMissedDismiss() がアプリ起動時に呼び出す。
++        Function("getDismissEvents") { () -> [[String: String]] in
++            return ExpoAlarmKitStorage.getDismissEvents()
++        }
++
++        // MARK: - Clear Dismiss Events
++        // 処理済み dismiss イベントをクリアする。
++        Function("clearDismissEvents") { () in
++            ExpoAlarmKitStorage.clearDismissEvents()
++        }
 +
 +        // MARK: - Sync Widget Data
 +        // App Groups UserDefaults に JSON 文字列を書き込む。

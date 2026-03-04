@@ -406,6 +406,10 @@ export default function DashboardScreen() {
             const dateStr = getLogicalDateString(date, dayBoundaryHour);
             const gradeRecord = getGradeForDate(dateStr);
             const isToday = dateStr === getLogicalDateString(new Date(), dayBoundaryHour);
+            // 表示用の日付番号・曜日は論理日付から取得する。
+            // dayBoundaryHour 前にアプリを開いた場合、カレンダー日付と論理日付がずれるため、
+            // date.getDate() / date.getDay() をそのまま使うと表示と実データが不一致になる。
+            const logicalDate = new Date(`${dateStr}T12:00:00`);
 
             return (
               <Pressable
@@ -414,10 +418,13 @@ export default function DashboardScreen() {
                 onPress={() => handleDayPress(date)}
               >
                 <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
-                  {getDayLabel(date.getDay() as DayOfWeek, tCommon as (key: string) => string)}
+                  {getDayLabel(
+                    logicalDate.getDay() as DayOfWeek,
+                    tCommon as (key: string) => string,
+                  )}
                 </Text>
                 <GradeIcon grade={gradeRecord?.grade ?? null} size={16} />
-                <Text style={styles.dayNumber}>{`${date.getDate()}`}</Text>
+                <Text style={styles.dayNumber}>{`${logicalDate.getDate()}`}</Text>
               </Pressable>
             );
           })}
