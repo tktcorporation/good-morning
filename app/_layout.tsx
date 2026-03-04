@@ -36,6 +36,29 @@ function isSnoozePayload(payload: { payload: string | null } | null): boolean {
   }
 }
 
+/**
+ * バックグラウンド→フォアグラウンド復帰時のアラームペイロード処理。
+ *
+ * スヌーズペイロードなら Live Activity を更新し、
+ * 初回アラームペイロードなら wakeup 画面に遷移して WakeRecord 作成を可能にする。
+ *
+ * 修正前: スヌーズのみ処理し、初回アラームペイロードを無視していたため、
+ * アプリがバックグラウンドにいる状態でアラームが発火すると WakeRecord が作成されなかった。
+ */
+function handleAlarmResume(routerPush: (path: string) => void): void {
+  const resumePayload = checkLaunchPayload();
+  if (resumePayload === null) return;
+
+  if (isSnoozePayload(resumePayload)) {
+    handleSnoozeArrival();
+  } else if (!useMorningSessionStore.getState().isActive()) {
+    // 初回アラームペイロード: セッションがまだアクティブでなければ wakeup 画面へ遷移。
+    // isActive() チェックにより、既に wakeup 画面で dismiss 済みの場合は二重遷移しない。
+    restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
+    routerPush('/wakeup');
+  }
+}
+
 export default function RootLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
@@ -120,11 +143,10 @@ export default function RootLayout() {
     }
   }, [onboardingDone, router]);
 
-  // バックグラウンド → フォアグラウンド復帰時にスヌーズ状態を確認する。
+  // バックグラウンド → フォアグラウンド復帰時にアラーム・スヌーズ状態を確認する。
   // AlarmKit がアプリを起動する場合は初期化 effect（上）で処理されるが、
   // アプリが kill されずバックグラウンドにいた場合は初期化 effect が再実行されない。
-  // そのケースでは checkLaunchPayload でスヌーズ再発火を検知し、Live Activity を更新する。
-  // 先行スケジュール方式のため再スケジュールは不要。
+  // そのケースでは handleAlarmResume でペイロードを検知し、適切な画面に遷移する。
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
@@ -133,13 +155,10 @@ export default function RootLayout() {
       appStateRef.current = nextState;
       if (!wasBackground || nextState !== 'active') return;
 
-      const resumePayload = checkLaunchPayload();
-      if (isSnoozePayload(resumePayload)) {
-        handleSnoozeArrival();
-      }
+      handleAlarmResume((path) => router.push(path));
     });
     return () => subscription.remove();
-  }, []);
+  }, [router]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reacting to target and sessionStoreLoaded changes only
   useEffect(() => {

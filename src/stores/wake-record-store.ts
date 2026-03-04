@@ -25,7 +25,15 @@ interface WakeRecordState {
       >
     >,
   ) => Promise<void>;
-  getRecordsForPeriod: (start: Date, end: Date) => readonly WakeRecord[];
+  /**
+   * 指定された開始・終了日文字列の範囲内のレコードを返す。
+   *
+   * 背景: WakeRecord.date は getLogicalDateString (dayBoundaryHour 考慮) で保存されるため、
+   * 呼び出し元も同じく論理日付文字列を渡す必要がある。
+   * 以前は Date を受け取り formatDateString で変換していたが、dayBoundaryHour を無視するため
+   * 深夜帯にレコードが見つからない不具合があった。
+   */
+  getRecordsForPeriod: (startStr: string, endStr: string) => readonly WakeRecord[];
   /**
    * 指定された開始日文字列から7日間の統計を返す。
    *
@@ -101,9 +109,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     await persistRecords(updated);
   },
 
-  getRecordsForPeriod: (start: Date, end: Date): readonly WakeRecord[] => {
-    const startStr = formatDateString(start);
-    const endStr = formatDateString(end);
+  getRecordsForPeriod: (startStr: string, endStr: string): readonly WakeRecord[] => {
     return get().records.filter((r) => r.date >= startStr && r.date <= endStr);
   },
 
