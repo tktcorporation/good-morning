@@ -13,7 +13,11 @@ import {
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
 import { registerBackgroundSync } from '../src/services/background-sync';
-import { handleSnoozeArrival, restoreSessionOnLaunch } from '../src/services/session-lifecycle';
+import {
+  handleSnoozeArrival,
+  recoverMissedDismiss,
+  restoreSessionOnLaunch,
+} from '../src/services/session-lifecycle';
 import { syncWidget } from '../src/services/widget-sync';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
@@ -47,7 +51,15 @@ function isSnoozePayload(payload: { payload: string | null } | null): boolean {
  */
 function handleAlarmResume(routerPush: (path: string) => void): void {
   const resumePayload = checkLaunchPayload();
-  if (resumePayload === null) return;
+  if (resumePayload === null) {
+    // ペイロードなし = アラーム経由でない復帰だが、
+    // ネイティブ dismiss イベントが溜まっている可能性がある。
+    // アラーム dismiss 時にアプリが起動しなかった場合のセーフティネット。
+    recoverMissedDismiss(useSettingsStore.getState().dayBoundaryHour).then((recovered) => {
+      if (recovered) routerPush('/');
+    });
+    return;
+  }
 
   if (isSnoozePayload(resumePayload)) {
     handleSnoozeArrival();
@@ -126,9 +138,17 @@ export default function RootLayout() {
       // アラーム経由でない通常起動。
       // targetLoaded を含めて、期限切れの nextOverride をクリアする。
       // アラーム起動時は wakeup 画面が resolvedTime を参照するためクリアしない。
-      Promise.all([coreLoaded, targetLoaded]).then(() => {
+      Promise.all([coreLoaded, targetLoaded, recordsLoaded]).then(async () => {
         restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
         useWakeTargetStore.getState().clearExpiredOverride();
+
+        // ネイティブ dismiss イベントを確認し、未処理の dismiss があれば
+        // WakeRecord + セッションを自動復元する。
+        // アラーム dismiss 時にアプリが起動しなかった場合のセーフティネット。
+        const recovered = await recoverMissedDismiss(useSettingsStore.getState().dayBoundaryHour);
+        if (recovered) {
+          router.push('/');
+        }
       });
     }
 

@@ -307,7 +307,8 @@ export async function recoverMissedDismiss(dayBoundaryHour: number): Promise<boo
   }
 
   // 最新のプライマリ dismiss イベントを使用
-  const event = primaryEvents[primaryEvents.length - 1]!;
+  // primaryEvents.length > 0 は上の early return で保証済み
+  const event = primaryEvents[primaryEvents.length - 1] as NativeDismissEvent;
   const dismissTime = new Date(event.dismissedAt);
   const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
 
