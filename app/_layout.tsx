@@ -44,10 +44,12 @@ function isSnoozePayload(payload: { payload: string | null } | null): boolean {
  * バックグラウンド→フォアグラウンド復帰時のアラームペイロード処理。
  *
  * スヌーズペイロードなら Live Activity を更新し、
- * 初回アラームペイロードなら wakeup 画面に遷移して WakeRecord 作成を可能にする。
+ * 初回アラームペイロードなら:
+ *   1. AlarmKit dismiss 済み（dismiss event あり）→ recoverMissedDismiss() で自動セッション開始
+ *   2. まだ dismiss していない → wakeup 画面に遷移してユーザーが手動 dismiss
  *
- * 修正前: スヌーズのみ処理し、初回アラームペイロードを無視していたため、
- * アプリがバックグラウンドにいる状態でアラームが発火すると WakeRecord が作成されなかった。
+ * 修正前: AlarmKit のネイティブUIで dismiss してもセッションが開始しなかった。
+ * recoverMissedDismiss() を試みることで、AlarmKit dismiss → 自動セッション開始が可能になった。
  */
 function handleAlarmResume(routerPush: (path: string) => void): void {
   const resumePayload = checkLaunchPayload();
@@ -64,10 +66,15 @@ function handleAlarmResume(routerPush: (path: string) => void): void {
   if (isSnoozePayload(resumePayload)) {
     handleSnoozeArrival();
   } else if (!useMorningSessionStore.getState().isActive()) {
-    // 初回アラームペイロード: セッションがまだアクティブでなければ wakeup 画面へ遷移。
+    // 初回アラームペイロード: AlarmKit dismiss 済みなら自動でセッション開始。
+    // dismiss event がない場合（ユーザーがまだ止めていない）は wakeup 画面へ遷移。
     // isActive() チェックにより、既に wakeup 画面で dismiss 済みの場合は二重遷移しない。
     restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
-    routerPush('/wakeup');
+    recoverMissedDismiss(useSettingsStore.getState().dayBoundaryHour).then((recovered) => {
+      if (!recovered) {
+        routerPush('/wakeup');
+      }
+    });
   }
 }
 
@@ -128,11 +135,17 @@ export default function RootLayout() {
           router.push('/');
         });
       } else {
-        // 初回アラーム: stale セッションをクリーンアップしてから wakeup 画面へ
-        coreLoaded.then(() => {
+        // 初回アラーム: ストアロード完了後に dismiss event を確認する。
+        // AlarmKit のネイティブUIで dismiss 済みなら recoverMissedDismiss() で自動セッション開始。
+        // dismiss event がない（ユーザーがまだ止めていない）場合は wakeup 画面へ遷移。
+        coreLoaded.then(async () => {
           restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
+          const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
+          const recovered = await recoverMissedDismiss(dayBoundaryHour);
+          if (!recovered) {
+            router.push('/wakeup');
+          }
         });
-        router.push('/wakeup');
       }
     } else {
       // アラーム経由でない通常起動。

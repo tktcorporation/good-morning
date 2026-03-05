@@ -74,16 +74,17 @@ export default function WakeUpScreen() {
     stopAlarmSound();
     Vibration.cancel();
 
-    // Cancel remaining scheduled alarms
-    if (alarmIds.length > 0) {
-      cancelAllAlarms().then(() => {
-        setAlarmIds([]);
-      });
-    }
-
     if (isDemo) {
       router.back();
       return;
+    }
+
+    // スヌーズスケジュール前に既存アラームをキャンセルする（await）。
+    // fire-and-forget だと startMorningSession() 内の scheduleSnoozeAlarms() が
+    // 追加したスヌーズアラームを cancelAllAlarms() が後から削除する競合が発生していた。
+    if (alarmIds.length > 0) {
+      await cancelAllAlarms();
+      await setAlarmIds([]);
     }
 
     if (target !== null && resolvedTime !== null) {

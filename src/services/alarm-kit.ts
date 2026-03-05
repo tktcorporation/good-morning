@@ -124,9 +124,10 @@ export async function scheduleWakeTargetAlarm(
       title: alarmTitle,
       soundName: target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined,
       launchAppOnDismiss: true,
-      // ネイティブ Snooze ボタンを有効化。先行スケジュール済みスヌーズに加え、
-      // ユーザーが即座にスヌーズしたい場合のフォールバックとして機能する。
-      doSnoozeIntent: true,
+      // doSnoozeIntent は設定しない。
+      // JS 側で scheduleSnoozeAlarms() により 9 分間隔のスヌーズを先行スケジュール済み。
+      // ネイティブスヌーズを有効にすると、ユーザーが誤って「スヌーズ」ボタンを押した場合に
+      // JS 管理外のアラームが発火し、dismiss しても止まらない連続鳴動が発生していた。
     });
     if (success) ids.push(id);
   }

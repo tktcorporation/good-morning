@@ -79,9 +79,11 @@ describe('alarm-kit service', () => {
           minute: 30,
           weekdays: [1, 2, 3, 4, 5, 6, 7],
           launchAppOnDismiss: true,
-          doSnoozeIntent: true,
         }),
       );
+      // ネイティブスヌーズが無効になっていること（JS 側スヌーズと二重にならないよう doSnoozeIntent を削除済み）
+      const callArgs = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(callArgs?.['doSnoozeIntent']).toBeUndefined();
       expect(ids.length).toBe(1);
     });
 
