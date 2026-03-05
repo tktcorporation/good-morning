@@ -205,10 +205,10 @@ export async function completeMorningSession(session: MorningSession): Promise<v
   // 4. セッションクリア
   await useMorningSessionStore.getState().clearSession();
 
-  // 5. 通常アラーム再スケジュール
-  const { target, alarmIds, setAlarmIds } = useWakeTargetStore.getState();
+  // 5. 通常アラーム再スケジュール（scheduleWakeTargetAlarm は内部で全削除→再追加するので alarmIds 不要）
+  const { target, setAlarmIds } = useWakeTargetStore.getState();
   if (target?.enabled) {
-    const newIds = await scheduleWakeTargetAlarm(target, alarmIds);
+    const newIds = await scheduleWakeTargetAlarm(target);
     await setAlarmIds(newIds);
   }
 }

@@ -57,9 +57,11 @@ describe('alarm-kit service', () => {
   });
 
   describe('scheduleWakeTargetAlarm', () => {
-    test('schedules repeating alarm for enabled days without cancelling when no previousIds', async () => {
+    test('cancels all existing alarms before scheduling (孤立アラーム蓄積防止)', async () => {
       let uuidCounter = 0;
       mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+      // 既存に2本のアラームがある状態でスケジュール
+      mockGetAllAlarms.mockReturnValue(['stale-1', 'stale-2']);
 
       const target: WakeTarget = {
         ...DEFAULT_WAKE_TARGET,
@@ -69,8 +71,10 @@ describe('alarm-kit service', () => {
 
       const ids = await scheduleWakeTargetAlarm(target);
 
-      // No previousIds passed — should not cancel any alarms
-      expect(mockCancelAlarm).not.toHaveBeenCalled();
+      // cancelAllAlarms() で既存の全アラームをキャンセルすること
+      expect(mockGetAllAlarms).toHaveBeenCalled();
+      expect(mockCancelAlarm).toHaveBeenCalledWith('stale-1');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('stale-2');
       // Should schedule one repeating alarm with all 7 weekdays
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(1);
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledWith(
@@ -84,28 +88,6 @@ describe('alarm-kit service', () => {
       // ネイティブスヌーズが無効になっていること（JS 側スヌーズと二重にならないよう doSnoozeIntent を削除済み）
       const callArgs = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as Record<string, unknown>;
       expect(callArgs?.['doSnoozeIntent']).toBeUndefined();
-      expect(ids.length).toBe(1);
-    });
-
-    test('cancels only previousIds and schedules new alarms', async () => {
-      let uuidCounter = 0;
-      mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
-
-      const target: WakeTarget = {
-        ...DEFAULT_WAKE_TARGET,
-        defaultTime: { hour: 7, minute: 30 },
-        enabled: true,
-      };
-
-      const ids = await scheduleWakeTargetAlarm(target, ['old-wake-1', 'old-wake-2']);
-
-      // Should cancel only the previous wake-target IDs
-      expect(mockCancelAlarm).toHaveBeenCalledWith('old-wake-1');
-      expect(mockCancelAlarm).toHaveBeenCalledWith('old-wake-2');
-      expect(mockCancelAlarm).toHaveBeenCalledTimes(2);
-      // Should not call getAllAlarms (that's cancelAllAlarms behavior)
-      expect(mockGetAllAlarms).not.toHaveBeenCalled();
-      // Should schedule new alarm
       expect(ids.length).toBe(1);
     });
 

@@ -274,8 +274,8 @@ describe('completeMorningSession', () => {
     // セッションがクリアされていること
     expect(useMorningSessionStore.getState().session).toBeNull();
 
-    // 通常アラームが再スケジュールされていること
-    expect(scheduleWakeTargetAlarm).toHaveBeenCalledWith(target, ['old-alarm-1']);
+    // 通常アラームが再スケジュールされていること（alarmIds は scheduleWakeTargetAlarm 内で全削除→再追加するため不要）
+    expect(scheduleWakeTargetAlarm).toHaveBeenCalledWith(target);
   });
 
   test('skips endLiveActivity when liveActivityId is null', async () => {

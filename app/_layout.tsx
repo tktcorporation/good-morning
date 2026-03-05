@@ -203,9 +203,9 @@ export default function RootLayout() {
     // 次のスケジュールが開始される。cancelled フラグで前回の結果を無効化し、
     // 孤立アラーム（追跡されないアラーム）の蓄積を防ぐ。
     let cancelled = false;
-    const { alarmIds } = useWakeTargetStore.getState();
     if (target.enabled) {
-      scheduleWakeTargetAlarm(target, alarmIds).then((newIds) => {
+      // scheduleWakeTargetAlarm は内部で cancelAllAlarms() を呼ぶので alarmIds は不要
+      scheduleWakeTargetAlarm(target).then((newIds) => {
         if (cancelled) {
           // 新しい effect が既に走っている — この結果は破棄してアラームもキャンセル
           void cancelAlarmsByIds(newIds);
