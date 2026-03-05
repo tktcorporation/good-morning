@@ -13,70 +13,13 @@ import {
   scheduleWakeTargetAlarm,
 } from '../src/services/alarm-kit';
 import { registerBackgroundSync } from '../src/services/background-sync';
-import {
-  handleSnoozeArrival,
-  recoverMissedDismiss,
-  restoreSessionOnLaunch,
-} from '../src/services/session-lifecycle';
+import { handleAlarmEvent } from '../src/services/session-lifecycle';
 import { syncWidget } from '../src/services/widget-sync';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
-
-/**
- * AlarmKit の LaunchPayload からスヌーズ経由かどうかを判定する。
- * scheduleSnooze() が payload に { isSnooze: true } を埋め込んでおり、
- * ここで解析して判定結果を返す。初期化 effect と AppState リスナーの両方で使用。
- */
-function isSnoozePayload(payload: { payload: string | null } | null): boolean {
-  if (payload === null || payload.payload === null) return false;
-  try {
-    const parsed = JSON.parse(payload.payload) as { isSnooze?: boolean };
-    return parsed.isSnooze === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * バックグラウンド→フォアグラウンド復帰時のアラームペイロード処理。
- *
- * スヌーズペイロードなら Live Activity を更新し、
- * 初回アラームペイロードなら:
- *   1. AlarmKit dismiss 済み（dismiss event あり）→ recoverMissedDismiss() で自動セッション開始
- *   2. まだ dismiss していない → wakeup 画面に遷移してユーザーが手動 dismiss
- *
- * 修正前: AlarmKit のネイティブUIで dismiss してもセッションが開始しなかった。
- * recoverMissedDismiss() を試みることで、AlarmKit dismiss → 自動セッション開始が可能になった。
- */
-function handleAlarmResume(routerPush: (path: string) => void): void {
-  const resumePayload = checkLaunchPayload();
-  if (resumePayload === null) {
-    // ペイロードなし = アラーム経由でない復帰だが、
-    // ネイティブ dismiss イベントが溜まっている可能性がある。
-    // アラーム dismiss 時にアプリが起動しなかった場合のセーフティネット。
-    recoverMissedDismiss(useSettingsStore.getState().dayBoundaryHour).then((recovered) => {
-      if (recovered) routerPush('/');
-    });
-    return;
-  }
-
-  if (isSnoozePayload(resumePayload)) {
-    handleSnoozeArrival();
-  } else if (!useMorningSessionStore.getState().isActive()) {
-    // 初回アラームペイロード: AlarmKit dismiss 済みなら自動でセッション開始。
-    // dismiss event がない場合（ユーザーがまだ止めていない）は wakeup 画面へ遷移。
-    // isActive() チェックにより、既に wakeup 画面で dismiss 済みの場合は二重遷移しない。
-    restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
-    recoverMissedDismiss(useSettingsStore.getState().dayBoundaryHour).then((recovered) => {
-      if (!recovered) {
-        routerPush('/wakeup');
-      }
-    });
-  }
-}
 
 export default function RootLayout() {
   const { t } = useTranslation('dashboard');
@@ -125,45 +68,27 @@ export default function RootLayout() {
     // 同日のセッションを誤って「期限切れ」と判定してクリアしてしまう。
     const coreLoaded = Promise.all([sessionLoaded, settingsLoaded]);
 
-    const payload = checkLaunchPayload();
-    if (payload !== null) {
-      if (isSnoozePayload(payload)) {
-        // スヌーズ再発火: ネイティブアラームがユーザーを起こし済み。
-        // Live Activity を更新してダッシュボードへ。
-        sessionLoaded.then(() => {
-          handleSnoozeArrival();
-          router.push('/');
-        });
-      } else {
-        // 初回アラーム: ストアロード完了後に dismiss event を確認する。
-        // AlarmKit のネイティブUIで dismiss 済みなら recoverMissedDismiss() で自動セッション開始。
-        // dismiss event がない（ユーザーがまだ止めていない）場合は wakeup 画面へ遷移。
-        coreLoaded.then(async () => {
-          restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
-          const dayBoundaryHour = useSettingsStore.getState().dayBoundaryHour;
-          const recovered = await recoverMissedDismiss(dayBoundaryHour);
-          if (!recovered) {
-            router.push('/wakeup');
-          }
-        });
-      }
-    } else {
-      // アラーム経由でない通常起動。
-      // targetLoaded を含めて、期限切れの nextOverride をクリアする。
-      // アラーム起動時は wakeup 画面が resolvedTime を参照するためクリアしない。
-      Promise.all([coreLoaded, targetLoaded, recordsLoaded]).then(async () => {
-        restoreSessionOnLaunch(useSettingsStore.getState().dayBoundaryHour);
-        useWakeTargetStore.getState().clearExpiredOverride();
+    // handleAlarmEvent に payload 判定・ルーティングを一元委譲。
+    // スヌーズは sessionLoaded のみ待てば十分（セッション状態を参照するため）。
+    // 初回アラームは coreLoaded（session + settings）を待つ。
+    // 通常起動は targetLoaded + recordsLoaded も待って clearExpiredOverride を実行。
+    const firstPayload = checkLaunchPayload();
+    const waitFor = (() => {
+      if (firstPayload === null) return Promise.all([coreLoaded, targetLoaded, recordsLoaded]);
+      try {
+        const parsed = JSON.parse(firstPayload.payload ?? '') as { isSnooze?: boolean };
+        if (parsed.isSnooze === true) return sessionLoaded;
+      } catch {}
+      return coreLoaded;
+    })();
 
-        // ネイティブ dismiss イベントを確認し、未処理の dismiss があれば
-        // WakeRecord + セッションを自動復元する。
-        // アラーム dismiss 時にアプリが起動しなかった場合のセーフティネット。
-        const recovered = await recoverMissedDismiss(useSettingsStore.getState().dayBoundaryHour);
-        if (recovered) {
-          router.push('/');
-        }
+    waitFor.then(() => {
+      handleAlarmEvent('cold-start', {
+        routerPush: (path) => router.push(path),
+        dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
+        clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
       });
-    }
+    });
 
     AsyncStorage.getItem('onboarding-completed').then((val) => {
       setOnboardingDone(val === 'true');
@@ -188,7 +113,10 @@ export default function RootLayout() {
       appStateRef.current = nextState;
       if (!wasBackground || nextState !== 'active') return;
 
-      handleAlarmResume((path) => router.push(path));
+      handleAlarmEvent('foreground-resume', {
+        routerPush: (path) => router.push(path),
+        dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
+      });
     });
     return () => subscription.remove();
   }, [router]);

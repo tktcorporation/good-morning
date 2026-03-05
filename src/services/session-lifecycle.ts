@@ -20,6 +20,7 @@ import { resolveTimeForDate } from '../types/wake-target';
 import { getLogicalDateString } from '../utils/date';
 import {
   cancelAlarmsByIds,
+  checkLaunchPayload,
   clearDismissEvents,
   endLiveActivity,
   getDismissEvents,
@@ -346,6 +347,87 @@ export async function recoverMissedDismiss(dayBoundaryHour: number): Promise<boo
 
   await clearDismissEvents();
   return true;
+}
+
+/**
+ * アラームイベント（cold-start / foreground-resume）を統一処理するエントリポイント。
+ *
+ * 背景: cold-start と foreground-resume で同一の判定ロジックが _layout.tsx に
+ * 二重実装されており、一方だけ修正して他方を漏らすバグが繰り返されていた。
+ * 全ケースをここに集約することで「直したつもり」問題を根絶する。
+ *
+ * ルーティング責務: routerPush を引数で受け取ることで、ナビゲーション層への
+ * 依存を注入形式にし、テスト時にモック可能にしている。
+ *
+ * context の違い:
+ * - cold-start: restoreSessionOnLaunch + clearExpiredOverride を実行（ストア未ロードの前提）
+ * - foreground-resume: ストアは既にロード済みのため上記はスキップ
+ *
+ * 呼び出し元:
+ * - app/_layout.tsx 初期化 effect (cold-start)
+ * - app/_layout.tsx AppState listener (foreground-resume)
+ */
+export async function handleAlarmEvent(
+  context: 'cold-start' | 'foreground-resume',
+  opts: {
+    routerPush: (path: string) => void;
+    dayBoundaryHour: number;
+    /** cold-start のみ: 期限切れの曜日オーバーライドをクリアする関数 */
+    clearExpiredOverride?: () => void;
+  },
+): Promise<void> {
+  const { routerPush, dayBoundaryHour, clearExpiredOverride } = opts;
+  const payload = checkLaunchPayload();
+
+  if (payload !== null) {
+    if (isSnoozePayload(payload)) {
+      // スヌーズ再発火: Live Activity を更新してダッシュボードへ。
+      // cold-start / foreground-resume 両方で同一処理。
+      handleSnoozeArrival();
+      routerPush('/');
+    } else {
+      // 初回アラームペイロード: AlarmKit dismiss 済みなら自動でセッション開始。
+      // dismiss event がない（ユーザーがまだ止めていない）場合は wakeup 画面へ。
+      // cold-start 時のみ restoreSessionOnLaunch を先行実行（stale セッションのクリア）。
+      if (context === 'cold-start') {
+        restoreSessionOnLaunch(dayBoundaryHour);
+      }
+      const recovered = await recoverMissedDismiss(dayBoundaryHour);
+      if (!recovered) {
+        routerPush('/wakeup');
+      }
+    }
+    return;
+  }
+
+  // ペイロードなし: アラーム経由でない起動または復帰。
+  // cold-start ではセッション復元 + 期限切れオーバーライドのクリアを行う。
+  // foreground-resume ではストアが既にロード済みのためスキップ。
+  if (context === 'cold-start') {
+    restoreSessionOnLaunch(dayBoundaryHour);
+    clearExpiredOverride?.();
+  }
+
+  // ネイティブ dismiss イベントを確認し、未処理があれば自動復元。
+  // アラーム dismiss 時にアプリが起動しなかった場合のセーフティネット。
+  const recovered = await recoverMissedDismiss(dayBoundaryHour);
+  if (recovered) {
+    routerPush('/');
+  }
+}
+
+/**
+ * AlarmKit LaunchPayload がスヌーズ由来かどうかを判定する。
+ * scheduleSnoozeAlarms() が payload に { isSnooze: true } を埋め込んでいる。
+ */
+function isSnoozePayload(payload: { payload: string | null } | null): boolean {
+  if (payload === null || payload.payload === null) return false;
+  try {
+    const parsed = JSON.parse(payload.payload) as { isSnooze?: boolean };
+    return parsed.isSnooze === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
