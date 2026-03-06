@@ -22,7 +22,13 @@ jest.mock('../services/alarm-kit', () => ({
   updateLiveActivity: jest.fn(),
   getDismissEvents: jest.fn().mockResolvedValue([]),
   clearDismissEvents: jest.fn().mockResolvedValue(undefined),
+  cancelAllAlarms: jest.fn().mockResolvedValue(undefined),
   SNOOZE_DURATION_SECONDS: 540,
+}));
+
+// alarm-sync をモック化: syncAlarms の内部実装ではなくオーケストレーション層をテストする
+jest.mock('../services/alarm-sync', () => ({
+  syncAlarms: jest.fn().mockResolvedValue(undefined),
 }));
 
 const {
@@ -30,7 +36,6 @@ const {
   startLiveActivity,
   cancelAlarmsByIds,
   endLiveActivity,
-  scheduleWakeTargetAlarm,
   getDismissEvents,
   clearDismissEvents,
 } = jest.requireMock('../services/alarm-kit') as {
@@ -38,10 +43,13 @@ const {
   startLiveActivity: jest.Mock;
   cancelAlarmsByIds: jest.Mock;
   endLiveActivity: jest.Mock;
-  scheduleWakeTargetAlarm: jest.Mock;
   updateLiveActivity: jest.Mock;
   getDismissEvents: jest.Mock;
   clearDismissEvents: jest.Mock;
+};
+
+const { syncAlarms } = jest.requireMock('../services/alarm-sync') as {
+  syncAlarms: jest.Mock;
 };
 
 import {
@@ -274,8 +282,8 @@ describe('completeMorningSession', () => {
     // セッションがクリアされていること
     expect(useMorningSessionStore.getState().session).toBeNull();
 
-    // 通常アラームが再スケジュールされていること（alarmIds は scheduleWakeTargetAlarm 内で全削除→再追加するため不要）
-    expect(scheduleWakeTargetAlarm).toHaveBeenCalledWith(target);
+    // セッション完了後に syncAlarms が呼ばれてアラームが再スケジュールされること
+    expect(syncAlarms).toHaveBeenCalled();
   });
 
   test('skips endLiveActivity when liveActivityId is null', async () => {

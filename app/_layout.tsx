@@ -5,13 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
 import { colors } from '../src/constants/theme';
-import {
-  cancelAlarmsByIds,
-  cancelAllAlarms,
-  checkLaunchPayload,
-  initializeAlarmKit,
-  scheduleWakeTargetAlarm,
-} from '../src/services/alarm-kit';
+import { checkLaunchPayload, initializeAlarmKit } from '../src/services/alarm-kit';
+import { syncAlarms } from '../src/services/alarm-sync';
 import { registerBackgroundSync } from '../src/services/background-sync';
 import { handleAlarmEvent } from '../src/services/session-lifecycle';
 import { syncWidget } from '../src/services/widget-sync';
@@ -25,12 +20,9 @@ export default function RootLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();
-  const target = useWakeTargetStore((s) => s.target);
-  const setAlarmIds = useWakeTargetStore((s) => s.setAlarmIds);
   const loadTarget = useWakeTargetStore((s) => s.loadTarget);
   const loadRecords = useWakeRecordStore((s) => s.loadRecords);
   const loadSession = useMorningSessionStore((s) => s.loadSession);
-  const sessionStoreLoaded = useMorningSessionStore((s) => s.loaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const setAlarmKitGranted = useSettingsStore((s) => s.setAlarmKitGranted);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
@@ -82,12 +74,16 @@ export default function RootLayout() {
       return coreLoaded;
     })();
 
-    waitFor.then(() => {
-      handleAlarmEvent('cold-start', {
+    waitFor.then(async () => {
+      await handleAlarmEvent('cold-start', {
         routerPush: (path) => router.push(path),
         dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
         clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
       });
+      // アラーム状態を現在の target に同期する。
+      // handleAlarmEvent でセッションが開始された場合は no-op（スヌーズ管理中）。
+      // セッション未開始の場合はアラームを target に合わせて再スケジュールする。
+      await syncAlarms();
     });
 
     AsyncStorage.getItem('onboarding-completed').then((val) => {
@@ -120,39 +116,6 @@ export default function RootLayout() {
     });
     return () => subscription.remove();
   }, [router]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reacting to target and sessionStoreLoaded changes only
-  useEffect(() => {
-    if (target === null) return;
-    if (!sessionStoreLoaded) return;
-    if (useMorningSessionStore.getState().isActive()) return;
-
-    // target が短期間に複数回変更された場合、前回の非同期スケジュールが完了する前に
-    // 次のスケジュールが開始される。cancelled フラグで前回の結果を無効化し、
-    // 孤立アラーム（追跡されないアラーム）の蓄積を防ぐ。
-    let cancelled = false;
-    if (target.enabled) {
-      // scheduleWakeTargetAlarm は内部で cancelAllAlarms() を呼ぶので alarmIds は不要
-      scheduleWakeTargetAlarm(target).then((newIds) => {
-        if (cancelled) {
-          // 新しい effect が既に走っている — この結果は破棄してアラームもキャンセル
-          void cancelAlarmsByIds(newIds);
-          return;
-        }
-        setAlarmIds(newIds);
-      });
-    } else {
-      cancelAllAlarms().then(() => {
-        if (!cancelled) {
-          setAlarmIds([]);
-        }
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [target, sessionStoreLoaded]);
 
   return (
     <Stack
