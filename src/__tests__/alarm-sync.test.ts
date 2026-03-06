@@ -115,7 +115,8 @@ describe('syncAlarms', () => {
     useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
 
     // 1回目の呼び出しを遅延させる
-    let resolveFirst: (ids: string[]) => void;
+    // eslint-disable-next-line -- mockImplementationOnce 内で必ず代入される
+    let resolveFirst: (ids: string[]) => void = () => {};
     scheduleWakeTargetAlarm.mockImplementationOnce(
       () =>
         new Promise<string[]>((resolve) => {
@@ -129,7 +130,7 @@ describe('syncAlarms', () => {
     const second = syncAlarms();
 
     // 1回目を遅延解決
-    resolveFirst?.(['alarm-stale-1']);
+    resolveFirst(['alarm-stale-1']);
     await first;
     await second;
 
