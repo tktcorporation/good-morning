@@ -95,16 +95,20 @@ function groupDaysByTime(
 /**
  * WakeTarget の設定に基づいてアラームをスケジュールする。
  *
+ * 設計: AlarmKit に登録されている全アラームを cancelAllAlarms() でクリアしてから
+ * 新規スケジュールする。cancelAlarmsByIds(previousIds) を使っていた旧設計では、
+ * alarmIds が消失（再インストール・AsyncStorage クリア等）した場合に孤立アラームが
+ * 蓄積し、同一時刻に複数のアラームが即座に連続発火する問題があった。
+ *
+ * 前提: セッション非アクティブ時のみ呼ばれる（_layout.tsx の isActive() ガード）。
+ * スヌーズアラームがアクティブな間は呼ばれないため、全削除しても安全。
+ *
  * @param target アラーム設定
- * @param previousIds 前回スケジュールした wake-target アラーム ID。これらのみキャンセルする。
- *                    空配列の場合はキャンセルせずに新規スケジュールのみ行う。
  */
-export async function scheduleWakeTargetAlarm(
-  target: WakeTarget,
-  previousIds: readonly string[] = [],
-): Promise<readonly string[]> {
-  // Cancel only previous wake-target alarms (not snooze alarms)
-  await cancelAlarmsByIds(previousIds);
+export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<readonly string[]> {
+  // AlarmKit に登録されている全アラームを削除してから再スケジュール。
+  // ID ベースのキャンセルと異なり、孤立アラームを確実に除去できる。
+  await cancelAllAlarms();
 
   const kit = getAlarmKit();
   if (kit === null || !target.enabled) return [];
@@ -124,9 +128,10 @@ export async function scheduleWakeTargetAlarm(
       title: alarmTitle,
       soundName: target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined,
       launchAppOnDismiss: true,
-      // ネイティブ Snooze ボタンを有効化。先行スケジュール済みスヌーズに加え、
-      // ユーザーが即座にスヌーズしたい場合のフォールバックとして機能する。
-      doSnoozeIntent: true,
+      // doSnoozeIntent は設定しない。
+      // JS 側で scheduleSnoozeAlarms() により 9 分間隔のスヌーズを先行スケジュール済み。
+      // ネイティブスヌーズを有効にすると、ユーザーが誤って「スヌーズ」ボタンを押した場合に
+      // JS 管理外のアラームが発火し、dismiss しても止まらない連続鳴動が発生していた。
     });
     if (success) ids.push(id);
   }
