@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
+import { syncAlarms } from '../services/alarm-sync';
 import { syncWidget } from '../services/widget-sync';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
@@ -109,6 +110,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     await persist(target);
     // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    // アラームスケジュールを同期（fire-and-forget — UI をブロックしない）
+    syncAlarms().catch(() => {});
   },
 
   updateDefaultTime: async (time: AlarmTime) => {
@@ -117,8 +120,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, defaultTime: time };
     set({ target: updated });
     await persist(updated);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   setNextOverride: async (time: AlarmTime) => {
@@ -128,8 +131,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, nextOverride: { time, targetDate } };
     set({ target: updated });
     await persist(updated);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   clearNextOverride: async () => {
@@ -138,8 +141,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, nextOverride: null };
     set({ target: updated });
     await persist(updated);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   clearExpiredOverride: async () => {
@@ -150,6 +153,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     set({ target: updated });
     await persist(updated);
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   setDayOverride: async (day: DayOfWeek, override: DayOverride) => {
@@ -161,8 +165,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     };
     set({ target: updated });
     await persist(updated);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   removeDayOverride: async (day: DayOfWeek) => {
@@ -172,8 +176,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, dayOverrides: rest };
     set({ target: updated });
     await persist(updated);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   addTodo: async (title: string) => {
@@ -210,6 +214,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, soundId };
     set({ target: updated });
     await persist(updated);
+    // サウンド変更はアラーム再登録が必要（AlarmKit の soundName パラメータが変わる）
+    syncAlarms().catch(() => {});
   },
 
   /**
@@ -244,8 +250,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, enabled: !target.enabled };
     set({ target: updated });
     await persist(updated);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
     syncWidget().catch(() => {});
+    syncAlarms().catch(() => {});
   },
 
   setAlarmIds: async (ids: readonly string[]) => {

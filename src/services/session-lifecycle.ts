@@ -27,10 +27,10 @@ import {
   type NativeDismissEvent,
   SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
-  scheduleWakeTargetAlarm,
   startLiveActivity,
   updateLiveActivity,
 } from './alarm-kit';
+import { syncAlarms } from './alarm-sync';
 
 /**
  * startMorningSession に渡すパラメータ。
@@ -206,12 +206,9 @@ export async function completeMorningSession(session: MorningSession): Promise<v
   // 4. セッションクリア
   await useMorningSessionStore.getState().clearSession();
 
-  // 5. 通常アラーム再スケジュール（scheduleWakeTargetAlarm は内部で全削除→再追加するので alarmIds 不要）
-  const { target, setAlarmIds } = useWakeTargetStore.getState();
-  if (target?.enabled) {
-    const newIds = await scheduleWakeTargetAlarm(target);
-    await setAlarmIds(newIds);
-  }
+  // 5. 通常アラーム再スケジュール。
+  // syncAlarms は session が null（step 4 でクリア済み）を見て target に基づき再登録する。
+  await syncAlarms();
 }
 
 /**
