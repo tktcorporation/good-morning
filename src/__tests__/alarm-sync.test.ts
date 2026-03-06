@@ -129,7 +129,7 @@ describe('syncAlarms', () => {
     const second = syncAlarms();
 
     // 1回目を遅延解決
-    resolveFirst!(['alarm-stale-1']);
+    resolveFirst?.(['alarm-stale-1']);
     await first;
     await second;
 
