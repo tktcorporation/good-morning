@@ -13,13 +13,14 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "doctor": "expo doctor"
+    "doctor": "expo doctor",
+    "version-packages": "changeset version"
   },
   "dependencies": {
     "@kingstinct/react-native-healthkit": "^13.2.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.10.1",
-    "expo": "55.0.4",
+    "expo": "55.0.5",
     "expo-alarm-kit": "^0.1.6",
     "expo-asset": "~55.0.8",
     "expo-audio": "^55.0.8",
@@ -48,6 +49,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.4",
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
     "@types/jest": "29.5.14",
     "@types/react": "19.2.14",
     "babel-preset-expo": "55.0.9",

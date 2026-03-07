@@ -115,7 +115,7 @@ describe('syncAlarms', () => {
     useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
 
     // 1回目の呼び出しを遅延させる
-    let resolveFirst: (ids: string[]) => void;
+    let resolveFirst!: (ids: string[]) => void;
     scheduleWakeTargetAlarm.mockImplementationOnce(
       () =>
         new Promise<string[]>((resolve) => {
