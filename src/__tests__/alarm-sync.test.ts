@@ -9,14 +9,14 @@ import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 
-jest.mock('../services/alarm-kit', () => ({
+jest.mock('../services/alarm-scheduler', () => ({
   cancelAllAlarms: jest.fn().mockResolvedValue(undefined),
   cancelAlarmsByIds: jest.fn().mockResolvedValue(undefined),
   scheduleWakeTargetAlarm: jest.fn().mockResolvedValue(['alarm-1', 'alarm-2']),
 }));
 
 const { cancelAllAlarms, cancelAlarmsByIds, scheduleWakeTargetAlarm } = jest.requireMock(
-  '../services/alarm-kit',
+  '../services/alarm-scheduler',
 ) as {
   cancelAllAlarms: jest.Mock;
   cancelAlarmsByIds: jest.Mock;

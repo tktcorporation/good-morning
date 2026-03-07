@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { cancelAllAlarms } from '../src/services/alarm-kit';
+import { cancelAllAlarms } from '../src/services/alarm-scheduler';
 import { startMorningSession } from '../src/services/session-lifecycle';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useSettingsStore } from '../src/stores/settings-store';

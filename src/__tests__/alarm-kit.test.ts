@@ -2,18 +2,20 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import {
   APP_GROUP_ID,
-  cancelAlarmsByIds,
-  cancelAllAlarms,
   checkLaunchPayload,
   endLiveActivity,
   initializeAlarmKit,
+  startLiveActivity,
+  updateLiveActivity,
+} from '../services/alarm-kit';
+import {
+  cancelAlarmsByIds,
+  cancelAllAlarms,
   SNOOZE_DURATION_SECONDS,
   SNOOZE_MAX_COUNT,
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
-  startLiveActivity,
-  updateLiveActivity,
-} from '../services/alarm-kit';
+} from '../services/alarm-scheduler';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 

@@ -12,18 +12,23 @@ import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
 import type { WakeTarget } from '../types/wake-target';
 
+// alarm-scheduler をモック化: ネイティブモジュールに依存せずオーケストレーションロジックをテスト
+jest.mock('../services/alarm-scheduler', () => ({
+  scheduleSnoozeAlarms: jest.fn().mockResolvedValue(['snooze-1', 'snooze-2']),
+  cancelAlarmsByIds: jest.fn().mockResolvedValue(undefined),
+  cancelAllAlarms: jest.fn().mockResolvedValue(undefined),
+  SNOOZE_DURATION_SECONDS: 540,
+}));
+
 // alarm-kit をモック化: ネイティブモジュールに依存せずオーケストレーションロジックをテスト
 jest.mock('../services/alarm-kit', () => ({
-  scheduleSnoozeAlarms: jest.fn().mockResolvedValue(['snooze-1', 'snooze-2']),
   startLiveActivity: jest.fn().mockResolvedValue('activity-1'),
-  cancelAlarmsByIds: jest.fn().mockResolvedValue(undefined),
   endLiveActivity: jest.fn().mockResolvedValue(undefined),
   scheduleWakeTargetAlarm: jest.fn().mockResolvedValue(['alarm-new']),
   updateLiveActivity: jest.fn(),
   getDismissEvents: jest.fn().mockResolvedValue([]),
   clearDismissEvents: jest.fn().mockResolvedValue(undefined),
-  cancelAllAlarms: jest.fn().mockResolvedValue(undefined),
-  SNOOZE_DURATION_SECONDS: 540,
+  checkLaunchPayload: jest.fn().mockReturnValue(null),
 }));
 
 // alarm-sync をモック化: syncAlarms の内部実装ではなくオーケストレーション層をテストする
@@ -31,22 +36,21 @@ jest.mock('../services/alarm-sync', () => ({
   syncAlarms: jest.fn().mockResolvedValue(undefined),
 }));
 
-const {
-  scheduleSnoozeAlarms,
-  startLiveActivity,
-  cancelAlarmsByIds,
-  endLiveActivity,
-  getDismissEvents,
-  clearDismissEvents,
-} = jest.requireMock('../services/alarm-kit') as {
+const { scheduleSnoozeAlarms, cancelAlarmsByIds } = jest.requireMock(
+  '../services/alarm-scheduler',
+) as {
   scheduleSnoozeAlarms: jest.Mock;
-  startLiveActivity: jest.Mock;
   cancelAlarmsByIds: jest.Mock;
-  endLiveActivity: jest.Mock;
-  updateLiveActivity: jest.Mock;
-  getDismissEvents: jest.Mock;
-  clearDismissEvents: jest.Mock;
 };
+
+const { startLiveActivity, endLiveActivity, getDismissEvents, clearDismissEvents } =
+  jest.requireMock('../services/alarm-kit') as {
+    startLiveActivity: jest.Mock;
+    endLiveActivity: jest.Mock;
+    updateLiveActivity: jest.Mock;
+    getDismissEvents: jest.Mock;
+    clearDismissEvents: jest.Mock;
+  };
 
 const { syncAlarms } = jest.requireMock('../services/alarm-sync') as {
   syncAlarms: jest.Mock;

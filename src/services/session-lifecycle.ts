@@ -19,17 +19,19 @@ import type { WakeTarget } from '../types/wake-target';
 import { resolveTimeForDate } from '../types/wake-target';
 import { getLogicalDateString } from '../utils/date';
 import {
-  cancelAlarmsByIds,
   checkLaunchPayload,
   clearDismissEvents,
   endLiveActivity,
   getDismissEvents,
   type NativeDismissEvent,
-  SNOOZE_DURATION_SECONDS,
-  scheduleSnoozeAlarms,
   startLiveActivity,
   updateLiveActivity,
 } from './alarm-kit';
+import {
+  cancelAlarmsByIds,
+  SNOOZE_DURATION_SECONDS,
+  scheduleSnoozeAlarms,
+} from './alarm-scheduler';
 import { syncAlarms } from './alarm-sync';
 
 /**
