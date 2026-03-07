@@ -134,3 +134,45 @@ export async function clearDismissEvents(): Promise<void> {
     logError('[AlarmKit] clearDismissEvents failed:', e);
   }
 }
+
+/**
+ * ネイティブ AlarmDismissIntent が App Groups に保存したスヌーズアラーム ID を取得する。
+ *
+ * 背景: アラーム dismiss 時にアプリが起動しない場合でも、ネイティブ側で
+ * スヌーズアラームを先行スケジュールする。次回アプリ起動時にこの関数で
+ * スケジュール済みの ID を読み取り、JS 側の session state に反映する。
+ *
+ * ライフサイクル: ネイティブ dismiss 時に作成 → JS startMorningSession() で読み取り → clearSnoozeAlarmIds() で削除
+ * 呼び出し元: startMorningSession() (session-lifecycle.ts)
+ */
+export function getSnoozeAlarmIds(): readonly string[] {
+  const kit = getAlarmKit();
+  if (kit === null) return [];
+  const fn = (kit as Record<string, unknown>).getSnoozeAlarmIds;
+  if (typeof fn !== 'function') return [];
+  try {
+    return (fn as () => string[])();
+  } catch (e) {
+    logError('[AlarmKit] getSnoozeAlarmIds failed:', e);
+    return [];
+  }
+}
+
+/**
+ * ネイティブ側が保存したスヌーズアラーム ID を App Groups から削除する。
+ * startMorningSession() で ID を読み取った後に呼ばれる。
+ * 二重読み取りを防ぐため、読み取り後に必ずクリアする。
+ *
+ * 呼び出し元: startMorningSession() (session-lifecycle.ts)
+ */
+export function clearSnoozeAlarmIds(): void {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  const fn = (kit as Record<string, unknown>).clearSnoozeAlarmIds;
+  if (typeof fn !== 'function') return;
+  try {
+    (fn as () => void)();
+  } catch (e) {
+    logError('[AlarmKit] clearSnoozeAlarmIds failed:', e);
+  }
+}

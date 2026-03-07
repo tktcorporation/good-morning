@@ -21,7 +21,9 @@ import { getLogicalDateString } from '../utils/date';
 import {
   checkLaunchPayload,
   clearDismissEvents,
+  clearSnoozeAlarmIds,
   getDismissEvents,
+  getSnoozeAlarmIds,
   type NativeDismissEvent,
 } from './alarm-kit';
 import {
@@ -127,9 +129,19 @@ export async function startMorningSession(params: StartSessionParams): Promise<v
     .getState()
     .startSession(record.id, dateStr, sessionTodos, goalDeadline);
 
-  // 3. スヌーズスケジュール（失敗してもセッション続行）
+  // 3. スヌーズ ID をネイティブから読み取る（ネイティブ dismiss 時に既にスケジュール済み）
+  // フォールバック: ネイティブがスケジュールしていなかった場合は JS 側でスケジュール
   try {
-    const snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+    const nativeSnoozeIds = getSnoozeAlarmIds();
+    let snoozeIds: readonly string[];
+    if (nativeSnoozeIds.length > 0) {
+      // ネイティブ dismiss 時にスケジュール済み — ID を読み取ってクリア
+      snoozeIds = nativeSnoozeIds;
+      clearSnoozeAlarmIds();
+    } else {
+      // ネイティブスケジュールなし（古い OS、Intent 内での失敗等）— JS フォールバック
+      snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+    }
     const snoozeFiresAt = new Date(
       dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
     ).toISOString();

@@ -25,6 +25,8 @@ jest.mock('../services/alarm-kit', () => ({
   getDismissEvents: jest.fn().mockResolvedValue([]),
   clearDismissEvents: jest.fn().mockResolvedValue(undefined),
   checkLaunchPayload: jest.fn().mockReturnValue(null),
+  getSnoozeAlarmIds: jest.fn().mockReturnValue([]),
+  clearSnoozeAlarmIds: jest.fn(),
 }));
 
 // live-activity をモック化: ネイティブモジュールに依存せず LA 操作をテスト
@@ -46,10 +48,13 @@ const { scheduleSnoozeAlarms, cancelAlarmsByIds } = jest.requireMock(
   cancelAlarmsByIds: jest.Mock;
 };
 
-const { getDismissEvents, clearDismissEvents } = jest.requireMock('../services/alarm-kit') as {
-  getDismissEvents: jest.Mock;
-  clearDismissEvents: jest.Mock;
-};
+const { getDismissEvents, clearDismissEvents, getSnoozeAlarmIds, clearSnoozeAlarmIds } =
+  jest.requireMock('../services/alarm-kit') as {
+    getDismissEvents: jest.Mock;
+    clearDismissEvents: jest.Mock;
+    getSnoozeAlarmIds: jest.Mock;
+    clearSnoozeAlarmIds: jest.Mock;
+  };
 
 const { startLiveActivity, endLiveActivity } = jest.requireMock('../services/live-activity') as {
   startLiveActivity: jest.Mock;
@@ -205,6 +210,43 @@ describe('startMorningSession', () => {
     expect(useWakeTargetStore.getState().alarmIds).toEqual([]);
     // その後スヌーズがスケジュールされること
     expect(scheduleSnoozeAlarms).toHaveBeenCalled();
+  });
+
+  test('uses native snooze IDs when available (skips JS scheduling)', async () => {
+    getSnoozeAlarmIds.mockReturnValueOnce([
+      'native-snooze-1',
+      'native-snooze-2',
+      'native-snooze-3',
+    ]);
+    const params = createStartParams();
+
+    await startMorningSession(params);
+
+    // ネイティブ ID が使われるため JS スケジュールは呼ばれない
+    expect(scheduleSnoozeAlarms).not.toHaveBeenCalled();
+    // ネイティブ ID が読み取り後にクリアされること
+    expect(clearSnoozeAlarmIds).toHaveBeenCalled();
+
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.snoozeAlarmIds).toEqual([
+      'native-snooze-1',
+      'native-snooze-2',
+      'native-snooze-3',
+    ]);
+    expect(session?.snoozeFiresAt).not.toBeNull();
+  });
+
+  test('falls back to JS snooze scheduling when native IDs empty', async () => {
+    // getSnoozeAlarmIds のデフォルトは [] — JS フォールバックが使われる
+    const params = createStartParams();
+
+    await startMorningSession(params);
+
+    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime);
+    expect(clearSnoozeAlarmIds).not.toHaveBeenCalled();
+
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
   });
 
   test('session survives snooze scheduling failure', async () => {
