@@ -1,5 +1,5 @@
 diff --git a/ios/ExpoAlarmKitModule.swift b/ios/ExpoAlarmKitModule.swift
-index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b28f23756 100644
+index 0000000..0000001 100644
 --- a/ios/ExpoAlarmKitModule.swift
 +++ b/ios/ExpoAlarmKitModule.swift
 @@ -3,6 +3,7 @@
@@ -10,7 +10,7 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b
  
  // MARK: - Storage Keys
  private let alarmKeyPrefix = "ExpoAlarmKit.alarm:"
-@@ -61,6 +62,32 @@
+@@ -61,6 +62,109 @@
      public static func removeLaunchAppOnDismiss(alarmId: String) {
          sharedDefaults?.removeObject(forKey: launchAppKeyPrefix + alarmId)
      }
@@ -40,15 +40,136 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b
 +    public static func clearDismissEvents() {
 +        sharedDefaults?.removeObject(forKey: dismissEventsKey)
 +    }
++
++    // MARK: - Snooze Scheduling
++    private static let snoozeIdsKey = "ExpoAlarmKit.snoozeAlarmIds"
++    /// 9分間隔。iOS 標準スヌーズと同じ。
++    private static let snoozeIntervalSeconds: TimeInterval = 540
++    /// 先行スケジュール本数。9分 x 20 = 3時間分。
++    private static let snoozeCount: Int = 20
++
++    /// dismiss 時にスヌーズアラームをスケジュールし、ID を App Groups に永続化する。
++    /// AlarmDismissIntent.perform() から呼ばれる（アプリ未起動でも実行される）。
++    public static func scheduleSnoozeAlarms(dismissedAt: Date) async {
++        struct Meta: AlarmMetadata {}
++        var ids: [String] = []
++
++        for i in 1...snoozeCount {
++            let uuid = UUID()
++            let fireDate = dismissedAt.addingTimeInterval(snoozeIntervalSeconds * Double(i))
++            let epochSeconds = fireDate.timeIntervalSince1970
++
++            let stopButton = AlarmButton(
++                text: LocalizedStringResource(stringLiteral: "Stop"),
++                textColor: .white,
++                systemImageName: "stop.circle"
++            )
++            let snoozeButton = AlarmButton(
++                text: LocalizedStringResource(stringLiteral: "Snooze"),
++                textColor: .white,
++                systemImageName: "clock.badge.checkmark"
++            )
++            let alertPresentation = AlarmPresentation.Alert(
++                title: LocalizedStringResource(stringLiteral: "Good Morning"),
++                stopButton: stopButton,
++                secondaryButton: snoozeButton,
++                secondaryButtonBehavior: .countdown
++            )
++            let presentation = AlarmPresentation(alert: alertPresentation)
++            let countdownDuration = Alarm.CountdownDuration(preAlert: nil, postAlert: snoozeIntervalSeconds)
++            let attributes = AlarmAttributes<Meta>(
++                presentation: presentation,
++                metadata: Meta(),
++                tintColor: .blue
++            )
++
++            let stopIntent: any LiveActivityIntent = AlarmDismissIntentWithLaunch(
++                alarmId: uuid.uuidString,
++                payload: "{\"isSnooze\":true}"
++            )
++
++            let config = AlarmManager.AlarmConfiguration<Meta>(
++                countdownDuration: countdownDuration,
++                schedule: .fixed(fireDate),
++                attributes: attributes,
++                stopIntent: stopIntent,
++                secondaryIntent: nil,
++                sound: .default
++            )
++
++            do {
++                try await AlarmManager.shared.schedule(id: uuid, configuration: config)
++                setAlarm(id: uuid.uuidString, value: epochSeconds)
++                setLaunchAppOnDismiss(alarmId: uuid.uuidString, value: true)
++                ids.append(uuid.uuidString)
++            } catch {
++                print("[ExpoAlarmKit] Failed to schedule snooze \(i): \(error)")
++            }
++        }
++
++        sharedDefaults?.set(ids, forKey: snoozeIdsKey)
++    }
++
++    public static func getSnoozeAlarmIds() -> [String] {
++        return sharedDefaults?.stringArray(forKey: snoozeIdsKey) ?? []
++    }
++
++    public static func clearSnoozeAlarmIds() {
++        sharedDefaults?.removeObject(forKey: snoozeIdsKey)
++    }
  }
  
  // MARK: - Record Structs for Expo Module
-@@ -147,13 +174,16 @@
+@@ -126,34 +230,55 @@
+     ]
+ }
+ 
++/// payload JSON に {"isSnooze": true} が含まれているかを判定する。
++/// スヌーズ自身の dismiss でスヌーズを再スケジュールしないために使用。
++private func isSnoozePayload(_ payload: String?) -> Bool {
++    guard let payload = payload, !payload.isEmpty,
++          let data = payload.data(using: .utf8),
++          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
++          let isSnooze = json["isSnooze"] as? Bool else {
++        return false
++    }
++    return isSnooze
++}
++
+ // MARK: - App Intent for Alarm Dismissal (No App Launch)
+ @available(iOS 26.0, *)
+ public struct AlarmDismissIntent: LiveActivityIntent {
+     public static var title: LocalizedStringResource = "Dismiss Alarm"
+     public static var description = IntentDescription("Handles alarm dismissal")
+     public static var openAppWhenRun: Bool = false
+-    
++
+     @Parameter(title: "alarmId")
+     public var alarmId: String
+-    
++
+     @Parameter(title: "payload")
+     public var payload: String?
+-    
++
+     public init() {}
+-    
++
+     public init(alarmId: String, payload: String? = nil) {
+         self.alarmId = alarmId
+         self.payload = payload
      }
-     
+-    
++
      public func perform() async throws -> some IntentResult {
 +        // dismiss イベントを永続化（removeAlarm より前に実行）
 +        ExpoAlarmKitStorage.recordDismissEvent(alarmId: self.alarmId, payload: self.payload)
++
++        // スヌーズ対象のアラーム（= スヌーズ自身ではない）なら、スヌーズを先行スケジュール。
++        // アプリ未起動でもスヌーズが確実に鳴るようにする。
++        if !isSnoozePayload(self.payload) {
++            await ExpoAlarmKitStorage.scheduleSnoozeAlarms(dismissedAt: Date())
++        }
 +
          // Store payload for JS to retrieve
          ExpoAlarmKitModule.launchPayload = buildLaunchPayload(alarmId: self.alarmId, payload: self.payload)
@@ -62,12 +183,38 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b
          return .result()
      }
  }
-@@ -179,13 +209,16 @@
+@@ -164,28 +289,37 @@
+     public static var title: LocalizedStringResource = "Dismiss Alarm"
+     public static var description = IntentDescription("Handles alarm dismissal and opens app")
+     public static var openAppWhenRun: Bool = true
+-    
++
+     @Parameter(title: "alarmId")
+     public var alarmId: String
+-    
++
+     @Parameter(title: "payload")
+     public var payload: String?
+-    
++
+     public init() {}
+-    
++
+     public init(alarmId: String, payload: String? = nil) {
+         self.alarmId = alarmId
+         self.payload = payload
      }
-     
+-    
++
      public func perform() async throws -> some IntentResult {
 +        // dismiss イベントを永続化（removeAlarm より前に実行）
 +        ExpoAlarmKitStorage.recordDismissEvent(alarmId: self.alarmId, payload: self.payload)
++
++        // スヌーズ対象のアラーム（= スヌーズ自身ではない）なら、スヌーズを先行スケジュール。
++        // アプリ未起動でもスヌーズが確実に鳴るようにする。
++        if !isSnoozePayload(self.payload) {
++            await ExpoAlarmKitStorage.scheduleSnoozeAlarms(dismissedAt: Date())
++        }
 +
          // Store payload for JS to retrieve
          ExpoAlarmKitModule.launchPayload = buildLaunchPayload(alarmId: self.alarmId, payload: self.payload)
@@ -81,7 +228,7 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b
          return .result()
      }
  }
-@@ -576,5 +609,38 @@
+@@ -576,5 +710,48 @@
              ExpoAlarmKitModule.launchPayload = nil
              return payload
          }
@@ -97,6 +244,16 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..a05cc0567cb4f6032beae6965104ae6b
 +        // 処理済み dismiss イベントをクリアする。
 +        Function("clearDismissEvents") { () in
 +            ExpoAlarmKitStorage.clearDismissEvents()
++        }
++
++        // MARK: - Get Snooze Alarm IDs
++        Function("getSnoozeAlarmIds") { () -> [String] in
++            return ExpoAlarmKitStorage.getSnoozeAlarmIds()
++        }
++
++        // MARK: - Clear Snooze Alarm IDs
++        Function("clearSnoozeAlarmIds") { () in
++            ExpoAlarmKitStorage.clearSnoozeAlarmIds()
 +        }
 +
 +        // MARK: - Sync Widget Data

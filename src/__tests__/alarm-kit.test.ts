@@ -1,19 +1,15 @@
 // src/__tests__/alarm-kit.test.ts
 import * as AlarmKit from 'expo-alarm-kit';
+import { APP_GROUP_ID, checkLaunchPayload, initializeAlarmKit } from '../services/alarm-kit';
 import {
-  APP_GROUP_ID,
   cancelAlarmsByIds,
   cancelAllAlarms,
-  checkLaunchPayload,
-  endLiveActivity,
-  initializeAlarmKit,
   SNOOZE_DURATION_SECONDS,
   SNOOZE_MAX_COUNT,
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
-  startLiveActivity,
-  updateLiveActivity,
-} from '../services/alarm-kit';
+} from '../services/alarm-scheduler';
+import { endLiveActivity, startLiveActivity, updateLiveActivity } from '../services/live-activity';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 

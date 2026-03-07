@@ -6,6 +6,9 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
+    "ios:release": "expo run:ios --configuration Release --device",
+    "ios:local": "eas build --platform ios --profile preview --local --non-interactive",
+    "ios:install": "xcrun devicectl device install app --device DB40A4CE-4A0A-550C-B53C-747D13F5D320",
     "android": "expo run:android",
     "web": "expo start --web",
     "lint": "biome check .",

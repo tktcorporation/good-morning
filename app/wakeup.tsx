@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { cancelAllAlarms } from '../src/services/alarm-kit';
 import { startMorningSession } from '../src/services/session-lifecycle';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -25,8 +24,6 @@ export default function WakeUpScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const clearNextOverride = useWakeTargetStore((s) => s.clearNextOverride);
-  const alarmIds = useWakeTargetStore((s) => s.alarmIds);
-  const setAlarmIds = useWakeTargetStore((s) => s.setAlarmIds);
 
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
@@ -79,14 +76,6 @@ export default function WakeUpScreen() {
       return;
     }
 
-    // スヌーズスケジュール前に既存アラームをキャンセルする（await）。
-    // fire-and-forget だと startMorningSession() 内の scheduleSnoozeAlarms() が
-    // 追加したスヌーズアラームを cancelAllAlarms() が後から削除する競合が発生していた。
-    if (alarmIds.length > 0) {
-      await cancelAllAlarms();
-      await setAlarmIds([]);
-    }
-
     if (target !== null && resolvedTime !== null) {
       // セッション作成を await して、clearNextOverride → target 変更 →
       // _layout のアラーム再スケジュール effect が isActive() で正しく
@@ -111,18 +100,7 @@ export default function WakeUpScreen() {
     // → アラーム再スケジュール effect を発火させても、スヌーズアラームが巻き添えでキャンセルされない。
     void clearNextOverride();
     router.replace('/');
-  }, [
-    dismissing,
-    target,
-    resolvedTime,
-    isDemo,
-    dayBoundaryHour,
-    alarmIds,
-    setAlarmIds,
-    clearNextOverride,
-    router,
-    t,
-  ]);
+  }, [dismissing, target, resolvedTime, isDemo, dayBoundaryHour, clearNextOverride, router, t]);
 
   if (target === null) {
     return (

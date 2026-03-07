@@ -19,7 +19,7 @@
 
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
-import { cancelAlarmsByIds, cancelAllAlarms, scheduleWakeTargetAlarm } from './alarm-kit';
+import { cancelAlarmsByIds, cancelAllAlarms, scheduleWakeTargetAlarm } from './alarm-scheduler';
 
 /**
  * 世代カウンター。syncAlarms が非同期処理中に再度呼ばれた場合、

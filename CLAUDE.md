@@ -13,11 +13,41 @@
 
 ## Commands
 - `pnpm start` - Expo dev server 起動
+- `pnpm ios` - Debug ビルド（dev server 接続必須）
+- `pnpm ios:release` - Release ビルドを実機にインストール（dev server 不要、スタンドアロン動作）
 - `pnpm test` - テスト実行
 - `pnpm lint` - Biome lint チェック
 - `pnpm lint:fix` - lint 自動修正
 - `pnpm format` - コードフォーマット
 - `pnpm typecheck` - TypeScript 型チェック
+
+## iOS ビルド方法
+
+### dev server 不要のスタンドアロンビルド（実機向け）
+
+```bash
+# 1. IPA をビルド（初回は数分かかる）
+pnpm ios:local
+
+# 2. 生成された IPA をデバイスにインストール
+pnpm ios:install ./build-*.ipa
+```
+
+- `expo-dev-client` を含まない Ad Hoc 配布ビルドを生成するため、dev server なしで起動できる
+- `eas build --local --non-interactive` をローカルで実行（EAS クラウド不使用）
+- eas-cli は mise で管理（`npm:eas-cli = "latest"` in `.mise.toml`）
+- インストールには CoreDevice ID `DB40A4CE-4A0A-550C-B53C-747D13F5D320`（`xcrun devicectl list devices` で確認）
+- IPA は `./build-*.ipa` として生成される
+
+> **注意**: `pnpm ios:release`（`expo run:ios --configuration Release`）は expo-dev-client が含まれるため、
+> dev server なしで起動すると "No development servers found" 画面が出る。スタンドアロン動作には `ios:local` を使うこと。
+
+### 開発中の通常フロー（hot reload あり）
+
+```bash
+pnpm start   # Metro dev server 起動
+pnpm ios     # Debug ビルドで実機/シミュレータに接続
+```
 
 ## Project Structure
 - `app/` - Expo Router スクリーン (file-based routing)

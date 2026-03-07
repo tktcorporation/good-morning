@@ -19,18 +19,20 @@ import type { WakeTarget } from '../types/wake-target';
 import { resolveTimeForDate } from '../types/wake-target';
 import { getLogicalDateString } from '../utils/date';
 import {
-  cancelAlarmsByIds,
   checkLaunchPayload,
   clearDismissEvents,
-  endLiveActivity,
+  clearSnoozeAlarmIds,
   getDismissEvents,
+  getSnoozeAlarmIds,
   type NativeDismissEvent,
+} from './alarm-kit';
+import {
+  cancelAlarmsByIds,
   SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
-  startLiveActivity,
-  updateLiveActivity,
-} from './alarm-kit';
+} from './alarm-scheduler';
 import { syncAlarms } from './alarm-sync';
+import { endLiveActivity, startLiveActivity, updateLiveActivity } from './live-activity';
 
 /**
  * startMorningSession に渡すパラメータ。
@@ -62,6 +64,15 @@ export interface StartSessionParams {
  */
 export async function startMorningSession(params: StartSessionParams): Promise<void> {
   const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
+
+  // セッション開始前に既存の wake-target アラームをキャンセルする。
+  // スヌーズアラームスケジュール後に cancelAllAlarms が走る競合を防ぐ。
+  const targetState = useWakeTargetStore.getState();
+  if (targetState.alarmIds.length > 0) {
+    await cancelAlarmsByIds(targetState.alarmIds);
+    await targetState.setAlarmIds([]);
+  }
+
   const hasTodos = target.todos.length > 0;
   const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
   const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
@@ -118,9 +129,19 @@ export async function startMorningSession(params: StartSessionParams): Promise<v
     .getState()
     .startSession(record.id, dateStr, sessionTodos, goalDeadline);
 
-  // 3. スヌーズスケジュール（失敗してもセッション続行）
+  // 3. スヌーズ ID をネイティブから読み取る（ネイティブ dismiss 時に既にスケジュール済み）
+  // フォールバック: ネイティブがスケジュールしていなかった場合は JS 側でスケジュール
   try {
-    const snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+    const nativeSnoozeIds = getSnoozeAlarmIds();
+    let snoozeIds: readonly string[];
+    if (nativeSnoozeIds.length > 0) {
+      // ネイティブ dismiss 時にスケジュール済み — ID を読み取ってクリア
+      snoozeIds = nativeSnoozeIds;
+      clearSnoozeAlarmIds();
+    } else {
+      // ネイティブスケジュールなし（古い OS、Intent 内での失敗等）— JS フォールバック
+      snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+    }
     const snoozeFiresAt = new Date(
       dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
     ).toISOString();
