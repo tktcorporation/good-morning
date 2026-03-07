@@ -21,11 +21,8 @@ import { getLogicalDateString } from '../utils/date';
 import {
   checkLaunchPayload,
   clearDismissEvents,
-  endLiveActivity,
   getDismissEvents,
   type NativeDismissEvent,
-  startLiveActivity,
-  updateLiveActivity,
 } from './alarm-kit';
 import {
   cancelAlarmsByIds,
@@ -33,6 +30,7 @@ import {
   scheduleSnoozeAlarms,
 } from './alarm-scheduler';
 import { syncAlarms } from './alarm-sync';
+import { endLiveActivity, startLiveActivity, updateLiveActivity } from './live-activity';
 
 /**
  * startMorningSession に渡すパラメータ。

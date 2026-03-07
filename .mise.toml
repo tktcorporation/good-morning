@@ -10,6 +10,7 @@ jj = "latest"
 "npm:@google/gemini-cli" = "latest"
 
 "npm:@antfu/ni" = "latest"
+"npm:eas-cli" = "latest"
 
 # Browser automation
 "npm:playwright" = "latest"

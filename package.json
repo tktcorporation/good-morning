@@ -7,6 +7,7 @@
     "start": "expo start",
     "ios": "expo run:ios",
     "ios:release": "expo run:ios --configuration Release --device",
+    "ios:local": "eas build --platform ios --profile preview --local",
     "android": "expo run:android",
     "web": "expo start --web",
     "lint": "biome check .",
