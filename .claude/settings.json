@@ -1,28 +1,4 @@
 {
-  "remoteControlAtStartup": true,
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/ensure-jj.sh"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/prefer-jj.sh"
-          }
-        ]
-      }
-    ]
-  },
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
@@ -38,11 +14,30 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "chrome-devtools",
-    "ide",
-    "context7"
-  ],
+  "enabledMcpjsonServers": ["chrome-devtools"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/ensure-jj.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prefer-jj.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
     "example-skills@anthropic-agent-skills": true,
@@ -59,18 +54,17 @@
     "context7@claude-plugins-official": true,
     "hookify@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
-    "serena@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
-    "circleback@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "claude-code-setup@claude-plugins-official": true,
     "playground@claude-plugins-official": true,
-    "sonatype-guide@claude-plugins-official": true
+    "skill-creator@claude-plugins-official": true,
+    "qodo-skills@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {

@@ -17,8 +17,9 @@ import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
-import type { DayOfWeek } from '../../src/types/alarm';
+import type { AlarmTime, DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
+import type { WakeTarget } from '../../src/types/wake-target';
 import { resolveTimeForDate } from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 
@@ -52,6 +53,106 @@ function WeeklyStatsCard({
   );
 }
 
+/**
+ * 週間カレンダー。各日のグレードアイコンを表示し、タップで日次レビューに遷移。
+ * DashboardScreen の認知複雑度を下げるため分離。
+ */
+function WeeklyCalendar({
+  recentDates,
+  dayBoundaryHour,
+  onDayPress,
+}: {
+  readonly recentDates: readonly Date[];
+  readonly dayBoundaryHour: number;
+  readonly onDayPress: (date: Date) => void;
+}) {
+  const { t } = useTranslation('dashboard');
+  const { t: tCommon } = useTranslation('common');
+  const getGradeForDate = useDailyGradeStore((s) => s.getGradeForDate);
+
+  return (
+    <View style={commonStyles.section}>
+      <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
+      <View style={styles.weekRow}>
+        {recentDates.map((date) => {
+          const dateStr = getLogicalDateString(date, dayBoundaryHour);
+          const gradeRecord = getGradeForDate(dateStr);
+          const isToday = dateStr === getLogicalDateString(new Date(), dayBoundaryHour);
+          // 表示用の日付番号・曜日は論理日付から取得する。
+          // dayBoundaryHour 前にアプリを開いた場合、カレンダー日付と論理日付がずれるため、
+          // date.getDate() / date.getDay() をそのまま使うと表示と実データが不一致になる。
+          const logicalDate = new Date(`${dateStr}T12:00:00`);
+
+          return (
+            <Pressable key={dateStr} style={styles.dayColumn} onPress={() => onDayPress(date)}>
+              <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
+                {getDayLabel(logicalDate.getDay() as DayOfWeek, tCommon as (key: string) => string)}
+              </Text>
+              <GradeIcon grade={gradeRecord?.grade ?? null} size={16} />
+              <Text style={styles.dayNumber}>{`${logicalDate.getDate()}`}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * 起床目標バッファ設定セクション。DashboardScreen の認知複雑度を下げるため分離。
+ * アラーム時刻 + バッファ分のデッドライン時刻を計算して表示する。
+ */
+function GoalBufferSection({
+  target,
+  resolvedTime,
+}: {
+  readonly target: WakeTarget;
+  readonly resolvedTime: AlarmTime | null;
+}) {
+  const { t } = useTranslation('dashboard');
+  const setWakeUpGoalBufferMinutes = useWakeTargetStore((s) => s.setWakeUpGoalBufferMinutes);
+  return (
+    <View style={commonStyles.section}>
+      <Text style={commonStyles.sectionTitle}>{t('goalBuffer.title')}</Text>
+      <View style={styles.bufferRow}>
+        <Pressable
+          style={styles.bufferButton}
+          onPress={() =>
+            setWakeUpGoalBufferMinutes(Math.max(10, target.wakeUpGoalBufferMinutes - 5))
+          }
+        >
+          <Text style={styles.bufferButtonText}>{'-'}</Text>
+        </Pressable>
+        <Text style={styles.bufferValue}>
+          {t('goalBuffer.value', { minutes: target.wakeUpGoalBufferMinutes })}
+        </Text>
+        <Pressable
+          style={styles.bufferButton}
+          onPress={() =>
+            setWakeUpGoalBufferMinutes(Math.min(120, target.wakeUpGoalBufferMinutes + 5))
+          }
+        >
+          <Text style={styles.bufferButtonText}>{'+'}</Text>
+        </Pressable>
+      </View>
+      {resolvedTime !== null && (
+        <Text style={styles.bufferDescription}>
+          {t('goalBuffer.description', {
+            goalTime: formatTime({
+              hour:
+                Math.floor(
+                  (resolvedTime.hour * 60 + resolvedTime.minute + target.wakeUpGoalBufferMinutes) /
+                    60,
+                ) % 24,
+              minute: (resolvedTime.minute + target.wakeUpGoalBufferMinutes) % 60,
+            }),
+          })}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function DashboardScreen() {
   useGradeFinalization();
 
@@ -60,7 +161,6 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   const gradeStreak = useDailyGradeStore((s) => s.streak);
-  const getGradeForDate = useDailyGradeStore((s) => s.getGradeForDate);
 
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
@@ -69,7 +169,6 @@ export default function DashboardScreen() {
 
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
-  const setWakeUpGoalBufferMinutes = useWakeTargetStore((s) => s.setWakeUpGoalBufferMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const session = useMorningSessionStore((s) => s.session);
@@ -157,19 +256,11 @@ export default function DashboardScreen() {
     }
     const updateGoalCountdown = () => {
       const diff = new Date(deadline).getTime() - Date.now();
-      if (diff <= 0) {
-        // 超過: 経過時間を表示し続ける
-        const elapsed = -diff;
-        const mins = Math.floor(elapsed / 60000);
-        const secs = Math.floor((elapsed % 60000) / 1000);
-        setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
-        setGoalExceeded(true);
-      } else {
-        const mins = Math.floor(diff / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
-        setGoalExceeded(false);
-      }
+      const absDiff = Math.abs(diff);
+      const mins = Math.floor(absDiff / 60000);
+      const secs = Math.floor((absDiff % 60000) / 1000);
+      setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+      setGoalExceeded(diff <= 0);
     };
     updateGoalCountdown();
     const timer = setInterval(updateGoalCountdown, 1000);
@@ -264,46 +355,7 @@ export default function DashboardScreen() {
 
       {/* Wake-up Goal Buffer -- 起床目標バッファ設定 */}
       {target !== null && !sessionActive && (
-        <View style={commonStyles.section}>
-          <Text style={commonStyles.sectionTitle}>{t('goalBuffer.title')}</Text>
-          <View style={styles.bufferRow}>
-            <Pressable
-              style={styles.bufferButton}
-              onPress={() =>
-                setWakeUpGoalBufferMinutes(Math.max(10, target.wakeUpGoalBufferMinutes - 5))
-              }
-            >
-              <Text style={styles.bufferButtonText}>{'-'}</Text>
-            </Pressable>
-            <Text style={styles.bufferValue}>
-              {t('goalBuffer.value', { minutes: target.wakeUpGoalBufferMinutes })}
-            </Text>
-            <Pressable
-              style={styles.bufferButton}
-              onPress={() =>
-                setWakeUpGoalBufferMinutes(Math.min(120, target.wakeUpGoalBufferMinutes + 5))
-              }
-            >
-              <Text style={styles.bufferButtonText}>{'+'}</Text>
-            </Pressable>
-          </View>
-          {resolvedTime !== null && (
-            <Text style={styles.bufferDescription}>
-              {t('goalBuffer.description', {
-                goalTime: formatTime({
-                  hour:
-                    Math.floor(
-                      (resolvedTime.hour * 60 +
-                        resolvedTime.minute +
-                        target.wakeUpGoalBufferMinutes) /
-                        60,
-                    ) % 24,
-                  minute: (resolvedTime.minute + target.wakeUpGoalBufferMinutes) % 60,
-                }),
-              })}
-            </Text>
-          )}
-        </View>
+        <GoalBufferSection target={target} resolvedTime={resolvedTime} />
       )}
 
       {/* Morning Routine Session (active) OR Todo List (inactive) */}
@@ -399,37 +451,11 @@ export default function DashboardScreen() {
       </View>
 
       {/* Weekly Calendar — 各日のグレードを GradeIcon で表示 */}
-      <View style={commonStyles.section}>
-        <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
-        <View style={styles.weekRow}>
-          {recentDates.map((date) => {
-            const dateStr = getLogicalDateString(date, dayBoundaryHour);
-            const gradeRecord = getGradeForDate(dateStr);
-            const isToday = dateStr === getLogicalDateString(new Date(), dayBoundaryHour);
-            // 表示用の日付番号・曜日は論理日付から取得する。
-            // dayBoundaryHour 前にアプリを開いた場合、カレンダー日付と論理日付がずれるため、
-            // date.getDate() / date.getDay() をそのまま使うと表示と実データが不一致になる。
-            const logicalDate = new Date(`${dateStr}T12:00:00`);
-
-            return (
-              <Pressable
-                key={dateStr}
-                style={styles.dayColumn}
-                onPress={() => handleDayPress(date)}
-              >
-                <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
-                  {getDayLabel(
-                    logicalDate.getDay() as DayOfWeek,
-                    tCommon as (key: string) => string,
-                  )}
-                </Text>
-                <GradeIcon grade={gradeRecord?.grade ?? null} size={16} />
-                <Text style={styles.dayNumber}>{`${logicalDate.getDate()}`}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+      <WeeklyCalendar
+        recentDates={recentDates}
+        dayBoundaryHour={dayBoundaryHour}
+        onDayPress={handleDayPress}
+      />
 
       {/* Sleep Summary */}
       <View style={commonStyles.section}>

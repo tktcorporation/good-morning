@@ -87,7 +87,7 @@ describe('alarm-kit service', () => {
       );
       // ネイティブスヌーズが無効になっていること（JS 側スヌーズと二重にならないよう doSnoozeIntent を削除済み）
       const callArgs = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(callArgs?.['doSnoozeIntent']).toBeUndefined();
+      expect(callArgs?.doSnoozeIntent).toBeUndefined();
       expect(ids.length).toBe(1);
     });
 
