@@ -26,14 +26,21 @@
 ### dev server 不要のスタンドアロンビルド（実機向け）
 
 ```bash
-pnpm ios:release
+# 1. IPA をビルド（初回は数分かかる）
+pnpm ios:local
+
+# 2. 生成された IPA をデバイスにインストール
+pnpm ios:install ./build-*.ipa
 ```
 
-- JS バンドルをアプリ内に埋め込むため、local server が落ちても動き続ける
-- 内部では `expo run:ios --configuration Release --device` を実行
-- デバイスは接続済みかつペアリング済みである必要がある（`xcrun devicectl list devices` で確認）
-- 初回ビルドは CocoaPods のコンパイルが入るため時間がかかる（2回目以降はキャッシュが効く）
-- ビルド完了後に Metro bundler が起動するが、Release ビルドなので終了して問題ない
+- `expo-dev-client` を含まない Ad Hoc 配布ビルドを生成するため、dev server なしで起動できる
+- `eas build --local --non-interactive` をローカルで実行（EAS クラウド不使用）
+- eas-cli は mise で管理（`npm:eas-cli = "latest"` in `.mise.toml`）
+- インストールには CoreDevice ID `DB40A4CE-4A0A-550C-B53C-747D13F5D320`（`xcrun devicectl list devices` で確認）
+- IPA は `./build-*.ipa` として生成される
+
+> **注意**: `pnpm ios:release`（`expo run:ios --configuration Release`）は expo-dev-client が含まれるため、
+> dev server なしで起動すると "No development servers found" 画面が出る。スタンドアロン動作には `ios:local` を使うこと。
 
 ### 開発中の通常フロー（hot reload あり）
 

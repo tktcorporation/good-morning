@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   expo-alarm-kit@0.1.6:
-    hash: 544f18b20dd4dab3bad81d07bf08fa2a4b7b6632f87de441e52fec9301b634ae
+    hash: 9204a87338e9e8cdba20f7dd6104b8e649dd456e15be5959448ce8bae695fb77
     path: patches/expo-alarm-kit@0.1.6.patch
 
 importers:
@@ -30,7 +30,7 @@ importers:
         version: 55.0.5(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.4)(react-dom@19.2.4(react@19.2.0))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
       expo-alarm-kit:
         specifier: ^0.1.6
-        version: 0.1.6(patch_hash=544f18b20dd4dab3bad81d07bf08fa2a4b7b6632f87de441e52fec9301b634ae)(expo@55.0.5)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
+        version: 0.1.6(patch_hash=9204a87338e9e8cdba20f7dd6104b8e649dd456e15be5959448ce8bae695fb77)(expo@55.0.5)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       expo-asset:
         specifier: ~55.0.8
         version: 55.0.8(expo@55.0.5)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
@@ -6721,7 +6721,7 @@ snapshots:
       jest-message-util: 29.7.0
       jest-util: 29.7.0
 
-  expo-alarm-kit@0.1.6(patch_hash=544f18b20dd4dab3bad81d07bf08fa2a4b7b6632f87de441e52fec9301b634ae)(expo@55.0.5)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0):
+  expo-alarm-kit@0.1.6(patch_hash=9204a87338e9e8cdba20f7dd6104b8e649dd456e15be5959448ce8bae695fb77)(expo@55.0.5)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0):
     dependencies:
       expo: 55.0.5(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.4)(react-dom@19.2.4(react@19.2.0))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
       react: 19.2.0
