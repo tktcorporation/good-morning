@@ -189,6 +189,24 @@ describe('startMorningSession', () => {
     expect(startLiveActivity).not.toHaveBeenCalled();
   });
 
+  test('cancels existing wake-target alarms before scheduling snooze', async () => {
+    useWakeTargetStore.setState({
+      target: createTargetWithTodos(),
+      loaded: true,
+      alarmIds: ['wake-alarm-1', 'wake-alarm-2'],
+    });
+    const params = createStartParams();
+
+    await startMorningSession(params);
+
+    // 既存の wake-target アラームがキャンセルされること
+    expect(cancelAlarmsByIds).toHaveBeenCalledWith(['wake-alarm-1', 'wake-alarm-2']);
+    // alarmIds がクリアされること
+    expect(useWakeTargetStore.getState().alarmIds).toEqual([]);
+    // その後スヌーズがスケジュールされること
+    expect(scheduleSnoozeAlarms).toHaveBeenCalled();
+  });
+
   test('session survives snooze scheduling failure', async () => {
     scheduleSnoozeAlarms.mockRejectedValueOnce(new Error('Snooze scheduling failed'));
     const params = createStartParams();

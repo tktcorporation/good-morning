@@ -62,6 +62,15 @@ export interface StartSessionParams {
  */
 export async function startMorningSession(params: StartSessionParams): Promise<void> {
   const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
+
+  // セッション開始前に既存の wake-target アラームをキャンセルする。
+  // スヌーズアラームスケジュール後に cancelAllAlarms が走る競合を防ぐ。
+  const targetState = useWakeTargetStore.getState();
+  if (targetState.alarmIds.length > 0) {
+    await cancelAlarmsByIds(targetState.alarmIds);
+    await targetState.setAlarmIds([]);
+  }
+
   const hasTodos = target.todos.length > 0;
   const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
   const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
