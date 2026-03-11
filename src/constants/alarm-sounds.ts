@@ -2,7 +2,6 @@ export interface AlarmSound {
   readonly id: string;
   readonly nameKey: string;
   readonly fileName: string;
-  readonly notificationFile: string;
 }
 
 export const ALARM_SOUNDS: readonly AlarmSound[] = [
@@ -10,25 +9,21 @@ export const ALARM_SOUNDS: readonly AlarmSound[] = [
     id: 'default',
     nameKey: 'alarmSounds.default',
     fileName: 'alarm.wav',
-    notificationFile: 'alarm-notification.wav',
   },
   {
     id: 'chime',
     nameKey: 'alarmSounds.chime',
     fileName: 'chime.mp3',
-    notificationFile: 'chime-notification.mp3',
   },
   {
     id: 'birds',
     nameKey: 'alarmSounds.birds',
     fileName: 'birds.mp3',
-    notificationFile: 'birds-notification.mp3',
   },
   {
     id: 'bell',
     nameKey: 'alarmSounds.bell',
     fileName: 'bell.mp3',
-    notificationFile: 'bell-notification.mp3',
   },
 ] as const;
 

@@ -345,7 +345,10 @@ export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<vo
       snoozeIds = nativeSnoozeIds;
       clearSnoozeAlarmIds();
     } else {
-      snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+      // ネイティブ側がスケジュールしなかった場合のフォールバック。
+      // ユーザー選択の音をスヌーズにも適用する。
+      const snoozeSoundName = target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined;
+      snoozeIds = await scheduleSnoozeAlarms(dismissTime, undefined, snoozeSoundName);
     }
     const snoozeFiresAt = new Date(
       dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,

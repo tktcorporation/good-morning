@@ -6,7 +6,6 @@ describe('getAlarmSound', () => {
     expect(sound.id).toBe('chime');
     expect(sound.nameKey).toBe('alarmSounds.chime');
     expect(sound.fileName).toBe('chime.mp3');
-    expect(sound.notificationFile).toBe('chime-notification.mp3');
   });
 
   it('returns default for unknown id', () => {
@@ -25,7 +24,6 @@ describe('ALARM_SOUNDS', () => {
       expect(sound.id).toBeTruthy();
       expect(sound.nameKey).toBeTruthy();
       expect(sound.fileName).toBeTruthy();
-      expect(sound.notificationFile).toBeTruthy();
     }
   });
 });
