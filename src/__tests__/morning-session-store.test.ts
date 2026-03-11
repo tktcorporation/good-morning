@@ -25,10 +25,10 @@ describe('morning-session-store', () => {
   it('starts a session', async () => {
     await useMorningSessionStore
       .getState()
-      .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
     const state = useMorningSessionStore.getState();
     expect(state.session).not.toBeNull();
-    expect(state.session?.recordId).toBe('wake_123');
+    expect(state.session?.recordId).toBeNull();
     expect(state.session?.date).toBe('2026-02-22');
     expect(state.session?.todos).toHaveLength(3);
     expect(state.isActive()).toBe(true);
@@ -37,7 +37,7 @@ describe('morning-session-store', () => {
   it('toggles a todo to completed', async () => {
     await useMorningSessionStore
       .getState()
-      .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
     await useMorningSessionStore.getState().toggleTodo('todo_1');
 
     const state = useMorningSessionStore.getState();
@@ -49,7 +49,7 @@ describe('morning-session-store', () => {
   it('toggles a todo back to incomplete', async () => {
     await useMorningSessionStore
       .getState()
-      .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
     await useMorningSessionStore.getState().toggleTodo('todo_1');
     await useMorningSessionStore.getState().toggleTodo('todo_1');
 
@@ -62,7 +62,7 @@ describe('morning-session-store', () => {
   it('reports progress correctly', async () => {
     await useMorningSessionStore
       .getState()
-      .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
 
     expect(useMorningSessionStore.getState().getProgress()).toEqual({ completed: 0, total: 3 });
 
@@ -76,7 +76,7 @@ describe('morning-session-store', () => {
   it('reports all completed correctly', async () => {
     await useMorningSessionStore
       .getState()
-      .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
     expect(useMorningSessionStore.getState().areAllCompleted()).toBe(false);
 
     await useMorningSessionStore.getState().toggleTodo('todo_1');
@@ -92,7 +92,7 @@ describe('morning-session-store', () => {
   it('clears the session', async () => {
     await useMorningSessionStore
       .getState()
-      .startSession('wake_123', '2026-02-22', sampleTodos, null);
+      .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
     await useMorningSessionStore.getState().clearSession();
 
     const state = useMorningSessionStore.getState();
@@ -108,7 +108,7 @@ describe('morning-session-store', () => {
     it('sets snoozeAlarmIds and snoozeFiresAt atomically via setSnoozeState', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       const fireTime = '2026-02-22T07:09:00.000Z';
       await useMorningSessionStore.getState().setSnoozeState(['snooze-1', 'snooze-2'], fireTime);
       const session = useMorningSessionStore.getState().session;
@@ -119,7 +119,7 @@ describe('morning-session-store', () => {
     it('clears snooze state on clearSession (session becomes null)', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       await useMorningSessionStore
         .getState()
         .setSnoozeState(['snooze-1', 'snooze-2'], '2026-02-22T07:09:00.000Z');
@@ -130,7 +130,7 @@ describe('morning-session-store', () => {
     it('stores snoozeFiresAt timestamp via setSnoozeFiresAt', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       const fireTime = '2026-02-22T07:09:00.000Z';
       await useMorningSessionStore.getState().setSnoozeFiresAt(fireTime);
       expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBe(fireTime);
@@ -139,7 +139,7 @@ describe('morning-session-store', () => {
     it('clears snoozeFiresAt via setSnoozeFiresAt(null)', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       await useMorningSessionStore.getState().setSnoozeFiresAt('2026-02-22T07:09:00.000Z');
       await useMorningSessionStore.getState().setSnoozeFiresAt(null);
       expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBeNull();
@@ -148,7 +148,7 @@ describe('morning-session-store', () => {
     it('initializes snooze state as empty/null in new session', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       expect(useMorningSessionStore.getState().session?.snoozeAlarmIds).toEqual([]);
       expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBeNull();
     });
@@ -168,7 +168,7 @@ describe('morning-session-store', () => {
     it('persists snooze state and restores on reload', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       const fireTime = '2026-02-22T07:09:00.000Z';
       await useMorningSessionStore.getState().setSnoozeState(['snooze-1', 'snooze-2'], fireTime);
 
@@ -206,7 +206,7 @@ describe('morning-session-store', () => {
     it('stores liveActivityId in session when set', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       await useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
       expect(useMorningSessionStore.getState().session?.liveActivityId).toBe('activity-xyz');
     });
@@ -214,14 +214,14 @@ describe('morning-session-store', () => {
     it('initializes liveActivityId as null in new session', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       expect(useMorningSessionStore.getState().session?.liveActivityId).toBeNull();
     });
 
     it('clears liveActivityId on clearSession (session is null)', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       await useMorningSessionStore.getState().setLiveActivityId('activity-xyz');
       await useMorningSessionStore.getState().clearSession();
       expect(useMorningSessionStore.getState().session).toBeNull();
@@ -271,14 +271,14 @@ describe('morning-session-store', () => {
       const deadline = '2026-02-22T07:30:00.000Z';
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, deadline);
+        .startSession('2026-02-22', sampleTodos, deadline, '2026-02-22T08:00:00.000Z');
       expect(useMorningSessionStore.getState().session?.goalDeadline).toBe(deadline);
     });
 
     it('stores null goalDeadline when not provided', async () => {
       await useMorningSessionStore
         .getState()
-        .startSession('wake_123', '2026-02-22', sampleTodos, null);
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
       expect(useMorningSessionStore.getState().session?.goalDeadline).toBeNull();
     });
   });

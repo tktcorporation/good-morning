@@ -74,7 +74,9 @@ test('returns null session when no active session', () => {
 });
 
 test('returns session with progress when session active', async () => {
-  await useMorningSessionStore.getState().startSession('rec_1', '2026-02-28', sampleTodos, null);
+  await useMorningSessionStore
+    .getState()
+    .startSession('2026-02-28', sampleTodos, null, '2026-02-28T08:00:00.000Z');
   const data = buildWidgetData();
   expect(data.session).not.toBeNull();
   expect(data.session?.progress).toEqual({ completed: 0, total: 2 });

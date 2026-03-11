@@ -8,11 +8,12 @@ import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
+import { useCountdown } from '../../src/hooks/useCountdown';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
 import { updateLiveActivity } from '../../src/services/live-activity';
-import { completeMorningSession } from '../../src/services/session-lifecycle';
+import { onAllTodosCompleted } from '../../src/services/session-lifecycle';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
@@ -100,6 +101,128 @@ function WeeklyCalendar({
 }
 
 /**
+ * モーニングルーティンセクション（セッション中の進捗・カウントダウン・TODOチェックリスト）。
+ * DashboardScreen の認知複雑度を下げるため分離。
+ */
+function MorningRoutineSection({
+  session,
+  progress,
+  goalRemaining,
+  goalExceeded,
+  snoozeRemaining,
+  onToggleTodo,
+}: {
+  readonly session: import('../../src/types/morning-session').MorningSession;
+  readonly progress: { completed: number; total: number };
+  readonly goalRemaining: string | null;
+  readonly goalExceeded: boolean;
+  readonly snoozeRemaining: string | null;
+  readonly onToggleTodo: (id: string) => void;
+}) {
+  const { t } = useTranslation('dashboard');
+  return (
+    <View style={commonStyles.section}>
+      <Text style={commonStyles.sectionTitle}>{t('morningRoutine.title')}</Text>
+      <View style={styles.routineProgressContainer}>
+        <View style={styles.routineProgressBar}>
+          <View
+            style={[
+              styles.routineProgressFill,
+              {
+                width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%`,
+              },
+            ]}
+          />
+        </View>
+        <Text style={styles.routineProgressText}>
+          {t('morningRoutine.progress', {
+            completed: progress.completed,
+            total: progress.total,
+          })}
+        </Text>
+      </View>
+      {goalRemaining !== null &&
+        (goalExceeded ? (
+          <Text style={styles.goalExceededText}>
+            {t('morningRoutine.goalExceeded', { time: goalRemaining })}
+          </Text>
+        ) : (
+          <Text style={styles.goalCountdownText}>
+            {t('morningRoutine.goalCountdown', { time: goalRemaining })}
+          </Text>
+        ))}
+      {snoozeRemaining !== null && (
+        <Text style={styles.snoozeCountdownText}>
+          {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
+        </Text>
+      )}
+      {session.todos.map((todo) => (
+        <TodoListItem
+          key={todo.id}
+          item={{ id: todo.id, title: todo.title, completed: todo.completed }}
+          onToggle={onToggleTodo}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * TODO リスト編集セクション（セッション非アクティブ時）。
+ * DashboardScreen の認知複雑度を下げるため分離。
+ */
+function TodoEditSection({
+  target,
+  newTodoText,
+  onNewTodoTextChange,
+  onAddTodo,
+  onRemoveTodo,
+}: {
+  readonly target: WakeTarget | null;
+  readonly newTodoText: string;
+  readonly onNewTodoTextChange: (text: string) => void;
+  readonly onAddTodo: () => void;
+  readonly onRemoveTodo: (id: string) => void;
+}) {
+  const { t } = useTranslation('dashboard');
+  return (
+    <View style={commonStyles.section}>
+      <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
+      {target !== null && target.todos.length > 0 ? (
+        <>
+          <Text style={styles.todoDescription}>{t('todos.description')}</Text>
+          {target.todos.map((todo) => (
+            <View key={todo.id} style={styles.todoRow}>
+              <View style={styles.todoBullet} />
+              <Text style={styles.todoText}>{todo.title}</Text>
+              <Pressable style={styles.todoDeleteButton} onPress={() => onRemoveTodo(todo.id)}>
+                <Text style={styles.todoDeleteText}>{'x'}</Text>
+              </Pressable>
+            </View>
+          ))}
+        </>
+      ) : (
+        <Text style={styles.emptyText}>{t('todos.empty')}</Text>
+      )}
+      <View style={styles.addTodoRow}>
+        <TextInput
+          style={styles.addTodoInput}
+          value={newTodoText}
+          onChangeText={onNewTodoTextChange}
+          placeholder={t('todos.placeholder')}
+          placeholderTextColor={colors.textMuted}
+          onSubmitEditing={onAddTodo}
+          returnKeyType="done"
+        />
+        <Pressable style={styles.addTodoButton} onPress={onAddTodo}>
+          <Text style={styles.addTodoButtonText}>{'+'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/**
  * 起床目標バッファ設定セクション。DashboardScreen の認知複雑度を下げるため分離。
  * アラーム時刻 + バッファ分のデッドライン時刻を計算して表示する。
  */
@@ -179,11 +302,14 @@ export default function DashboardScreen() {
   const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
 
   const [newTodoText, setNewTodoText] = useState('');
-  const [snoozeRemaining, setSnoozeRemaining] = useState<string | null>(null);
-  const [goalRemaining, setGoalRemaining] = useState<string | null>(null);
-  /** goalDeadline を超過しているかどうか。超過中もセッション・スヌーズは継続し、警告表示に切り替える。 */
-  const [goalExceeded, setGoalExceeded] = useState(false);
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
+
+  // カウントダウンタイマー: スヌーズ（超過後は非表示）と目標（超過後も経過時間を警告表示）
+  const { remaining: snoozeRemaining } = useCountdown(snoozeFiresAt);
+  const { remaining: goalRemaining, exceeded: goalExceeded } = useCountdown(
+    session?.goalDeadline ?? null,
+    true,
+  );
 
   const today = useMemo(() => new Date(), []);
   const todaySummary = useDailySummary(today);
@@ -216,57 +342,12 @@ export default function DashboardScreen() {
     () => (weekStartStr !== undefined ? getWeekStats(weekStartStr) : null),
     [getWeekStats, weekStartStr],
   );
-  // TODO 全完了時にセッション完了処理を実行。cancelAlarmsByIds でスヌーズのみキャンセルし、
-  // wake-target アラームを再スケジュールする。session-lifecycle に委譲。
+  // TODO 全完了時にスヌーズ・LA を停止し WakeRecord を更新する。
+  // セッション自体はクリアしない（ウィンドウ終了まで維持される）。
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
-    completeMorningSession(session).catch(() => {});
+    onAllTodosCompleted(session).catch(() => {});
   }, [session, areAllCompleted]);
-
-  // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。
-  // snoozeFiresAt が null になった時点（TODO全完了 or セッションクリア）でタイマーを停止。
-  useEffect(() => {
-    if (snoozeFiresAt === null) {
-      setSnoozeRemaining(null);
-      return;
-    }
-    const updateCountdown = () => {
-      const diff = new Date(snoozeFiresAt).getTime() - Date.now();
-      if (diff <= 0) {
-        setSnoozeRemaining(null);
-        return;
-      }
-      const mins = Math.floor(diff / 60000);
-      const secs = Math.floor((diff % 60000) / 1000);
-      setSnoozeRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
-    };
-    updateCountdown();
-    const timer = setInterval(updateCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [snoozeFiresAt]);
-
-  // 起床目標デッドラインまでのカウントダウンタイマー。MM:SS 形式で表示する。
-  // セッション中のみ表示。デッドライン超過後は経過時間を警告表示に切り替える。
-  // セッション・スヌーズは超過後も継続する。
-  useEffect(() => {
-    const deadline = session?.goalDeadline ?? null;
-    if (deadline === null) {
-      setGoalRemaining(null);
-      setGoalExceeded(false);
-      return;
-    }
-    const updateGoalCountdown = () => {
-      const diff = new Date(deadline).getTime() - Date.now();
-      const absDiff = Math.abs(diff);
-      const mins = Math.floor(absDiff / 60000);
-      const secs = Math.floor((absDiff % 60000) / 1000);
-      setGoalRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
-      setGoalExceeded(diff <= 0);
-    };
-    updateGoalCountdown();
-    const timer = setInterval(updateGoalCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [session?.goalDeadline]);
 
   const handleToggleTodo = useCallback(
     async (todoId: string) => {
@@ -361,86 +442,22 @@ export default function DashboardScreen() {
 
       {/* Morning Routine Session (active) OR Todo List (inactive) */}
       {sessionActive && progress !== null ? (
-        <View style={commonStyles.section}>
-          <Text style={commonStyles.sectionTitle}>{t('morningRoutine.title')}</Text>
-          <View style={styles.routineProgressContainer}>
-            <View style={styles.routineProgressBar}>
-              <View
-                style={[
-                  styles.routineProgressFill,
-                  {
-                    width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%`,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.routineProgressText}>
-              {t('morningRoutine.progress', {
-                completed: progress.completed,
-                total: progress.total,
-              })}
-            </Text>
-          </View>
-          {goalRemaining !== null &&
-            (goalExceeded ? (
-              <Text style={styles.goalExceededText}>
-                {t('morningRoutine.goalExceeded', { time: goalRemaining })}
-              </Text>
-            ) : (
-              <Text style={styles.goalCountdownText}>
-                {t('morningRoutine.goalCountdown', { time: goalRemaining })}
-              </Text>
-            ))}
-          {snoozeRemaining !== null && (
-            <Text style={styles.snoozeCountdownText}>
-              {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
-            </Text>
-          )}
-          {session.todos.map((todo) => (
-            <TodoListItem
-              key={todo.id}
-              item={{ id: todo.id, title: todo.title, completed: todo.completed }}
-              onToggle={handleToggleTodo}
-            />
-          ))}
-        </View>
+        <MorningRoutineSection
+          session={session}
+          progress={progress}
+          goalRemaining={goalRemaining}
+          goalExceeded={goalExceeded}
+          snoozeRemaining={snoozeRemaining}
+          onToggleTodo={handleToggleTodo}
+        />
       ) : (
-        <View style={commonStyles.section}>
-          <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
-          {target !== null && target.todos.length > 0 ? (
-            <>
-              <Text style={styles.todoDescription}>{t('todos.description')}</Text>
-              {target.todos.map((todo) => (
-                <View key={todo.id} style={styles.todoRow}>
-                  <View style={styles.todoBullet} />
-                  <Text style={styles.todoText}>{todo.title}</Text>
-                  <Pressable
-                    style={styles.todoDeleteButton}
-                    onPress={() => handleRemoveTodo(todo.id)}
-                  >
-                    <Text style={styles.todoDeleteText}>{'x'}</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </>
-          ) : (
-            <Text style={styles.emptyText}>{t('todos.empty')}</Text>
-          )}
-          <View style={styles.addTodoRow}>
-            <TextInput
-              style={styles.addTodoInput}
-              value={newTodoText}
-              onChangeText={setNewTodoText}
-              placeholder={t('todos.placeholder')}
-              placeholderTextColor={colors.textMuted}
-              onSubmitEditing={handleAddTodo}
-              returnKeyType="done"
-            />
-            <Pressable style={styles.addTodoButton} onPress={handleAddTodo}>
-              <Text style={styles.addTodoButtonText}>{'+'}</Text>
-            </Pressable>
-          </View>
-        </View>
+        <TodoEditSection
+          target={target}
+          newTodoText={newTodoText}
+          onNewTodoTextChange={setNewTodoText}
+          onAddTodo={handleAddTodo}
+          onRemoveTodo={handleRemoveTodo}
+        />
       )}
 
       {/* Streak Badge — グレードストアから取得したストリーク情報を表示 */}

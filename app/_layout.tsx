@@ -109,6 +109,7 @@ export default function RootLayout() {
       appStateRef.current = nextState;
       if (!wasBackground || nextState !== 'active') return;
 
+      // handleAlarmEvent 内でセッション自動開始・期限切れチェックも行う
       handleAlarmEvent('foreground-resume', {
         routerPush: (path) => router.push(path),
         dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
