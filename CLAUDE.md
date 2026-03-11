@@ -74,6 +74,24 @@ pnpm ios     # Debug ビルドで実機/シミュレータに接続
 - `jj commit -m "message"` でコミット、`jj git push` でプッシュ
 - 詳細は `.claude/rules/jujutsu.md` を参照
 
+## Pre-push Checklist
+
+**プッシュ前に以下を全て実行し、エラーがないことを確認すること。**
+CI で落ちる修正を防ぐため、1つでも失敗したらプッシュしない。
+
+```bash
+pnpm typecheck                          # 型チェック
+pnpm lint                               # Biome lint
+pnpm biome format .                     # フォーマットチェック
+pnpm test                               # テスト実行
+npx expo install --check                # Expo 依存パッケージの互換性
+pnpm changeset status --since=origin/main  # changeset の有無（コード変更時は必須）
+```
+
+- changeset が必要な場合: `pnpm changeset` で追加（対話式）
+- コード変更を含まない場合: `pnpm changeset --empty` でスキップ可能
+- Expo 依存の不整合: `npx expo install --fix` で自動修正
+
 ## Development
 - Node.js 22 (mise で管理)
 - pnpm 10 (mise で管理)
