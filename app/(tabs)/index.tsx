@@ -12,7 +12,7 @@ import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
 import { updateLiveActivity } from '../../src/services/live-activity';
-import { completeMorningSession } from '../../src/services/session-lifecycle';
+import { onAllTodosCompleted } from '../../src/services/session-lifecycle';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
@@ -216,11 +216,11 @@ export default function DashboardScreen() {
     () => (weekStartStr !== undefined ? getWeekStats(weekStartStr) : null),
     [getWeekStats, weekStartStr],
   );
-  // TODO 全完了時にセッション完了処理を実行。cancelAlarmsByIds でスヌーズのみキャンセルし、
-  // wake-target アラームを再スケジュールする。session-lifecycle に委譲。
+  // TODO 全完了時にスヌーズ・LA を停止し WakeRecord を更新する。
+  // セッション自体はクリアしない（ウィンドウ終了まで維持される）。
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
-    completeMorningSession(session).catch(() => {});
+    onAllTodosCompleted(session).catch(() => {});
   }, [session, areAllCompleted]);
 
   // スヌーズ発火までのカウントダウンタイマー。M:SS 形式（例: "8:45"）で表示する。

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { startMorningSession } from '../src/services/session-lifecycle';
+import { handleAlarmDismiss } from '../src/services/session-lifecycle';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
@@ -77,12 +77,11 @@ export default function WakeUpScreen() {
     }
 
     if (target !== null && resolvedTime !== null) {
-      // セッション作成を await して、clearNextOverride → target 変更 →
-      // _layout のアラーム再スケジュール effect が isActive() で正しく
-      // ガードされるようにする。fire-and-forget だと session 未作成のまま
-      // effect が走り、不要な再スケジュールや孤立アラームが発生していた。
+      // アラーム dismiss 処理を await して、WakeRecord 作成・セッション紐づけ・
+      // スヌーズ/LA 開始を完了させる。セッションが自動開始済みの場合は
+      // recordId と goalDeadline の紐づけのみ行う。
       try {
-        await startMorningSession({
+        await handleAlarmDismiss({
           target,
           resolvedTime,
           dismissTime: new Date(),

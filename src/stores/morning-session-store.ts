@@ -9,12 +9,28 @@ interface MorningSessionState {
   readonly session: MorningSession | null;
   readonly loaded: boolean;
   loadSession: () => Promise<void>;
+  /**
+   * セッションを開始する。
+   *
+   * 設計変更: recordId はセッション開始時には不要（自動開始時は WakeRecord 未作成）。
+   * アラーム dismiss 時に setRecordId で後から紐づける。
+   */
   startSession: (
-    recordId: string,
     date: string,
     todos: readonly SessionTodo[],
     goalDeadline: string | null,
+    windowEnd: string,
   ) => Promise<void>;
+  /**
+   * WakeRecord ID をセッションに紐づける。
+   * アラーム dismiss 時に呼ばれる。セッションが自動開始済みの場合に使用。
+   */
+  setRecordId: (recordId: string) => Promise<void>;
+  /**
+   * goalDeadline を後から設定する。
+   * セッション自動開始時は null で、アラーム dismiss 時に算出して設定。
+   */
+  setGoalDeadline: (deadline: string | null) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
   /**
@@ -30,6 +46,8 @@ interface MorningSessionState {
   /** liveActivityId を session 内に保存して AsyncStorage に永続化する。永続化完了を await できるため、アプリ kill 後も再起動時に endLiveActivity で回収可能。 */
   setLiveActivityId: (id: string | null) => Promise<void>;
   isActive: () => boolean;
+  /** セッションの windowEnd を過ぎているかどうか。期限切れセッションのクリーンアップに使用。 */
+  isExpired: () => boolean;
   areAllCompleted: () => boolean;
   getProgress: () => { completed: number; total: number };
 }
@@ -52,9 +70,15 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
       const parsed = JSON.parse(raw) as MorningSession;
       // マイグレーション: 後から追加されたフィールドが undefined になるレガシーデータに対応。
       // undefined のまま使うとクラッシュするため、デフォルト値にフォールバックする。
+      // windowEnd が未設定のレガシーデータは startedAt + 60分 をフォールバックとする。
+      const legacyWindowEnd =
+        parsed.windowEnd ??
+        new Date(new Date(parsed.startedAt).getTime() + 60 * 60 * 1000).toISOString();
       set({
         session: {
           ...parsed,
+          recordId: parsed.recordId ?? null,
+          windowEnd: legacyWindowEnd,
           liveActivityId: parsed.liveActivityId ?? null,
           goalDeadline: parsed.goalDeadline ?? null,
           snoozeAlarmIds: parsed.snoozeAlarmIds ?? [],
@@ -68,16 +92,17 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   },
 
   startSession: async (
-    recordId: string,
     date: string,
     todos: readonly SessionTodo[],
     goalDeadline: string | null,
+    windowEnd: string,
   ) => {
     const session: MorningSession = {
-      recordId,
+      recordId: null,
       date,
       startedAt: new Date().toISOString(),
       todos,
+      windowEnd,
       liveActivityId: null,
       goalDeadline,
       snoozeAlarmIds: [],
@@ -87,6 +112,22 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     await persistSession(session);
     // ウィジェットにセッション開始を反映（fire-and-forget）
     syncWidget().catch(() => {});
+  },
+
+  setRecordId: async (recordId: string) => {
+    const { session } = get();
+    if (session === null) return;
+    const updated: MorningSession = { ...session, recordId };
+    set({ session: updated });
+    await persistSession(updated);
+  },
+
+  setGoalDeadline: async (deadline: string | null) => {
+    const { session } = get();
+    if (session === null) return;
+    const updated: MorningSession = { ...session, goalDeadline: deadline };
+    set({ session: updated });
+    await persistSession(updated);
   },
 
   toggleTodo: async (todoId: string) => {
@@ -150,6 +191,12 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   },
 
   isActive: () => get().session !== null,
+
+  isExpired: () => {
+    const { session } = get();
+    if (session === null) return false;
+    return Date.now() > new Date(session.windowEnd).getTime();
+  },
 
   areAllCompleted: () => {
     const { session } = get();

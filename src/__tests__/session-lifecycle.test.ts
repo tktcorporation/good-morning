@@ -67,11 +67,11 @@ const { syncAlarms } = jest.requireMock('../services/alarm-sync') as {
 };
 
 import {
-  completeMorningSession,
+  handleAlarmDismiss,
   handleSnoozeArrival,
+  onAllTodosCompleted,
   recoverMissedDismiss,
   restoreSessionOnLaunch,
-  startMorningSession,
 } from '../services/session-lifecycle';
 
 /**
@@ -87,6 +87,7 @@ function setActiveSession(overrides?: Partial<MorningSession>): void {
       { id: 'todo-1', title: 'Stretch', completed: false, completedAt: null },
       { id: 'todo-2', title: 'Drink water', completed: false, completedAt: null },
     ],
+    windowEnd: '2026-02-28T07:30:00.000Z',
     liveActivityId: null,
     goalDeadline: null,
     snoozeAlarmIds: [],
@@ -146,11 +147,11 @@ beforeEach(() => {
   useWakeTargetStore.setState({ target: null, loaded: true, alarmIds: [] });
 });
 
-describe('startMorningSession', () => {
+describe('handleAlarmDismiss (was startMorningSession)', () => {
   test('creates record + session + snooze + LA for target with todos', async () => {
     const params = createStartParams();
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     // WakeRecord が作成されていること
     const records = useWakeRecordStore.getState().records;
@@ -178,7 +179,7 @@ describe('startMorningSession', () => {
   test('creates only record when target has no todos', async () => {
     const params = createStartParams({ target: createTargetWithoutTodos() });
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     // WakeRecord は作成される
     const records = useWakeRecordStore.getState().records;
@@ -202,7 +203,7 @@ describe('startMorningSession', () => {
     });
     const params = createStartParams();
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     // 既存の wake-target アラームがキャンセルされること
     expect(cancelAlarmsByIds).toHaveBeenCalledWith(['wake-alarm-1', 'wake-alarm-2']);
@@ -220,7 +221,7 @@ describe('startMorningSession', () => {
     ]);
     const params = createStartParams();
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     // ネイティブ ID が使われるため JS スケジュールは呼ばれない
     expect(scheduleSnoozeAlarms).not.toHaveBeenCalled();
@@ -240,7 +241,7 @@ describe('startMorningSession', () => {
     // getSnoozeAlarmIds のデフォルトは [] — JS フォールバックが使われる
     const params = createStartParams();
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime);
     expect(clearSnoozeAlarmIds).not.toHaveBeenCalled();
@@ -253,7 +254,7 @@ describe('startMorningSession', () => {
     scheduleSnoozeAlarms.mockRejectedValueOnce(new Error('Snooze scheduling failed'));
     const params = createStartParams();
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     // セッションは存在するが snoozeAlarmIds は空
     const session = useMorningSessionStore.getState().session;
@@ -269,7 +270,7 @@ describe('startMorningSession', () => {
     startLiveActivity.mockRejectedValueOnce(new Error('LA failed'));
     const params = createStartParams();
 
-    await startMorningSession(params);
+    await handleAlarmDismiss(params);
 
     // セッションは存在し、スヌーズはスケジュール済み
     const session = useMorningSessionStore.getState().session;
@@ -282,8 +283,8 @@ describe('startMorningSession', () => {
   });
 });
 
-describe('completeMorningSession', () => {
-  test('cancels only snooze alarms, ends LA, updates record, clears session, reschedules', async () => {
+describe('onAllTodosCompleted', () => {
+  test('cancels snooze, ends LA, updates record, but keeps session (window-based)', async () => {
     // WakeRecord を事前に作成
     const { addRecord } = useWakeRecordStore.getState();
     const record = await addRecord({
@@ -306,7 +307,7 @@ describe('completeMorningSession', () => {
       goalDeadline: '2026-02-28T07:30:00.000Z',
     });
 
-    // WakeTarget を設定（再スケジュール用）
+    // WakeTarget を設定
     const target = createTargetWithTodos();
     useWakeTargetStore.setState({ target, alarmIds: ['old-alarm-1'], loaded: true });
 
@@ -334,7 +335,7 @@ describe('completeMorningSession', () => {
 
     const session = useMorningSessionStore.getState().session;
     if (session === null) throw new Error('session should not be null');
-    await completeMorningSession(session);
+    await onAllTodosCompleted(session);
 
     // cancelAlarmsByIds が snoozeAlarmIds で呼ばれること
     expect(cancelAlarmsByIds).toHaveBeenCalledWith(['snooze-1', 'snooze-2']);
@@ -348,11 +349,11 @@ describe('completeMorningSession', () => {
     expect(updatedRecord?.todosCompletedAt).not.toBeNull();
     expect(updatedRecord?.todoCompletionSeconds).toBeGreaterThan(0);
 
-    // セッションがクリアされていること
-    expect(useMorningSessionStore.getState().session).toBeNull();
+    // セッションはクリアされない（ウィンドウ終了まで維持）
+    expect(useMorningSessionStore.getState().session).not.toBeNull();
 
-    // セッション完了後に syncAlarms が呼ばれてアラームが再スケジュールされること
-    expect(syncAlarms).toHaveBeenCalled();
+    // syncAlarms は呼ばれない（セッションがまだ active のため）
+    expect(syncAlarms).not.toHaveBeenCalled();
   });
 
   test('skips endLiveActivity when liveActivityId is null', async () => {
@@ -383,16 +384,16 @@ describe('completeMorningSession', () => {
 
     const session = useMorningSessionStore.getState().session;
     if (session === null) throw new Error('session should not be null');
-    await completeMorningSession(session);
+    await onAllTodosCompleted(session);
 
     // endLiveActivity が呼ばれないこと
     expect(endLiveActivity).not.toHaveBeenCalled();
 
-    // セッションはクリアされていること
-    expect(useMorningSessionStore.getState().session).toBeNull();
+    // セッションは維持される（ウィンドウベース）
+    expect(useMorningSessionStore.getState().session).not.toBeNull();
   });
 
-  test('clears session even when updateRecord fails', async () => {
+  test('handles updateRecord failure gracefully', async () => {
     // updateRecord が失敗するように仕込む
     const originalUpdateRecord = useWakeRecordStore.getState().updateRecord;
     useWakeRecordStore.setState({
@@ -409,10 +410,10 @@ describe('completeMorningSession', () => {
     if (session === null) throw new Error('session should not be null');
 
     // エラーが throw されないこと
-    await expect(completeMorningSession(session)).resolves.not.toThrow();
+    await expect(onAllTodosCompleted(session)).resolves.not.toThrow();
 
-    // セッションがクリアされていること（無限再発火防止）
-    expect(useMorningSessionStore.getState().session).toBeNull();
+    // セッションは維持される（ウィンドウベース管理のため）
+    expect(useMorningSessionStore.getState().session).not.toBeNull();
 
     // 後片付け
     useWakeRecordStore.setState({ updateRecord: originalUpdateRecord });
@@ -420,14 +421,16 @@ describe('completeMorningSession', () => {
 });
 
 describe('restoreSessionOnLaunch', () => {
-  test('cleans up stale session (different day) and ends Live Activity', () => {
+  test('cleans up stale session (different day) and ends Live Activity', async () => {
     // 昨日のセッション（今日は 2026-02-28 ではないので stale になる）
+    // windowEnd を未来に設定して期限切れにならないようにする
     setActiveSession({
       date: '2026-01-01',
       liveActivityId: 'activity-stale',
+      windowEnd: '2099-12-31T23:59:59.000Z',
     });
 
-    restoreSessionOnLaunch(4);
+    await restoreSessionOnLaunch(4);
 
     // endLiveActivity が呼ばれること
     expect(endLiveActivity).toHaveBeenCalledWith('activity-stale');
@@ -436,7 +439,7 @@ describe('restoreSessionOnLaunch', () => {
     expect(useMorningSessionStore.getState().session).toBeNull();
   });
 
-  test('does nothing for active session (snoozeFiresAt already persisted)', () => {
+  test('does nothing for active session (snoozeFiresAt already persisted)', async () => {
     // 今日の日付を論理日付として取得
     const now = new Date();
     const hour = now.getHours();
@@ -454,9 +457,11 @@ describe('restoreSessionOnLaunch', () => {
       date: todayStr,
       snoozeFiresAt: '2026-02-28T07:09:00.000Z',
       snoozeAlarmIds: ['snooze-1'],
+      // windowEnd を未来に設定
+      windowEnd: '2099-12-31T23:59:59.000Z',
     });
 
-    restoreSessionOnLaunch(4);
+    await restoreSessionOnLaunch(4);
 
     // endLiveActivity は呼ばれない（liveActivityId が null のため）
     expect(endLiveActivity).not.toHaveBeenCalled();
@@ -468,7 +473,7 @@ describe('restoreSessionOnLaunch', () => {
     );
   });
 
-  test('ends dangling Live Activity for completed session', () => {
+  test('ends dangling Live Activity for completed session', async () => {
     // 今日の論理日付を算出
     const now = new Date();
     const hour = now.getHours();
@@ -485,6 +490,7 @@ describe('restoreSessionOnLaunch', () => {
     setActiveSession({
       date: todayStr,
       liveActivityId: 'activity-dangling',
+      windowEnd: '2099-12-31T23:59:59.000Z',
       todos: [
         {
           id: 'todo-1',
@@ -501,21 +507,40 @@ describe('restoreSessionOnLaunch', () => {
       ],
     });
 
-    restoreSessionOnLaunch(4);
+    await restoreSessionOnLaunch(4);
 
     // dangling Live Activity が終了されること
     expect(endLiveActivity).toHaveBeenCalledWith('activity-dangling');
 
-    // セッション自体はクリアされない（completeMorningSession の仕事）
+    // セッション自体はクリアされない（expireSessionIfNeeded の仕事）
     expect(useMorningSessionStore.getState().session).not.toBeNull();
   });
 
-  test('does nothing when no session exists', () => {
+  test('does nothing when no session exists', async () => {
     // session は null (beforeEach でリセット済み)
-    restoreSessionOnLaunch(4);
+    await restoreSessionOnLaunch(4);
 
     expect(endLiveActivity).not.toHaveBeenCalled();
     expect(useMorningSessionStore.getState().session).toBeNull();
+  });
+
+  test('cleans up expired session (windowEnd passed)', async () => {
+    // windowEnd が過去のセッション
+    setActiveSession({
+      windowEnd: '2020-01-01T00:00:00.000Z',
+      liveActivityId: 'activity-expired',
+      snoozeAlarmIds: ['snooze-expired'],
+    });
+
+    await restoreSessionOnLaunch(4);
+
+    // 期限切れセッションがクリアされること
+    expect(useMorningSessionStore.getState().session).toBeNull();
+    // スヌーズとLAがクリーンアップされること
+    expect(cancelAlarmsByIds).toHaveBeenCalledWith(['snooze-expired']);
+    expect(endLiveActivity).toHaveBeenCalledWith('activity-expired');
+    // アラーム再スケジュール
+    expect(syncAlarms).toHaveBeenCalled();
   });
 });
 
