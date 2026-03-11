@@ -86,6 +86,7 @@ describe('syncAlarms', () => {
         date: '2026-03-06',
         startedAt: '2026-03-06T07:00:00.000Z',
         todos: [{ id: 'todo-1', title: 'Test', completed: false, completedAt: null }],
+        windowEnd: '2026-03-06T07:30:00.000Z',
         liveActivityId: null,
         goalDeadline: null,
         snoozeAlarmIds: ['snooze-1'],
