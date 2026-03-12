@@ -13,6 +13,7 @@
  * 設計: docs/plans/2026-03-01-session-lifecycle-service-design.md
  */
 
+import { toAlarmKitSoundName } from '../constants/alarm-sounds';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
@@ -345,7 +346,13 @@ export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<vo
       snoozeIds = nativeSnoozeIds;
       clearSnoozeAlarmIds();
     } else {
-      snoozeIds = await scheduleSnoozeAlarms(dismissTime);
+      // ネイティブ側がスケジュールしなかった場合のフォールバック。
+      // ユーザー選択の音をスヌーズにも適用する。
+      snoozeIds = await scheduleSnoozeAlarms(
+        dismissTime,
+        undefined,
+        toAlarmKitSoundName(target.soundId),
+      );
     }
     const snoozeFiresAt = new Date(
       dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,

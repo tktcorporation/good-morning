@@ -9,10 +9,11 @@
  * 循環 import なし: alarm-scheduler → alarm-kit（OK）、alarm-kit → alarm-scheduler（なし）
  */
 
+import { toAlarmKitSoundName } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { isNextOverrideExpired } from '../types/wake-target';
-import { getAlarmKit } from './alarm-kit';
+import { getAlarmKit, setSnoozeSoundName } from './alarm-kit';
 
 /**
  * Convert DayOfWeek (0=Sunday, 1=Monday, ..., 6=Saturday)
@@ -79,6 +80,12 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
   const kit = getAlarmKit();
   if (kit === null || !target.enabled) return [];
 
+  // ネイティブ dismiss 時のスヌーズスケジュールで使う音名を App Groups に永続化する。
+  // アプリ未起動でもネイティブ側がこの値を読み取ってユーザー選択の音でスヌーズを鳴らす。
+  // toAlarmKitSoundName() が soundId → fileName の唯一の変換ポイント。
+  const soundName = toAlarmKitSoundName(target.soundId);
+  setSnoozeSoundName(soundName);
+
   const ids: string[] = [];
   const alarmTitle = 'Good Morning';
 
@@ -92,7 +99,7 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
       minute: time.minute,
       weekdays,
       title: alarmTitle,
-      soundName: target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined,
+      soundName,
       launchAppOnDismiss: true,
       // doSnoozeIntent は設定しない。
       // JS 側で scheduleSnoozeAlarms() により 9 分間隔のスヌーズを先行スケジュール済み。
@@ -118,7 +125,7 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
       id,
       epochSeconds,
       title: alarmTitle,
-      soundName: target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined,
+      soundName,
       launchAppOnDismiss: true,
     });
     if (success) ids.push(id);
@@ -148,11 +155,13 @@ export const SNOOZE_MAX_COUNT = 20;
  *
  * @param baseTime スヌーズ起算時刻（通常はアラーム dismiss 時刻）
  * @param count スケジュールする本数（デフォルト SNOOZE_MAX_COUNT）
+ * @param soundName AlarmKit に渡す音名（例: "chime.mp3"）。undefined でデフォルト音。
  * @returns スケジュールに成功したアラーム ID の配列
  */
 export async function scheduleSnoozeAlarms(
   baseTime: Date,
   count: number = SNOOZE_MAX_COUNT,
+  soundName?: string,
 ): Promise<readonly string[]> {
   const kit = getAlarmKit();
   if (kit === null) return [];
@@ -168,6 +177,7 @@ export async function scheduleSnoozeAlarms(
         id,
         epochSeconds,
         title: 'Good Morning',
+        soundName,
         launchAppOnDismiss: true,
         dismissPayload: JSON.stringify({ isSnooze: true }),
       });

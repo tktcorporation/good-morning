@@ -136,6 +136,27 @@ export async function clearDismissEvents(): Promise<void> {
 }
 
 /**
+ * スヌーズアラームで使用する音名を App Groups に保存する。
+ *
+ * 背景: ネイティブ AlarmDismissIntent.perform() はアプリ未起動でもスヌーズをスケジュールする。
+ * その際にユーザー選択の音を使えるよう、メインアラームスケジュール時に soundName を
+ * App Groups に永続化しておく。ネイティブ側の scheduleSnoozeAlarms() がこの値を読み取る。
+ *
+ * 呼び出し元: scheduleWakeTargetAlarm() (alarm-scheduler.ts)
+ */
+export function setSnoozeSoundName(soundName: string | undefined): void {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+  const fn = (kit as Record<string, unknown>).setSnoozeSoundName;
+  if (typeof fn !== 'function') return;
+  try {
+    (fn as (name: string | null) => void)(soundName ?? null);
+  } catch (e) {
+    logError('[AlarmKit] setSnoozeSoundName failed:', e);
+  }
+}
+
+/**
  * ネイティブ AlarmDismissIntent が App Groups に保存したスヌーズアラーム ID を取得する。
  *
  * 背景: アラーム dismiss 時にアプリが起動しない場合でも、ネイティブ側で

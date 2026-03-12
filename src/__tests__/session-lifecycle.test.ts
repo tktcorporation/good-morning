@@ -166,8 +166,8 @@ describe('handleAlarmDismiss (was startMorningSession)', () => {
     expect(session?.recordId).toBe(records[0]?.id);
     expect(session?.todos).toHaveLength(2);
 
-    // スヌーズがスケジュールされていること
-    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime);
+    // スヌーズがスケジュールされていること（soundId='default' → soundName=undefined）
+    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime, undefined, undefined);
     expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
     expect(session?.snoozeFiresAt).not.toBeNull();
 
@@ -243,11 +243,21 @@ describe('handleAlarmDismiss (was startMorningSession)', () => {
 
     await handleAlarmDismiss(params);
 
-    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime);
+    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime, undefined, undefined);
     expect(clearSnoozeAlarmIds).not.toHaveBeenCalled();
 
     const session = useMorningSessionStore.getState().session;
     expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+  });
+
+  test('passes custom soundName to snooze scheduling when target has non-default sound', async () => {
+    const target = { ...createTargetWithTodos(), soundId: 'chime' };
+    const params = createStartParams({ target });
+
+    await handleAlarmDismiss(params);
+
+    // soundId='chime' → soundName='chime.mp3' が渡されること
+    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime, undefined, 'chime.mp3');
   });
 
   test('session survives snooze scheduling failure', async () => {
