@@ -1,4 +1,9 @@
-import { ALARM_SOUNDS, DEFAULT_SOUND_ID, getAlarmSound } from '../constants/alarm-sounds';
+import {
+  ALARM_SOUNDS,
+  DEFAULT_SOUND_ID,
+  getAlarmSound,
+  toAlarmKitSoundName,
+} from '../constants/alarm-sounds';
 
 describe('getAlarmSound', () => {
   it('returns correct sound by id', () => {
@@ -11,6 +16,22 @@ describe('getAlarmSound', () => {
   it('returns default for unknown id', () => {
     const sound = getAlarmSound('nonexistent');
     expect(sound.id).toBe(DEFAULT_SOUND_ID);
+  });
+});
+
+describe('toAlarmKitSoundName', () => {
+  it('returns undefined for default soundId (OS default sound)', () => {
+    expect(toAlarmKitSoundName('default')).toBeUndefined();
+  });
+
+  it('returns fileName from ALARM_SOUNDS for known soundId', () => {
+    expect(toAlarmKitSoundName('chime')).toBe('chime.mp3');
+    expect(toAlarmKitSoundName('birds')).toBe('birds.mp3');
+    expect(toAlarmKitSoundName('bell')).toBe('bell.mp3');
+  });
+
+  it('returns undefined for unknown soundId', () => {
+    expect(toAlarmKitSoundName('nonexistent')).toBeUndefined();
   });
 });
 

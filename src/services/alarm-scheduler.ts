@@ -9,6 +9,7 @@
  * 循環 import なし: alarm-scheduler → alarm-kit（OK）、alarm-kit → alarm-scheduler（なし）
  */
 
+import { toAlarmKitSoundName } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { isNextOverrideExpired } from '../types/wake-target';
@@ -81,7 +82,8 @@ export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<reado
 
   // ネイティブ dismiss 時のスヌーズスケジュールで使う音名を App Groups に永続化する。
   // アプリ未起動でもネイティブ側がこの値を読み取ってユーザー選択の音でスヌーズを鳴らす。
-  const soundName = target.soundId !== 'default' ? `${target.soundId}.mp3` : undefined;
+  // toAlarmKitSoundName() が soundId → fileName の唯一の変換ポイント。
+  const soundName = toAlarmKitSoundName(target.soundId);
   setSnoozeSoundName(soundName);
 
   const ids: string[] = [];

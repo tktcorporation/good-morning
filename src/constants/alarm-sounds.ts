@@ -35,3 +35,20 @@ export function getAlarmSound(id: string): AlarmSound {
   // biome-ignore lint/style/noNonNullAssertion: ALARM_SOUNDS always has at least one element
   return ALARM_SOUNDS[0]!;
 }
+
+/**
+ * soundId を AlarmKit に渡す soundName (ファイル名) に変換する。
+ *
+ * 背景: AlarmKit の soundName に undefined を渡すと OS デフォルト音が使われる。
+ * `'default'` は「OS デフォルト音を使う」という意味なので undefined を返す。
+ * それ以外は ALARM_SOUNDS から fileName をルックアップする。
+ *
+ * この関数が soundId → soundName 変換の唯一の正規化ポイント。
+ * alarm-scheduler.ts, session-lifecycle.ts, ネイティブ patch が消費する。
+ * 新しいサウンドを追加したときも ALARM_SOUNDS に追加するだけで全箇所に反映される。
+ */
+export function toAlarmKitSoundName(soundId: string): string | undefined {
+  if (soundId === DEFAULT_SOUND_ID) return undefined;
+  const sound = ALARM_SOUNDS.find((s) => s.id === soundId);
+  return sound?.fileName;
+}
