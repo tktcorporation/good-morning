@@ -62,20 +62,30 @@ function groupDaysByTime(
 /**
  * WakeTarget の設定に基づいてアラームをスケジュールする。
  *
- * 設計: AlarmKit に登録されている全アラームを cancelAllAlarms() でクリアしてから
- * 新規スケジュールする。cancelAlarmsByIds(previousIds) を使っていた旧設計では、
- * alarmIds が消失（再インストール・AsyncStorage クリア等）した場合に孤立アラームが
- * 蓄積し、同一時刻に複数のアラームが即座に連続発火する問題があった。
+ * 設計: 前回の wake-target アラーム ID（previousIds）のみをキャンセルしてから
+ * 新規スケジュールする。cancelAllAlarms() を使っていた旧設計では、
+ * スヌーズアラームまで巻き添えキャンセルされるため、セッションアクティブ中に
+ * 呼べない制約があった。ID ベースに変更したことで、いつでも安全に呼べる。
  *
- * 前提: セッション非アクティブ時のみ呼ばれる（_layout.tsx の isActive() ガード）。
- * スヌーズアラームがアクティブな間は呼ばれないため、全削除しても安全。
+ * 孤立アラーム対策: previousIds が消失（再インストール・AsyncStorage クリア等）
+ * した場合、AlarmKit の getAllAlarms() から snoozeAlarmIds を除外した差分で
+ * 孤立 wake-target を検出・キャンセルする。
  *
  * @param target アラーム設定
+ * @param previousIds 前回スケジュールした wake-target の ID。孤立防止のため渡す。
+ * @param snoozeAlarmIds 現在アクティブなスヌーズアラーム ID。キャンセル対象から除外する。
  */
-export async function scheduleWakeTargetAlarm(target: WakeTarget): Promise<readonly string[]> {
-  // AlarmKit に登録されている全アラームを削除してから再スケジュール。
-  // ID ベースのキャンセルと異なり、孤立アラームを確実に除去できる。
-  await cancelAllAlarms();
+export async function scheduleWakeTargetAlarm(
+  target: WakeTarget,
+  previousIds: readonly string[] = [],
+  snoozeAlarmIds: readonly string[] = [],
+): Promise<readonly string[]> {
+  // 前回の wake-target アラームをキャンセル。スヌーズには影響しない。
+  await cancelAlarmsByIds(previousIds);
+
+  // 孤立アラーム対策: ストアの ID が消失していても、AlarmKit に残っている
+  // 非スヌーズアラームを検出してキャンセルする。
+  await cancelOrphanedWakeTargetAlarms(snoozeAlarmIds);
 
   const kit = getAlarmKit();
   if (kit === null || !target.enabled) return [];
@@ -189,6 +199,15 @@ export async function scheduleSnoozeAlarms(
   return ids;
 }
 
+/**
+ * AlarmKit に登録されている全アラームをキャンセルする。
+ *
+ * 注意: wake-target とスヌーズの区別なく全て削除する。
+ * セッション非アクティブ時（スヌーズなし）のみ安全に使用できる。
+ * セッション中のアラーム同期には scheduleWakeTargetAlarm の ID ベースキャンセルを使うこと。
+ *
+ * 用途: syncAlarms の target disabled/null 時（全アラーム不要）
+ */
 export async function cancelAllAlarms(): Promise<void> {
   const kit = getAlarmKit();
   if (kit === null) return;
@@ -196,6 +215,28 @@ export async function cancelAllAlarms(): Promise<void> {
   const existing = kit.getAllAlarms();
   const cancellations = existing.map((id) => kit.cancelAlarm(id));
   await Promise.all(cancellations);
+}
+
+/**
+ * AlarmKit に登録されているアラームのうち、snoozeAlarmIds に含まれないものを
+ * 孤立 wake-target アラームとみなしてキャンセルする。
+ *
+ * 背景: previousIds が消失（再インストール・AsyncStorage クリア等）した場合、
+ * ID ベースのキャンセルでは孤立アラームが残り、同一時刻に複数アラームが
+ * 連続発火する問題があった。この関数で差分キャンセルすることで、
+ * cancelAllAlarms() を使わずに孤立アラームを除去できる。
+ */
+async function cancelOrphanedWakeTargetAlarms(snoozeAlarmIds: readonly string[]): Promise<void> {
+  const kit = getAlarmKit();
+  if (kit === null) return;
+
+  const allAlarms = kit.getAllAlarms();
+  const snoozeSet = new Set(snoozeAlarmIds);
+  const orphanedIds = allAlarms.filter((id) => !snoozeSet.has(id));
+
+  if (orphanedIds.length > 0) {
+    await Promise.all(orphanedIds.map((id) => kit.cancelAlarm(id)));
+  }
 }
 
 /**

@@ -39,6 +39,7 @@ import {
 } from './alarm-scheduler';
 import { syncAlarms } from './alarm-sync';
 import { endLiveActivity, startLiveActivity, updateLiveActivity } from './live-activity';
+import { cancelReminderNotifications, scheduleReminderNotifications } from './todo-reminder';
 
 // ─── セッションウィンドウ定数 ───────────────────────────────────────
 /**
@@ -186,6 +187,9 @@ export async function expireSessionIfNeeded(): Promise<boolean> {
     await cancelAlarmsByIds(session.snoozeAlarmIds);
   }
 
+  // 1.5. 残存リマインド通知をキャンセル
+  await cancelReminderNotifications();
+
   // 2. Live Activity を終了
   if (session.liveActivityId !== null) {
     await endLiveActivity(session.liveActivityId);
@@ -264,12 +268,9 @@ export interface AlarmDismissParams {
 export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<void> {
   const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
 
-  // 既存の wake-target アラームをキャンセル（スヌーズとの競合防止）
-  const targetState = useWakeTargetStore.getState();
-  if (targetState.alarmIds.length > 0) {
-    await cancelAlarmsByIds(targetState.alarmIds);
-    await targetState.setAlarmIds([]);
-  }
+  // wake-target アラームはキャンセルしない。
+  // scheduleWakeTargetAlarm が ID ベースキャンセルに変更されたため、
+  // スヌーズアラームとの競合は発生しない。次回の syncAlarms で自然に再スケジュールされる。
 
   const hasTodos = target.todos.length > 0;
   const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
@@ -362,7 +363,16 @@ export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<vo
     // スヌーズ失敗はログのみ — セッション自体は有効に保つ
   }
 
-  // 4. Live Activity 開始
+  // 4. TODO 未完了リマインド通知をスケジュール
+  // スヌーズアラーム（AlarmKit）が iOS の制約で鳴らないケースの保険として、
+  // expo-notifications のローカル通知でもリマインドする。
+  try {
+    await scheduleReminderNotifications(target.todos.length);
+  } catch {
+    // リマインド通知失敗はログのみ
+  }
+
+  // 5. Live Activity 開始
   try {
     const { session: currentSession } = useMorningSessionStore.getState();
     const liveActivityTodos = target.todos.map((td) => ({
@@ -423,6 +433,9 @@ export async function onAllTodosCompleted(session: MorningSession): Promise<void
     await useMorningSessionStore.getState().setSnoozeState([], null);
   }
 
+  // 1.5. リマインド通知もキャンセル（TODO完了したので不要）
+  await cancelReminderNotifications();
+
   // 2. Live Activity 終了
   if (session.liveActivityId !== null) {
     await endLiveActivity(session.liveActivityId);
@@ -463,6 +476,8 @@ export async function onAllTodosCompleted(session: MorningSession): Promise<void
   }
 
   // セッションはクリアしない — windowEnd まで維持される
+  // wake-target アラームの再スケジュールは不要。dismiss 時にキャンセルしていないため、
+  // 翌日以降のアラームは消失していない。
 }
 
 /**
