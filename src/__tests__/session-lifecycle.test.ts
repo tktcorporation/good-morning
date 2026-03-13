@@ -195,7 +195,7 @@ describe('handleAlarmDismiss (was startMorningSession)', () => {
     expect(startLiveActivity).not.toHaveBeenCalled();
   });
 
-  test('cancels existing wake-target alarms before scheduling snooze', async () => {
+  test('does not cancel wake-target alarms on dismiss (ID-based cancel preserves them)', async () => {
     useWakeTargetStore.setState({
       target: createTargetWithTodos(),
       loaded: true,
@@ -205,11 +205,11 @@ describe('handleAlarmDismiss (was startMorningSession)', () => {
 
     await handleAlarmDismiss(params);
 
-    // 既存の wake-target アラームがキャンセルされること
-    expect(cancelAlarmsByIds).toHaveBeenCalledWith(['wake-alarm-1', 'wake-alarm-2']);
-    // alarmIds がクリアされること
-    expect(useWakeTargetStore.getState().alarmIds).toEqual([]);
-    // その後スヌーズがスケジュールされること
+    // wake-target アラームはキャンセルされない（ID ベースキャンセルにより競合しないため）
+    expect(cancelAlarmsByIds).not.toHaveBeenCalledWith(['wake-alarm-1', 'wake-alarm-2']);
+    // alarmIds は維持されること
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(['wake-alarm-1', 'wake-alarm-2']);
+    // スヌーズは正常にスケジュールされること
     expect(scheduleSnoozeAlarms).toHaveBeenCalled();
   });
 

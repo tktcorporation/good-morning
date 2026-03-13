@@ -6,14 +6,14 @@
  * target が変更されるたびに effect が発火し、タイミング次第で
  * セッション中のスヌーズアラームが巻き添えキャンセルされる競合状態があった。
  *
- * 設計: React のリアクティブモデルからアラーム管理を分離する。
- * target を変更するストアメソッドが明示的に syncAlarms() を呼ぶことで、
- * アプリの状態（フォアグラウンド/バックグラウンド/終了後）に依存しない
- * 一貫したスケジューリングを実現する。
+ * 設計変更（2026-03）: scheduleWakeTargetAlarm が ID ベースキャンセルに変更されたため、
+ * セッションアクティブ中でも安全に呼べるようになった。
+ * 旧: cancelAllAlarms → スヌーズ巻き添え → セッションアクティブガードが必要
+ * 新: cancelAlarmsByIds(previousIds) → スヌーズに影響しない → ガード不要
  *
  * 呼び出し元:
  *   - wake-target-store.ts: target 変更時（時刻・曜日・有効/無効・サウンド等）
- *   - session-lifecycle.ts: completeMorningSession（セッション完了後の再スケジュール）
+ *   - session-lifecycle.ts: expireSessionIfNeeded（セッション期限切れ後の再スケジュール）
  *   - _layout.tsx: アプリ起動時（cold-start 後のアラーム確保）
  */
 
@@ -33,20 +33,18 @@ let currentGeneration = 0;
  * 現在のストア状態に基づいてアラームを同期する。
  *
  * 判定ロジック:
- * - セッションアクティブ中 → 何もしない（スヌーズが管理中）
  * - ストア未ロード → 何もしない（初期化完了後に再呼出される）
  * - target が null/disabled → 全アラームキャンセル
- * - target が enabled → 全アラームキャンセル → 再スケジュール
+ * - target が enabled → 前回の wake-target ID のみキャンセル → 再スケジュール
+ *
+ * セッションアクティブ中でも安全に呼べる。scheduleWakeTargetAlarm が
+ * ID ベースキャンセルに変更されたため、スヌーズアラームには影響しない。
  *
  * 再入防止: 世代カウンターにより、処理中に新しい呼び出しが開始された場合、
  * 古い呼び出しの結果（新規登録したアラーム ID）をキャンセルして破棄する。
  * これにより target の連続変更時に中間状態のアラームが残る問題を防ぐ。
  */
 export async function syncAlarms(): Promise<void> {
-  // セッションアクティブ中はスヌーズアラームが session-lifecycle で管理されている。
-  // cancelAllAlarms で巻き添えキャンセルされるのを防ぐ。
-  if (useMorningSessionStore.getState().isActive()) return;
-
   const targetState = useWakeTargetStore.getState();
 
   // ストア未ロード時は何もしない。
@@ -57,6 +55,9 @@ export async function syncAlarms(): Promise<void> {
   const generation = ++currentGeneration;
 
   if (target === null || !target.enabled) {
+    // target 無効時は全アラームキャンセル。
+    // セッションアクティブ中に target を無効にすることは通常ないが、
+    // 万が一のケースではスヌーズも含めて全停止が適切。
     await cancelAllAlarms();
     if (generation === currentGeneration) {
       await targetState.setAlarmIds([]);
@@ -64,8 +65,11 @@ export async function syncAlarms(): Promise<void> {
     return;
   }
 
-  // scheduleWakeTargetAlarm は内部で cancelAllAlarms → 再スケジュールする。
-  const newIds = await scheduleWakeTargetAlarm(target);
+  // 前回の wake-target ID とアクティブなスヌーズ ID を渡す。
+  // scheduleWakeTargetAlarm は wake-target のみキャンセルし、スヌーズには触れない。
+  const previousIds = targetState.alarmIds;
+  const snoozeAlarmIds = useMorningSessionStore.getState().session?.snoozeAlarmIds ?? [];
+  const newIds = await scheduleWakeTargetAlarm(target, previousIds, snoozeAlarmIds);
 
   if (generation !== currentGeneration) {
     // 処理中に新しい syncAlarms が開始された — この結果は古いので破棄

@@ -53,7 +53,8 @@ describe('syncAlarms', () => {
 
     await syncAlarms();
 
-    expect(scheduleWakeTargetAlarm).toHaveBeenCalledWith(target);
+    // previousIds=[], snoozeAlarmIds=[] が渡されること（セッションなし）
+    expect(scheduleWakeTargetAlarm).toHaveBeenCalledWith(target, [], []);
     expect(useWakeTargetStore.getState().alarmIds).toEqual(['alarm-1', 'alarm-2']);
   });
 
@@ -77,9 +78,9 @@ describe('syncAlarms', () => {
     expect(useWakeTargetStore.getState().alarmIds).toEqual([]);
   });
 
-  test('does nothing when session is active (protects snooze alarms)', async () => {
+  test('schedules alarms even when session is active (preserving snooze)', async () => {
     const target = createTarget();
-    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: ['old-wake-1'] });
     useMorningSessionStore.setState({
       session: {
         recordId: 'rec-1',
@@ -97,9 +98,11 @@ describe('syncAlarms', () => {
 
     await syncAlarms();
 
-    // セッションアクティブ中はアラームに触らない
+    // セッションアクティブ中でも wake-target はスケジュールされる。
+    // previousIds とスヌーズ ID が渡され、スヌーズには触れない。
+    expect(scheduleWakeTargetAlarm).toHaveBeenCalledWith(target, ['old-wake-1'], ['snooze-1']);
     expect(cancelAllAlarms).not.toHaveBeenCalled();
-    expect(scheduleWakeTargetAlarm).not.toHaveBeenCalled();
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(['alarm-1', 'alarm-2']);
   });
 
   test('does nothing when store is not loaded yet', async () => {

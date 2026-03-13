@@ -1,15 +1,10 @@
 /**
- * バックグラウンド同期タスク（ウィジェット + アラーム再スケジュール）。
+ * バックグラウンドウィジェット同期タスク。
  *
  * 背景: ホームウィジェットのデータをアプリ非使用時にも最新に保つため、
  * expo-background-fetch で iOS に定期実行を登録する。
  * タスクが起動されると全ストアを AsyncStorage から再読み込みし、
  * App Groups UserDefaults にウィジェットデータを書き出す。
- *
- * 追加（2026-03）: セッション期限切れ時のアラーム再スケジュールも行う。
- * handleAlarmDismiss で repeating アラームをキャンセルした後、
- * アプリがフォアグラウンドに復帰しないとアラームが消失するバグの対策。
- * バックグラウンドフェッチで期限切れセッションを検知し、アラームを復元する。
  *
  * 呼び出し元: iOS バックグラウンドフェッチ（30分〜数時間間隔）
  * 登録: _layout.tsx の初期化で registerBackgroundSync() を呼ぶ
@@ -49,15 +44,6 @@ TaskManager.defineTask(BACKGROUND_WIDGET_SYNC, async () => {
 
     // ウィジェットデータ同期
     await syncWidget();
-
-    // 期限切れセッションのクリーンアップ + アラーム再スケジュール。
-    // アプリがフォアグラウンドに復帰しなくても、バックグラウンドフェッチで
-    // 翌日のアラームを復元する。expireSessionIfNeeded 内で syncAlarms が呼ばれる。
-    const sessionStore = useMorningSessionStore.getState();
-    if (sessionStore.isActive() && sessionStore.isExpired()) {
-      const { expireSessionIfNeeded } = await import('./session-lifecycle');
-      await expireSessionIfNeeded();
-    }
 
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch {

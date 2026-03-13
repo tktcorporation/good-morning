@@ -36,7 +36,6 @@ import {
   cancelAlarmsByIds,
   SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
-  scheduleWakeTargetAlarm,
 } from './alarm-scheduler';
 import { syncAlarms } from './alarm-sync';
 import { endLiveActivity, startLiveActivity, updateLiveActivity } from './live-activity';
@@ -269,12 +268,9 @@ export interface AlarmDismissParams {
 export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<void> {
   const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
 
-  // 既存の wake-target アラームをキャンセル（スヌーズとの競合防止）
-  const targetState = useWakeTargetStore.getState();
-  if (targetState.alarmIds.length > 0) {
-    await cancelAlarmsByIds(targetState.alarmIds);
-    await targetState.setAlarmIds([]);
-  }
+  // wake-target アラームはキャンセルしない。
+  // scheduleWakeTargetAlarm が ID ベースキャンセルに変更されたため、
+  // スヌーズアラームとの競合は発生しない。次回の syncAlarms で自然に再スケジュールされる。
 
   const hasTodos = target.todos.length > 0;
   const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
@@ -480,20 +476,8 @@ export async function onAllTodosCompleted(session: MorningSession): Promise<void
   }
 
   // セッションはクリアしない — windowEnd まで維持される
-
-  // 4. wake-target アラームを再スケジュール
-  // handleAlarmDismiss で dismiss 時に repeating アラームを全キャンセルしているため、
-  // TODO 完了時点で翌日以降のアラームが消失している。
-  // syncAlarms() はセッション active 中は早期リターンするため、直接再スケジュールする。
-  try {
-    const { target } = useWakeTargetStore.getState();
-    if (target?.enabled) {
-      const newIds = await scheduleWakeTargetAlarm(target);
-      await useWakeTargetStore.getState().setAlarmIds(newIds);
-    }
-  } catch {
-    // アラーム再スケジュール失敗はログのみ — セッション期限切れ時にリトライされる
-  }
+  // wake-target アラームの再スケジュールは不要。dismiss 時にキャンセルしていないため、
+  // 翌日以降のアラームは消失していない。
 }
 
 /**
