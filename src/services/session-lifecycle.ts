@@ -36,9 +36,11 @@ import {
   cancelAlarmsByIds,
   SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
+  scheduleWakeTargetAlarm,
 } from './alarm-scheduler';
 import { syncAlarms } from './alarm-sync';
 import { endLiveActivity, startLiveActivity, updateLiveActivity } from './live-activity';
+import { cancelReminderNotifications, scheduleReminderNotifications } from './todo-reminder';
 
 // ─── セッションウィンドウ定数 ───────────────────────────────────────
 /**
@@ -185,6 +187,9 @@ export async function expireSessionIfNeeded(): Promise<boolean> {
   if (session.snoozeAlarmIds.length > 0) {
     await cancelAlarmsByIds(session.snoozeAlarmIds);
   }
+
+  // 1.5. 残存リマインド通知をキャンセル
+  await cancelReminderNotifications();
 
   // 2. Live Activity を終了
   if (session.liveActivityId !== null) {
@@ -362,7 +367,16 @@ export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<vo
     // スヌーズ失敗はログのみ — セッション自体は有効に保つ
   }
 
-  // 4. Live Activity 開始
+  // 4. TODO 未完了リマインド通知をスケジュール
+  // スヌーズアラーム（AlarmKit）が iOS の制約で鳴らないケースの保険として、
+  // expo-notifications のローカル通知でもリマインドする。
+  try {
+    await scheduleReminderNotifications(target.todos.length);
+  } catch {
+    // リマインド通知失敗はログのみ
+  }
+
+  // 5. Live Activity 開始
   try {
     const { session: currentSession } = useMorningSessionStore.getState();
     const liveActivityTodos = target.todos.map((td) => ({
@@ -423,6 +437,9 @@ export async function onAllTodosCompleted(session: MorningSession): Promise<void
     await useMorningSessionStore.getState().setSnoozeState([], null);
   }
 
+  // 1.5. リマインド通知もキャンセル（TODO完了したので不要）
+  await cancelReminderNotifications();
+
   // 2. Live Activity 終了
   if (session.liveActivityId !== null) {
     await endLiveActivity(session.liveActivityId);
@@ -463,6 +480,20 @@ export async function onAllTodosCompleted(session: MorningSession): Promise<void
   }
 
   // セッションはクリアしない — windowEnd まで維持される
+
+  // 4. wake-target アラームを再スケジュール
+  // handleAlarmDismiss で dismiss 時に repeating アラームを全キャンセルしているため、
+  // TODO 完了時点で翌日以降のアラームが消失している。
+  // syncAlarms() はセッション active 中は早期リターンするため、直接再スケジュールする。
+  try {
+    const { target } = useWakeTargetStore.getState();
+    if (target?.enabled) {
+      const newIds = await scheduleWakeTargetAlarm(target);
+      await useWakeTargetStore.getState().setAlarmIds(newIds);
+    }
+  } catch {
+    // アラーム再スケジュール失敗はログのみ — セッション期限切れ時にリトライされる
+  }
 }
 
 /**
