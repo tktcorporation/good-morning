@@ -1,8 +1,8 @@
 diff --git a/ios/ExpoAlarmKitModule.swift b/ios/ExpoAlarmKitModule.swift
-index 0000000..0000001 100644
+index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..07a1692f2d11f6566ddf055818f51aeae5ccd7ae 100644
 --- a/ios/ExpoAlarmKitModule.swift
 +++ b/ios/ExpoAlarmKitModule.swift
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,7 @@ import AlarmKit
  import ActivityKit
  import AppIntents
  import SwiftUI
@@ -10,7 +10,7 @@ index 0000000..0000001 100644
  
  // MARK: - Storage Keys
  private let alarmKeyPrefix = "ExpoAlarmKit.alarm:"
-@@ -61,6 +62,139 @@
+@@ -61,6 +62,140 @@ public class ExpoAlarmKitStorage {
      public static func removeLaunchAppOnDismiss(alarmId: String) {
          sharedDefaults?.removeObject(forKey: launchAppKeyPrefix + alarmId)
      }
@@ -70,6 +70,11 @@ index 0000000..0000001 100644
 +    /// dismiss 時にスヌーズアラームをスケジュールし、ID を App Groups に永続化する。
 +    /// AlarmDismissIntent.perform() から呼ばれる（アプリ未起動でも実行される）。
 +    /// soundName は App Groups の snoozeSoundName から読み取る。
++    ///
++    /// 重要: 各スヌーズは単発アラーム（countdownDuration: nil）として登録する。
++    /// postAlert を設定すると AlarmKit が発火後に自動で再カウントダウン→再発火するため、
++    /// 先行スケジュール済みの次のスヌーズと同時刻に鳴り、アラームが指数的に増殖する。
++    /// 先行スケジュール方式では各アラームが独立した単発であることが前提。
 +    public static func scheduleSnoozeAlarms(dismissedAt: Date) async {
 +        struct Meta: AlarmMetadata {}
 +        var ids: [String] = []
@@ -89,24 +94,20 @@ index 0000000..0000001 100644
 +            let fireDate = dismissedAt.addingTimeInterval(snoozeIntervalSeconds * Double(i))
 +            let epochSeconds = fireDate.timeIntervalSince1970
 +
++            // Stop ボタンのみ。Snooze ボタンは不要（次の先行スケジュール済みアラームが担う）。
 +            let stopButton = AlarmButton(
 +                text: LocalizedStringResource(stringLiteral: "Stop"),
 +                textColor: .white,
 +                systemImageName: "stop.circle"
 +            )
-+            let snoozeButton = AlarmButton(
-+                text: LocalizedStringResource(stringLiteral: "Snooze"),
-+                textColor: .white,
-+                systemImageName: "clock.badge.checkmark"
-+            )
 +            let alertPresentation = AlarmPresentation.Alert(
 +                title: LocalizedStringResource(stringLiteral: "Good Morning"),
-+                stopButton: stopButton,
-+                secondaryButton: snoozeButton,
-+                secondaryButtonBehavior: .countdown
++                stopButton: stopButton
 +            )
 +            let presentation = AlarmPresentation(alert: alertPresentation)
-+            let countdownDuration = Alarm.CountdownDuration(preAlert: nil, postAlert: snoozeIntervalSeconds)
++            // countdownDuration: nil — 単発アラーム。postAlert を設定すると
++            // 発火後に自動カウントダウン→再発火し、次の先行スケジュール済みスヌーズと
++            // 同時刻に鳴って連続鳴動の原因になる。
 +            let attributes = AlarmAttributes<Meta>(
 +                presentation: presentation,
 +                metadata: Meta(),
@@ -119,7 +120,7 @@ index 0000000..0000001 100644
 +            )
 +
 +            let config = AlarmManager.AlarmConfiguration<Meta>(
-+                countdownDuration: countdownDuration,
++                countdownDuration: nil,
 +                schedule: .fixed(fireDate),
 +                attributes: attributes,
 +                stopIntent: stopIntent,
@@ -150,7 +151,7 @@ index 0000000..0000001 100644
  }
  
  // MARK: - Record Structs for Expo Module
-@@ -126,34 +260,55 @@
+@@ -126,34 +261,55 @@ private func buildLaunchPayload(alarmId: String, payload: String?) -> [String: A
      ]
  }
  
@@ -213,7 +214,7 @@ index 0000000..0000001 100644
          return .result()
      }
  }
-@@ -164,28 +319,37 @@
+@@ -164,28 +320,37 @@ public struct AlarmDismissIntentWithLaunch: LiveActivityIntent {
      public static var title: LocalizedStringResource = "Dismiss Alarm"
      public static var description = IntentDescription("Handles alarm dismissal and opens app")
      public static var openAppWhenRun: Bool = true
@@ -258,7 +259,7 @@ index 0000000..0000001 100644
          return .result()
      }
  }
-@@ -576,5 +740,56 @@
+@@ -576,5 +741,56 @@ public class ExpoAlarmKitModule: Module {
              ExpoAlarmKitModule.launchPayload = nil
              return payload
          }
