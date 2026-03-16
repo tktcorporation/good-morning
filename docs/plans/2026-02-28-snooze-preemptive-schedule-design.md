@@ -15,19 +15,54 @@ expo-alarm-kit には `doSnoozeIntent`（ネイティブスヌーズボタン）
 
 ---
 
+## 設計上の不変条件
+
+先行スケジュール方式を正しく機能させるための制約。違反すると連続鳴動バグが再発する。
+
+### 不変条件 1: 先行スケジュール済みスヌーズは単発アラームであること
+
+各スヌーズアラームは AlarmKit の `countdownDuration: nil` で登録し、
+`postAlert` や `secondaryButtonBehavior: .countdown` を**設定してはならない**。
+
+**理由:** AlarmKit の `postAlert` は発火後に自動でカウントダウン→再発火する。
+先行スケジュール済みの次のスヌーズと同時刻に鳴り、アラームが指数的に増殖する。
+
+**過去の違反事例:**
+1. `doSnoozeIntent: true` をメインアラームに設定 → ネイティブが JS 管理外のスヌーズを生成
+   → 修正: `doSnoozeIntent` を除去 (alarm-scheduler.ts)
+2. `postAlert: 540` + `secondaryButtonBehavior: .countdown` を各スヌーズに設定
+   → 修正: `countdownDuration: nil` + Snooze ボタン除去 (expo-alarm-kit patch, 2026-03-16)
+
+### 不変条件 2: スヌーズの再スケジュール機能は AlarmKit に委譲しない
+
+先行スケジュール方式では、9分間隔の発火タイミングは「事前にスケジュールした20本のアラーム」が
+管理する。AlarmKit のネイティブスヌーズ機構（`doSnoozeIntent`, `postAlert`, `.countdown`）は
+使わない。これらを使うと JS 側で管理できないアラームが発生し、dismiss しても止まらない
+連続鳴動が発生する。
+
+### 不変条件 3: スヌーズスケジュールは一度だけ
+
+dismiss 1回につきスヌーズ群は1回だけスケジュールする。
+ネイティブがスケジュール済みなら JS はフォールバックしない（`getSnoozeAlarmIds` で判定）。
+
+---
+
 ## Step 1: スヌーズ先行スケジュール方式の実装
 
 ### 設計
 
+> **注意:** 以下の設計は初期案。実装を経て上記の不変条件が確立された。
+> `doSnoozeIntent: true` は連続鳴動の原因となるため削除済み。
+
 ```
 scheduleWakeTargetAlarm(target) 実行時:
   1. メインアラーム（既存: repeating + nextOverride）
-     - doSnoozeIntent: true（ネイティブ Snooze ボタン有効化）
+     - doSnoozeIntent: false（設定しない — 不変条件2参照）
      - launchAppOnDismiss: true（Stop で アプリ起動）
-     - launchAppOnSnooze: false（Snooze でアプリ起動しない）
   2. スヌーズアラーム × 20本（T+9, T+18, ..., T+180 = 3時間分）
+     - countdownDuration: nil（単発 — 不変条件1参照）
      - launchAppOnDismiss: true
-     - dismissPayload: { isSnooze: true, snoozeIndex: N }
+     - dismissPayload: { isSnooze: true }
 
 TODO 全完了時:
   → cancelAllSnoozes(snoozeAlarmIds) で残り全キャンセル

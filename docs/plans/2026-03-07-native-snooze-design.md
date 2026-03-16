@@ -167,8 +167,18 @@ TODO 全完了（JS）
     → cancelAlarmsByIds([id1..id20]) → 残りスヌーズをキャンセル
 ```
 
+## 設計上の不変条件
+
+先行スケジュール方式の不変条件は `2026-02-28-snooze-preemptive-schedule-design.md` に定義。
+ネイティブ側のスヌーズスケジューリングでも厳守すること:
+
+1. **`countdownDuration: nil`** — 各スヌーズは単発アラーム。`postAlert` は自動再発火を引き起こす
+2. **Snooze ボタンなし** — `secondaryButton` + `.countdown` も同じ問題を起こす
+3. **AlarmKit のスヌーズ機構を使わない** — `doSnoozeIntent`, `postAlert`, `.countdown` は先行スケジュール方式と相容れない
+
 ## リスク
 
 - **AlarmManager.shared.schedule() が Intent 内で呼べない場合**: JS フォールバックがある
 - **App Groups 書き込みの競合**: dismiss は1回だけ実行されるため安全
 - **snoozeAlarmIds の二重読み取り**: clearSnoozeAlarmIds() で読み取り後にクリアする
+- **postAlert/countdown の再導入**: 設計上の不変条件に反する。連続鳴動バグの直接原因（2026-03-16 修正済み）

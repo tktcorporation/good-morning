@@ -42,6 +42,15 @@ public func perform() async throws -> some IntentResult {
 
 `clearDismissEvents()` の後（`}` の前、class 末尾）に以下を追加:
 
+> **重要: 先行スケジュール方式の不変条件**
+>
+> 各スヌーズアラームは `countdownDuration: nil` の**単発アラーム**でなければならない。
+> `postAlert` を設定すると AlarmKit が発火後に自動で再カウントダウン→再発火するため、
+> 先行スケジュール済みの次のスヌーズと同時刻に鳴り、アラームが指数的に増殖する。
+> 同様に、`secondaryButton` + `.countdown` もユーザー操作で同じ問題を引き起こす。
+> この不変条件は `doSnoozeIntent` の問題（alarm-scheduler.ts 参照）と本質的に同じ。
+> 詳細は `2026-02-28-snooze-preemptive-schedule-design.md` の「設計上の不変条件」を参照。
+
 ```swift
     // MARK: - Snooze Scheduling
     private static let snoozeIdsKey = "ExpoAlarmKit.snoozeAlarmIds"
@@ -52,34 +61,39 @@ public func perform() async throws -> some IntentResult {
 
     /// dismiss 時にスヌーズアラームをスケジュールし、ID を App Groups に永続化する。
     /// AlarmDismissIntent.perform() から呼ばれる（アプリ未起動でも実行される）。
+    ///
+    /// 重要: 各スヌーズは countdownDuration: nil の単発アラームとして登録する。
+    /// postAlert を設定すると自動再発火で連続鳴動が発生する。
     public static func scheduleSnoozeAlarms(dismissedAt: Date) async {
         struct Meta: AlarmMetadata {}
         var ids: [String] = []
+
+        let soundName = getSnoozeSoundName()
+        let alarmSound: AlertConfiguration.AlertSound
+        if let soundName = soundName, !soundName.isEmpty {
+            alarmSound = .named(soundName)
+        } else {
+            alarmSound = .default
+        }
 
         for i in 1...snoozeCount {
             let uuid = UUID()
             let fireDate = dismissedAt.addingTimeInterval(snoozeIntervalSeconds * Double(i))
             let epochSeconds = fireDate.timeIntervalSince1970
 
-            // Stop ボタン: アプリを起動して dismiss する（スヌーズ payload 付き）
+            // Stop ボタンのみ。Snooze ボタンは不要（次の先行スケジュール済みアラームが担う）。
             let stopButton = AlarmButton(
                 text: LocalizedStringResource(stringLiteral: "Stop"),
                 textColor: .white,
                 systemImageName: "stop.circle"
             )
-            let snoozeButton = AlarmButton(
-                text: LocalizedStringResource(stringLiteral: "Snooze"),
-                textColor: .white,
-                systemImageName: "clock.badge.checkmark"
-            )
             let alertPresentation = AlarmPresentation.Alert(
                 title: LocalizedStringResource(stringLiteral: "Good Morning"),
-                stopButton: stopButton,
-                secondaryButton: snoozeButton,
-                secondaryButtonBehavior: .countdown
+                stopButton: stopButton
             )
             let presentation = AlarmPresentation(alert: alertPresentation)
-            let countdownDuration = Alarm.CountdownDuration(preAlert: nil, postAlert: snoozeIntervalSeconds)
+            // countdownDuration: nil — 単発アラーム。postAlert を設定すると
+            // 発火後に自動カウントダウン→再発火し、連続鳴動の原因になる。
             let attributes = AlarmAttributes<Meta>(
                 presentation: presentation,
                 metadata: Meta(),
@@ -93,12 +107,12 @@ public func perform() async throws -> some IntentResult {
             )
 
             let config = AlarmManager.AlarmConfiguration<Meta>(
-                countdownDuration: countdownDuration,
+                countdownDuration: nil,
                 schedule: .fixed(fireDate),
                 attributes: attributes,
                 stopIntent: stopIntent,
                 secondaryIntent: nil,
-                sound: .default
+                sound: alarmSound
             )
 
             do {
