@@ -1,5 +1,16 @@
 # good-morning
 
+## 1.1.1
+
+### Patch Changes
+
+- [#49](https://github.com/tktcorporation/good-morning/pull/49) [`f4127f6`](https://github.com/tktcorporation/good-morning/commit/f4127f6c63bd4aaa2ac810d4207a38cdbbe38930) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: ネイティブスヌーズの postAlert 自動再発火を除去して連続鳴動を修正
+
+  AlarmKit の countdownDuration(postAlert:) と secondaryButtonBehavior(.countdown) を
+  除去し、各スヌーズを単発アラームに変更。postAlert を設定すると発火後に自動で
+  再カウントダウン → 再発火するため、先行スケジュール済みの次のスヌーズと同時刻に
+  鳴り、アラームが指数的に増殖していた。
+
 ## 1.1.0
 
 ### Minor Changes
