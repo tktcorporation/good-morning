@@ -18,7 +18,8 @@ if [ -z "$command" ]; then
 fi
 
 # git push または jj git push を検出
-if ! echo "$command" | grep -qE '(^|\s)(git\s+push|jj\s+git\s+push)'; then
+# /usr/bin/git push や GIT_DIR=... git push 等の変形パターンにも対応
+if ! echo "$command" | grep -qE '(git\s+push|jj\s+git\s+push)'; then
   exit 0
 fi
 
@@ -50,6 +51,11 @@ fi
 # 5. Expo 依存パッケージ互換性
 if ! npx expo install --check > /dev/null 2>&1; then
   errors+=("expo install --check")
+fi
+
+# 6. changeset の有無
+if ! pnpm changeset status --since=origin/main > /dev/null 2>&1; then
+  errors+=("changeset status")
 fi
 
 if [ ${#errors[@]} -gt 0 ]; then
