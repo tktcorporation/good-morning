@@ -9,7 +9,6 @@ import {
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
 } from '../services/alarm-scheduler';
-import { endLiveActivity, startLiveActivity, updateLiveActivity } from '../services/live-activity';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 
@@ -292,31 +291,6 @@ describe('alarm-kit service', () => {
     });
   });
 
-  describe('startLiveActivity', () => {
-    test('returns null when native function is unavailable', async () => {
-      const result = await startLiveActivity(
-        [{ id: '1', title: 'Test', completed: false }],
-        '2026-02-25T07:09:00.000Z',
-      );
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('updateLiveActivity', () => {
-    test('does not throw when native function is unavailable', async () => {
-      await expect(
-        updateLiveActivity(
-          'activity-123',
-          [{ id: '1', title: 'Test', completed: false }],
-          '2026-02-25T07:09:00.000Z',
-        ),
-      ).resolves.toBeUndefined();
-    });
-  });
-
-  describe('endLiveActivity', () => {
-    test('does not throw when native function is unavailable', async () => {
-      await expect(endLiveActivity('activity-123')).resolves.toBeUndefined();
-    });
-  });
+  // Live Activity テストは AlarmKitService.ts に統合された。
+  // Effect 版テストへの移行時に AlarmKitService のテストとして書き直す。
 });

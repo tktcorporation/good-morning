@@ -17,6 +17,13 @@ export {
   scheduleWakeTargetAlarm,
 } from './AlarmSchedulerService';
 export { syncAlarmsEffect } from './AlarmSyncService';
+// Legacy-compatible wrappers (Effect サービスを async/sync 関数として提供)
+export {
+  checkLaunchPayload,
+  isAlarmKitAvailable,
+  playAlarmSound,
+  stopAlarmSound,
+} from './compat';
 // Errors
 export {
   AlarmKitOperationError,

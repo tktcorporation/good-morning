@@ -1,11 +1,12 @@
 /**
- * ウィジェットデータの組み立てと App Groups UserDefaults への同期サービス。
+ * ウィジェット表示用データの組み立て純粋関数。
  *
  * 背景: ホームウィジェット（Widget Extension）にアラーム・セッション・ストリーク情報を
- * 表示するため、全ストアの状態を WidgetData に変換して UserDefaults に書き出す。
- * ストア変更時に fire-and-forget で呼ばれ、失敗してもアプリ動作に影響しない。
+ * 表示するため、全ストアの状態を WidgetData に変換する。
+ * ストアの getState() を呼んでデータを組み立てるだけの純粋関数。
+ * 実際の App Groups 書き込み（副作用）は WidgetSyncService が担当する。
  *
- * 呼び出し元: 各ストアの変更メソッド、background-sync タスク、_layout.tsx の初期化
+ * 呼び出し元: services/effect/WidgetSyncService.ts, background-sync
  */
 
 import { useDailyGradeStore } from '../stores/daily-grade-store';
@@ -15,7 +16,6 @@ import type { DayOfWeek } from '../types/alarm';
 import { formatTime } from '../types/alarm';
 import { resolveTimeForDate } from '../types/wake-target';
 import type { WidgetData } from '../types/widget-data';
-import { reloadWidgetTimelines, syncWidgetData } from './alarm-kit';
 
 /** 曜日インデックス → 短縮ラベル。i18n は Widget Extension 側で不使用のため固定値。 */
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -78,15 +78,4 @@ export function buildWidgetData(): WidgetData {
     },
     updatedAt: new Date().toISOString(),
   };
-}
-
-/**
- * ウィジェットデータを App Groups UserDefaults に同期し、タイムラインを更新する。
- * ストア変更のコールバックから fire-and-forget で呼ぶ。
- * 失敗してもアプリ動作に影響しないため、エラーはログのみ。
- */
-export async function syncWidget(): Promise<void> {
-  const data = buildWidgetData();
-  await syncWidgetData(JSON.stringify(data));
-  await reloadWidgetTimelines();
 }

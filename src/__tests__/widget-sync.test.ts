@@ -1,14 +1,7 @@
-import { buildWidgetData } from '../services/widget-sync';
+import { buildWidgetData } from '../domain/widget-data';
 import { useDailyGradeStore } from '../stores/daily-grade-store';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
-
-// alarm-kit は native module なのでモック
-jest.mock('../services/alarm-kit', () => ({
-  syncWidgetData: jest.fn(),
-  reloadWidgetTimelines: jest.fn(),
-  APP_GROUP_ID: 'group.test',
-}));
 
 // AsyncStorage モック
 jest.mock('@react-native-async-storage/async-storage', () => ({
