@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,8 +13,7 @@ import { useCountdown } from '../../src/hooks/useCountdown';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
 import { isAlarmKitAvailable } from '../../src/services/alarm-kit';
-import { updateLiveActivity } from '../../src/services/live-activity';
-import { onAllTodosCompleted } from '../../src/services/session-lifecycle';
+import { AlarmKit, onAllTodosCompletedEffect, runEffectFork } from '../../src/services/effect';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
@@ -346,7 +346,7 @@ export default function DashboardScreen() {
   // セッション自体はクリアしない（ウィンドウ終了まで維持される）。
   useEffect(() => {
     if (session === null || !areAllCompleted()) return;
-    onAllTodosCompleted(session).catch(() => {});
+    runEffectFork(onAllTodosCompletedEffect(session));
   }, [session, areAllCompleted]);
 
   const handleToggleTodo = useCallback(
@@ -358,11 +358,24 @@ export default function DashboardScreen() {
 
       const state = useMorningSessionStore.getState();
       const activityId = state.session?.liveActivityId ?? null;
-      if (activityId !== null && state.session !== null) {
-        updateLiveActivity(
-          activityId,
-          state.session.todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })),
-          state.session?.snoozeFiresAt ?? null,
+      const currentSession = state.session;
+      if (activityId !== null && currentSession !== null) {
+        const snoozeEpoch = currentSession.snoozeFiresAt
+          ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
+          : null;
+        runEffectFork(
+          Effect.gen(function* () {
+            const kit = yield* AlarmKit;
+            yield* kit.updateLiveActivity(
+              activityId,
+              currentSession.todos.map((t) => ({
+                id: t.id,
+                title: t.title,
+                completed: t.completed,
+              })),
+              snoozeEpoch,
+            );
+          }),
         );
       }
     },

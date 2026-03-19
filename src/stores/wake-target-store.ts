@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
-import { syncAlarms } from '../services/alarm-sync';
-import { syncWidget } from '../services/widget-sync';
+import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services/effect';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';
@@ -48,14 +47,20 @@ async function persist(target: WakeTarget): Promise<void> {
 }
 
 /**
+ * target 変更時にウィジェットとアラームを同期する。
+ * Effect ランタイムで実行し、エラーは console.error に出力される
+ * （従来の `.catch(() => {})` よりエラーが見える）。
+ */
+function syncAfterTargetChange(): void {
+  runEffectFork(syncWidgetEffect);
+  runEffectFork(syncAlarmsEffect);
+}
+
+/**
  * AsyncStorage のパース済みデータから WakeTarget を復元する。
  * レガシーフィールド（soundId 欠落、bedtimeTarget → targetSleepMinutes）のマイグレーションも行う。
  */
 function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
-  // targetSleepMinutes マイグレーション:
-  // 1. 新フォーマット (targetSleepMinutes) があればそのまま使用
-  // 2. 旧フォーマット (bedtimeTarget) があれば分数に変換
-  // 3. どちらもなければ null（未設定）
   let targetSleepMinutes: number | null = null;
   if (typeof parsed.targetSleepMinutes === 'number') {
     targetSleepMinutes = parsed.targetSleepMinutes as number;
@@ -65,8 +70,6 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
     targetSleepMinutes = migrateBedtimeToSleepMinutes(bt, dt);
   }
 
-  // wakeUpGoalBufferMinutes マイグレーション:
-  // フィールドが存在しない旧データにはデフォルト値（30分）を適用
   const wakeUpGoalBufferMinutes =
     typeof parsed.wakeUpGoalBufferMinutes === 'number'
       ? (parsed.wakeUpGoalBufferMinutes as number)
@@ -94,10 +97,6 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     if (raw !== null) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       const migrated = migrateStoredTarget(parsed);
-      // 期限切れの nextOverride は loadTarget では自動クリアしない。
-      // アラーム経由の起動時に wakeup 画面が resolvedTime を計算する前に
-      // クリアされてしまい、セッション・WakeRecord が作成されない不具合を防ぐため。
-      // 通常起動時は _layout.tsx から clearExpiredOverride() を呼ぶ。
       set({ target: migrated, loaded: true, alarmIds });
     } else {
       const fallback: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
@@ -108,10 +107,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   setTarget: async (target: WakeTarget) => {
     set({ target });
     await persist(target);
-    // ウィジェットに最新のアラーム情報を反映（fire-and-forget）
-    syncWidget().catch(() => {});
-    // アラームスケジュールを同期（fire-and-forget — UI をブロックしない）
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   updateDefaultTime: async (time: AlarmTime) => {
@@ -120,8 +116,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, defaultTime: time };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   setNextOverride: async (time: AlarmTime) => {
@@ -131,8 +126,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, nextOverride: { time, targetDate } };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   clearNextOverride: async () => {
@@ -141,8 +135,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, nextOverride: null };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   clearExpiredOverride: async () => {
@@ -152,8 +145,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, nextOverride: null };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   setDayOverride: async (day: DayOfWeek, override: DayOverride) => {
@@ -165,8 +157,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   removeDayOverride: async (day: DayOfWeek) => {
@@ -176,8 +167,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, dayOverrides: rest };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   addTodo: async (title: string) => {
@@ -215,14 +205,9 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     set({ target: updated });
     await persist(updated);
     // サウンド変更はアラーム再登録が必要（AlarmKit の soundName パラメータが変わる）
-    syncAlarms().catch(() => {});
+    runEffectFork(syncAlarmsEffect);
   },
 
-  /**
-   * 目標睡眠時間（分）を設定する。null を渡すとクリア。
-   * Daily Grade System の夜の評価で使用される。
-   * 就寝目標時刻は calculateBedtime() で算出。
-   */
   setTargetSleepMinutes: async (minutes: number | null) => {
     const { target } = get();
     if (target === null) return;
@@ -231,11 +216,6 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     await persist(updated);
   },
 
-  /**
-   * 起床目標バッファ（分）を設定する。
-   * アラーム時刻 + この分数が起床目標時刻となり、
-   * その時刻までに全TODO完了で morningPass 判定。
-   */
   setWakeUpGoalBufferMinutes: async (minutes: number) => {
     const { target } = get();
     if (target === null) return;
@@ -250,8 +230,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, enabled: !target.enabled };
     set({ target: updated });
     await persist(updated);
-    syncWidget().catch(() => {});
-    syncAlarms().catch(() => {});
+    syncAfterTargetChange();
   },
 
   setAlarmIds: async (ids: readonly string[]) => {
@@ -259,5 +238,3 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     await AsyncStorage.setItem(ALARM_IDS_KEY, JSON.stringify(ids));
   },
 }));
-
-export type { WakeTargetState };

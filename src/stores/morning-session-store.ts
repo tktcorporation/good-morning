@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { syncWidget } from '../services/widget-sync';
+import { runEffectFork, syncWidgetEffect } from '../services/effect';
 import type { MorningSession, SessionTodo } from '../types/morning-session';
 
 const STORAGE_KEY = 'morning-session';
@@ -111,7 +111,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     set({ session });
     await persistSession(session);
     // ウィジェットにセッション開始を反映（fire-and-forget）
-    syncWidget().catch(() => {});
+    runEffectFork(syncWidgetEffect);
   },
 
   setRecordId: async (recordId: string) => {
@@ -149,7 +149,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     set({ session: updated });
     await persistSession(updated);
     // ウィジェットに TODO 進捗を反映（fire-and-forget）
-    syncWidget().catch(() => {});
+    runEffectFork(syncWidgetEffect);
   },
 
   /** セッションをクリアする。snooze state は session 内に含まれるため、session = null で自動的にクリアされる。 */
@@ -157,7 +157,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     set({ session: null });
     await persistSession(null);
     // ウィジェットにセッション終了を反映（fire-and-forget）
-    syncWidget().catch(() => {});
+    runEffectFork(syncWidgetEffect);
   },
 
   setSnoozeState: async (ids: readonly string[], firesAt: string | null) => {
@@ -211,5 +211,3 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     return { completed, total: session.todos.length };
   },
 }));
-
-export type { MorningSessionState };

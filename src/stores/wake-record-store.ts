@@ -203,5 +203,3 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     return streak;
   },
 }));
-
-export type { WakeRecordState };

@@ -23,6 +23,7 @@
     "@kingstinct/react-native-healthkit": "^13.2.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.10.1",
+    "effect": "^3.20.0",
     "expo": "55.0.5",
     "expo-alarm-kit": "^0.1.6",
     "expo-asset": "~55.0.8",
@@ -59,6 +60,7 @@
     "babel-preset-expo": "55.0.9",
     "jest": "~29.7.0",
     "jest-expo": "55.0.9",
+    "knip": "^5.88.1",
     "typescript": "5.9.3"
   },
   "expo": {

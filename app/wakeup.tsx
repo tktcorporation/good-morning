@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { handleAlarmDismiss } from '../src/services/session-lifecycle';
+import { handleAlarmDismissEffect, runEffect } from '../src/services/effect';
 import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
@@ -81,13 +81,15 @@ export default function WakeUpScreen() {
       // スヌーズ/LA 開始を完了させる。セッションが自動開始済みの場合は
       // recordId と goalDeadline の紐づけのみ行う。
       try {
-        await handleAlarmDismiss({
-          target,
-          resolvedTime,
-          dismissTime: new Date(),
-          mountedAt: mountedAt.current,
-          dayBoundaryHour,
-        });
+        await runEffect(
+          handleAlarmDismissEffect({
+            target,
+            resolvedTime,
+            dismissTime: new Date(),
+            mountedAt: mountedAt.current,
+            dayBoundaryHour,
+          }),
+        );
       } catch (e: unknown) {
         // biome-ignore lint/suspicious/noConsole: dismiss フローを中断しないが、デバッグ用にエラーは記録する
         console.error('[WakeUp] Failed to start session:', e);

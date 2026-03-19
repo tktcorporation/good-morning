@@ -33,14 +33,8 @@ import { calculateBedtime } from '../utils/sleep';
  * モジュールスコープのフラグ。
  * アプリセッション中に1度だけ finalize 処理を走らせるためのガード。
  * re-render で useEffect が再実行されても二重処理を防ぐ。
- * テスト時にリセットできるよう export する。
  */
-export let hasFinalized = false;
-
-/** テスト用: hasFinalized フラグをリセットする */
-export function resetFinalizationFlag(): void {
-  hasFinalized = false;
-}
+let hasFinalized = false;
 
 /**
  * 確定対象の開始日を決定する。

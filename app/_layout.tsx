@@ -1,15 +1,21 @@
 import '../src/i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect } from 'effect';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
 import { colors } from '../src/constants/theme';
-import { checkLaunchPayload, initializeAlarmKit } from '../src/services/alarm-kit';
-import { syncAlarms } from '../src/services/alarm-sync';
+import { checkLaunchPayload } from '../src/services/alarm-kit';
 import { registerBackgroundSync } from '../src/services/background-sync';
-import { handleAlarmEvent } from '../src/services/session-lifecycle';
-import { syncWidget } from '../src/services/widget-sync';
+import {
+  AlarmKit,
+  handleAlarmEventEffect,
+  runEffect,
+  runEffectFork,
+  syncAlarmsEffect,
+  syncWidgetEffect,
+} from '../src/services/effect';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -29,41 +35,38 @@ export default function RootLayout() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: initialization effect — runs once on mount
   useEffect(() => {
-    // handleSnoozeRefire() がセッション情報を参照するため、
-    // loadSession の Promise を保持してスヌーズ処理前に await する。
-    // 他の load も Promise を保持し、全完了後にウィジェット初回同期を行う。
     const sessionLoaded = loadSession();
     const targetLoaded = loadTarget();
     const recordsLoaded = loadRecords();
     const settingsLoaded = loadSettings();
-    // グレード履歴をアプリ起動時にロード。ダッシュボードの useGradeFinalization が
-    // loaded フラグを参照するため、ルートレイアウトで先行ロードしておく。
     const gradesLoaded = useDailyGradeStore.getState().loadGrades();
 
     // バックグラウンドフェッチ登録（fire-and-forget）
     registerBackgroundSync().catch(() => {});
 
-    // 全ストアロード完了後に初回ウィジェットデータ同期
+    // 全ストアロード完了後に Effect ランタイムで初回ウィジェット同期
     Promise.all([sessionLoaded, targetLoaded, recordsLoaded, settingsLoaded, gradesLoaded])
-      .then(() => syncWidget())
+      .then(() => runEffect(syncWidgetEffect))
       .catch(() => {});
-    // initializeAlarmKit の結果を store に永続化して、設定画面で権限状態を正しく復元する。
-    // HealthKit は settings.healthKitEnabled で管理済みだが、AlarmKit は未管理だったため追加。
-    initializeAlarmKit().then((status) => {
-      if (status === 'authorized') {
-        setAlarmKitGranted(true);
-      }
-    });
 
-    // restoreSessionOnLaunch は dayBoundaryHour を参照するため、設定ロード完了を待つ。
-    // 設定ロード前にデフォルト値で判定すると、ユーザーが dayBoundaryHour を変更していた場合に
-    // 同日のセッションを誤って「期限切れ」と判定してクリアしてしまう。
+    // AlarmKit の認可状態を Effect ランタイムで確認し、store に永続化
+    runEffect(
+      Effect.gen(function* () {
+        const kit = yield* AlarmKit;
+        return yield* kit.initialize;
+      }),
+    )
+      .then((status) => {
+        if (status === 'authorized') {
+          setAlarmKitGranted(true);
+        }
+      })
+      .catch(() => {});
+
     const coreLoaded = Promise.all([sessionLoaded, settingsLoaded]);
 
-    // handleAlarmEvent に payload 判定・ルーティングを一元委譲。
-    // スヌーズは sessionLoaded のみ待てば十分（セッション状態を参照するため）。
-    // 初回アラームは coreLoaded（session + settings）を待つ。
-    // 通常起動は targetLoaded + recordsLoaded も待って clearExpiredOverride を実行。
+    // handleAlarmEvent を Effect 版に切り替え。
+    // 従来の handleAlarmEvent と同じロジックだが、全副作用が Effect として型追跡される。
     const firstPayload = checkLaunchPayload();
     const waitFor = (() => {
       if (firstPayload === null) return Promise.all([coreLoaded, targetLoaded, recordsLoaded]);
@@ -75,15 +78,15 @@ export default function RootLayout() {
     })();
 
     waitFor.then(async () => {
-      await handleAlarmEvent('cold-start', {
-        routerPush: (path) => router.push(path),
-        dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
-        clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
-      });
-      // アラーム状態を現在の target に同期する。
-      // handleAlarmEvent でセッションが開始された場合は no-op（スヌーズ管理中）。
-      // セッション未開始の場合はアラームを target に合わせて再スケジュールする。
-      await syncAlarms();
+      await runEffect(
+        handleAlarmEventEffect('cold-start', {
+          routerPush: (path) => router.push(path),
+          dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
+          clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
+        }),
+      );
+      // アラーム状態を現在の target に同期する
+      await runEffect(syncAlarmsEffect);
     });
 
     AsyncStorage.getItem('onboarding-completed').then((val) => {
@@ -98,9 +101,6 @@ export default function RootLayout() {
   }, [onboardingDone, router]);
 
   // バックグラウンド → フォアグラウンド復帰時にアラーム・スヌーズ状態を確認する。
-  // AlarmKit がアプリを起動する場合は初期化 effect（上）で処理されるが、
-  // アプリが kill されずバックグラウンドにいた場合は初期化 effect が再実行されない。
-  // そのケースでは handleAlarmResume でペイロードを検知し、適切な画面に遷移する。
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
@@ -109,11 +109,13 @@ export default function RootLayout() {
       appStateRef.current = nextState;
       if (!wasBackground || nextState !== 'active') return;
 
-      // handleAlarmEvent 内でセッション自動開始・期限切れチェックも行う
-      handleAlarmEvent('foreground-resume', {
-        routerPush: (path) => router.push(path),
-        dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
-      });
+      // Effect 版で処理。エラーは console.error に出力される。
+      runEffectFork(
+        handleAlarmEventEffect('foreground-resume', {
+          routerPush: (path) => router.push(path),
+          dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
+        }),
+      );
     });
     return () => subscription.remove();
   }, [router]);

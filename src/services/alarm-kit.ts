@@ -26,7 +26,7 @@ export function isAlarmKitAvailable(): boolean {
   return getAlarmKit() !== null;
 }
 
-export interface LaunchPayload {
+interface LaunchPayload {
   alarmId: string;
   payload: string | null;
 }
