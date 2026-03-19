@@ -15,7 +15,7 @@ import { getAlarmKit, logError } from './alarm-kit';
  * Live Activity ウィジェットに表示するTODO項目。
  * SessionTodo の軽量サブセットで、ネイティブ側に渡すために plain object にする。
  */
-export interface LiveActivityTodo {
+interface LiveActivityTodo {
   readonly id: string;
   readonly title: string;
   readonly completed: boolean;

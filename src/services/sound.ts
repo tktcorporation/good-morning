@@ -11,7 +11,7 @@ let currentPlayer: AudioPlayer | null = null;
  *
  * 呼び出し元: playAlarmSound()
  */
-export async function configureAudioSession(): Promise<void> {
+async function configureAudioSession(): Promise<void> {
   await setAudioModeAsync({
     playsInSilentMode: true,
     shouldPlayInBackground: true,
@@ -73,8 +73,4 @@ export async function stopAlarmSound(): Promise<void> {
   } finally {
     currentPlayer = null;
   }
-}
-
-export function isPlaying(): boolean {
-  return currentPlayer !== null;
 }

@@ -46,14 +46,14 @@ import { cancelReminderNotifications, scheduleReminderNotifications } from './to
  * セッションはアラーム時刻の何分前に開始するか。
  * 例: アラーム 9:30、BEFORE=30 → セッション開始 9:00
  */
-export const SESSION_WINDOW_BEFORE_MINUTES = 30;
+const SESSION_WINDOW_BEFORE_MINUTES = 30;
 
 /**
  * セッションはアラーム時刻の何分後まで維持するか。
  * 例: アラーム 9:30、AFTER=30 → セッション終了 10:00
  * TODO全完了後もこの時刻まで維持される。
  */
-export const SESSION_WINDOW_AFTER_MINUTES = 30;
+const SESSION_WINDOW_AFTER_MINUTES = 30;
 
 // ─── セッションウィンドウ計算 ──────────────────────────────────────
 
@@ -64,7 +64,7 @@ export const SESSION_WINDOW_AFTER_MINUTES = 30;
  * @param date ウィンドウを算出する日付（論理日付ベース）
  * @returns windowStart, windowEnd の Date ペア
  */
-export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: Date; end: Date } {
+function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: Date; end: Date } {
   const alarmDate = new Date(
     date.getFullYear(),
     date.getMonth(),
@@ -84,7 +84,7 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
  *
  * @returns ウィンドウ内ならセッション情報、そうでなければ null
  */
-export function checkSessionWindow(
+function checkSessionWindow(
   now: Date,
   target: WakeTarget,
   dayBoundaryHour: number,
@@ -123,10 +123,7 @@ export function checkSessionWindow(
  *
  * @returns true if session was auto-started
  */
-export async function tryAutoStartSession(
-  target: WakeTarget,
-  dayBoundaryHour: number,
-): Promise<boolean> {
+async function tryAutoStartSession(target: WakeTarget, dayBoundaryHour: number): Promise<boolean> {
   const sessionStore = useMorningSessionStore.getState();
 
   // 既にセッションがアクティブなら何もしない
@@ -175,7 +172,7 @@ export async function tryAutoStartSession(
  *
  * @returns true if session was expired and cleaned up
  */
-export async function expireSessionIfNeeded(): Promise<boolean> {
+async function expireSessionIfNeeded(): Promise<boolean> {
   const sessionStore = useMorningSessionStore.getState();
   if (!(sessionStore.isActive() && sessionStore.isExpired())) return false;
 
@@ -392,25 +389,6 @@ export async function handleAlarmDismiss(params: AlarmDismissParams): Promise<vo
   }
 }
 
-/**
- * 後方互換エイリアス。既存の呼び出し元（recoverMissedDismiss）から使用。
- * 新規コードでは handleAlarmDismiss を直接使うこと。
- */
-export async function startMorningSession(params: StartSessionParams): Promise<void> {
-  await handleAlarmDismiss(params);
-}
-
-/**
- * startMorningSession の旧パラメータ型。後方互換のため維持。
- */
-export interface StartSessionParams {
-  readonly target: WakeTarget;
-  readonly resolvedTime: AlarmTime;
-  readonly dismissTime: Date;
-  readonly mountedAt: Date;
-  readonly dayBoundaryHour: number;
-}
-
 // ─── TODO 全完了時の処理 ──────────────────────────────────────────
 
 /**
@@ -478,17 +456,6 @@ export async function onAllTodosCompleted(session: MorningSession): Promise<void
   // セッションはクリアしない — windowEnd まで維持される
   // wake-target アラームの再スケジュールは不要。dismiss 時にキャンセルしていないため、
   // 翌日以降のアラームは消失していない。
-}
-
-/**
- * 後方互換エイリアス。
- * 旧: セッションクリア + syncAlarms を行っていた。
- * 新: TODO完了処理のみ行い、セッションは維持。
- *
- * 呼び出し元がまだ completeMorningSession を参照している場合のため残す。
- */
-export async function completeMorningSession(session: MorningSession): Promise<void> {
-  await onAllTodosCompleted(session);
 }
 
 // ─── セッション復元 ─────────────────────────────────────────────

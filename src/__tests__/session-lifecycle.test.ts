@@ -5,7 +5,7 @@
  * 個別にテストする。alarm-kit はモック化して副作用を排除し、ストアの状態変化を検証する。
  */
 
-import type { StartSessionParams } from '../services/session-lifecycle';
+import type { AlarmDismissParams } from '../services/session-lifecycle';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
@@ -128,8 +128,8 @@ function createTargetWithoutTodos(): WakeTarget {
   };
 }
 
-/** 標準的な StartSessionParams を生成する */
-function createStartParams(overrides?: Partial<StartSessionParams>): StartSessionParams {
+/** 標準的な AlarmDismissParams を生成する */
+function createStartParams(overrides?: Partial<AlarmDismissParams>): AlarmDismissParams {
   return {
     target: createTargetWithTodos(),
     resolvedTime: { hour: 7, minute: 0 },

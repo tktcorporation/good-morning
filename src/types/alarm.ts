@@ -2,7 +2,7 @@ export type TranslateFn = (key: string) => string;
 
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-export const DAY_KEYS: Readonly<Record<DayOfWeek, string>> = {
+const DAY_KEYS: Readonly<Record<DayOfWeek, string>> = {
   0: '0',
   1: '1',
   2: '2',
@@ -35,22 +35,4 @@ export function formatTime(time: AlarmTime): string {
   const h = time.hour.toString().padStart(2, '0');
   const m = time.minute.toString().padStart(2, '0');
   return `${h}:${m}`;
-}
-
-export function formatRepeatDays(days: readonly DayOfWeek[], t: TranslateFn): string {
-  if (days.length === 0) {
-    return t('repeat.once');
-  }
-  if (days.length === 7) {
-    return t('repeat.everyDay');
-  }
-  const weekdays: readonly DayOfWeek[] = [1, 2, 3, 4, 5];
-  const weekend: readonly DayOfWeek[] = [0, 6];
-  if (weekdays.every((d) => days.includes(d)) && !weekend.some((d) => days.includes(d))) {
-    return t('repeat.weekdays');
-  }
-  if (weekend.every((d) => days.includes(d)) && !weekdays.some((d) => days.includes(d))) {
-    return t('repeat.weekends');
-  }
-  return days.map((d) => getDayLabel(d, t)).join(', ');
 }

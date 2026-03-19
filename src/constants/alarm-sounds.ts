@@ -1,4 +1,4 @@
-export interface AlarmSound {
+interface AlarmSound {
   readonly id: string;
   readonly nameKey: string;
   readonly fileName: string;
