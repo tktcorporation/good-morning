@@ -239,23 +239,6 @@ describe('alarm-kit service', () => {
       }
     });
 
-    test('passes soundName to each snooze alarm when provided', async () => {
-      let uuidCounter = 0;
-      mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
-      mockScheduleAlarm.mockResolvedValue(true);
-
-      const baseTime = new Date('2026-02-28T07:00:00.000Z');
-      await runEffect(scheduleSnoozeAlarms(baseTime, 2, 'chime.mp3'));
-
-      for (let i = 0; i < 2; i++) {
-        expect(mockScheduleAlarm).toHaveBeenCalledWith(
-          expect.objectContaining({
-            soundName: 'chime.mp3',
-          }),
-        );
-      }
-    });
-
     test('returns empty array when count is 0', async () => {
       const ids = await runEffect(scheduleSnoozeAlarms(new Date(), 0));
       expect(ids).toHaveLength(0);

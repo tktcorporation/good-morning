@@ -48,7 +48,6 @@ test('returns nextAlarm with time when target exists', () => {
       nextOverride: null,
       todos: [],
       enabled: true,
-      soundId: 'default',
       targetSleepMinutes: null,
       wakeUpGoalBufferMinutes: 30,
     },

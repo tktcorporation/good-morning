@@ -24,7 +24,6 @@ function createTarget(overrides?: Partial<WakeTarget>): WakeTarget {
     nextOverride: null,
     todos: [],
     enabled: true,
-    soundId: 'default',
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,
     ...overrides,

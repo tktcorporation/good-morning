@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
@@ -27,7 +26,7 @@ interface WakeTargetState {
   clearNextOverride: () => Promise<void>;
   /**
    * 期限切れの nextOverride のみをクリアする。
-   * 通常起動時に呼び出す（アラーム起動時は wakeup 画面が参照するためクリアしない）。
+   * 通常起動時に呼び出す（アラーム起動時はクリアしない）。
    */
   clearExpiredOverride: () => Promise<void>;
   setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>;
@@ -35,7 +34,6 @@ interface WakeTargetState {
   addTodo: (title: string) => Promise<void>;
   removeTodo: (id: string) => Promise<void>;
   reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
-  setSoundId: (soundId: string) => Promise<void>;
   setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
   setWakeUpGoalBufferMinutes: (minutes: number) => Promise<void>;
   toggleEnabled: () => Promise<void>;
@@ -58,7 +56,7 @@ function syncAfterTargetChange(): void {
 
 /**
  * AsyncStorage のパース済みデータから WakeTarget を復元する。
- * レガシーフィールド（soundId 欠落、bedtimeTarget → targetSleepMinutes）のマイグレーションも行う。
+ * レガシーフィールド（bedtimeTarget → targetSleepMinutes）のマイグレーションも行う。
  */
 function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
   let targetSleepMinutes: number | null = null;
@@ -77,7 +75,6 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
 
   return {
     ...(parsed as unknown as WakeTarget),
-    soundId: typeof parsed.soundId === 'string' ? parsed.soundId : DEFAULT_SOUND_ID,
     targetSleepMinutes,
     wakeUpGoalBufferMinutes,
   };
@@ -196,16 +193,6 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const updated: WakeTarget = { ...target, todos };
     set({ target: updated });
     await persist(updated);
-  },
-
-  setSoundId: async (soundId: string) => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = { ...target, soundId };
-    set({ target: updated });
-    await persist(updated);
-    // サウンド変更はアラーム再登録が必要（AlarmKit の soundName パラメータが変わる）
-    runEffectFork(syncAlarmsEffect);
   },
 
   setTargetSleepMinutes: async (minutes: number | null) => {

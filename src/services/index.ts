@@ -9,7 +9,6 @@
  * - AlarmSchedulerService : アラームスケジュール・スヌーズロジック
  * - AlarmSyncService : ストア状態 ↔ AlarmKit の同期
  * - StorageService   : AsyncStorage 抽象化
- * - SoundService     : アラーム音再生
  * - NotificationService : expo-notifications 抽象化
  * - TodoReminderService : TODO 未完了リマインド通知
  * - WidgetSyncService : App Groups ウィジェットデータ同期
@@ -33,13 +32,7 @@ export {
 } from './AlarmSchedulerService';
 export { syncAlarmsEffect } from './AlarmSyncService';
 // Legacy-compatible wrappers (Effect サービスを async/sync 関数として提供)
-export {
-  checkLaunchPayload,
-  initializeAlarmKit,
-  isAlarmKitAvailable,
-  playAlarmSound,
-  stopAlarmSound,
-} from './compat';
+export { checkLaunchPayload, initializeAlarmKit, isAlarmKitAvailable } from './compat';
 // Errors
 export {
   AlarmKitOperationError,
@@ -47,7 +40,6 @@ export {
   HealthKitError,
   LiveActivityError,
   NotificationError,
-  SoundError,
   StorageError,
   WidgetSyncError,
 } from './errors';
@@ -56,8 +48,6 @@ export { Notification, NotificationLive } from './NotificationService';
 export type { AppServices } from './runtime';
 // Runtime
 export { AppLayer, runEffect, runEffectFork } from './runtime';
-export type { SoundService } from './SoundService';
-export { Sound, SoundLive } from './SoundService';
 export type { StorageService } from './StorageService';
 export { Storage, StorageLive } from './StorageService';
 export type { AlarmDismissParams } from './session';

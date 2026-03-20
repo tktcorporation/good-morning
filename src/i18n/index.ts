@@ -7,13 +7,11 @@ import commonEn from './locales/en/common.json';
 import dashboardEn from './locales/en/dashboard.json';
 import onboardingEn from './locales/en/onboarding.json';
 import statsEn from './locales/en/stats.json';
-import wakeupEn from './locales/en/wakeup.json';
 import alarmJa from './locales/ja/alarm.json';
 import commonJa from './locales/ja/common.json';
 import dashboardJa from './locales/ja/dashboard.json';
 import onboardingJa from './locales/ja/onboarding.json';
 import statsJa from './locales/ja/stats.json';
-import wakeupJa from './locales/ja/wakeup.json';
 
 const SUPPORTED_LANGUAGES = ['ja', 'en'] as const;
 const DEFAULT_LANGUAGE = 'ja';
@@ -34,7 +32,6 @@ i18n.use(initReactI18next).init({
     ja: {
       common: commonJa,
       alarm: alarmJa,
-      wakeup: wakeupJa,
       stats: statsJa,
       onboarding: onboardingJa,
       dashboard: dashboardJa,
@@ -42,7 +39,6 @@ i18n.use(initReactI18next).init({
     en: {
       common: commonEn,
       alarm: alarmEn,
-      wakeup: wakeupEn,
       stats: statsEn,
       onboarding: onboardingEn,
       dashboard: dashboardEn,

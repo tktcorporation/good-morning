@@ -12,7 +12,6 @@ describe('resolveTimeForDate', () => {
     nextOverride: null,
     todos: [],
     enabled: true,
-    soundId: 'default',
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,
   };

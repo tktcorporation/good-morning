@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { DayBoundaryPicker } from '../../src/components/DayBoundaryPicker';
-import { ALARM_SOUNDS } from '../../src/constants/alarm-sounds';
 import {
   APP_PERMISSIONS,
   type PermissionItem,
@@ -18,7 +17,6 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
-import { playAlarmSound, stopAlarmSound } from '../../src/services';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 
@@ -29,8 +27,6 @@ export default function SettingsScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
-  const soundId = target?.soundId ?? 'default';
-  const setSoundId = useWakeTargetStore((s) => s.setSoundId);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -77,19 +73,6 @@ export default function SettingsScreen() {
   const handleToggleEnabled = useCallback(async () => {
     await toggleEnabled();
   }, [toggleEnabled]);
-
-  const handleSoundSelect = useCallback(
-    async (id: string) => {
-      await setSoundId(id);
-      await stopAlarmSound();
-      await playAlarmSound(id);
-      // Stop preview after 3 seconds
-      setTimeout(() => {
-        stopAlarmSound();
-      }, 3000);
-    },
-    [setSoundId],
-  );
 
   const handleDayBoundaryChange = useCallback(
     async (hour: number) => {
@@ -154,25 +137,6 @@ export default function SettingsScreen() {
             thumbColor={colors.text}
           />
         </View>
-      </View>
-
-      {/* Alarm Sound Selection */}
-      <View style={commonStyles.section}>
-        <Text style={commonStyles.sectionTitle}>{t('settings.alarmSound')}</Text>
-        {ALARM_SOUNDS.map((sound) => (
-          <Pressable
-            key={sound.id}
-            style={[styles.soundRow, sound.id === soundId && styles.soundRowSelected]}
-            onPress={() => handleSoundSelect(sound.id)}
-          >
-            <Text
-              style={[styles.soundRowText, sound.id === soundId && styles.soundRowTextSelected]}
-            >
-              {t(sound.nameKey as 'alarmSounds.default')}
-            </Text>
-            {sound.id === soundId && <Text style={styles.checkmark}>{'✓'}</Text>}
-          </Pressable>
-        ))}
       </View>
 
       {/* Day Boundary */}
@@ -303,33 +267,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textMuted,
     lineHeight: 22,
-  },
-  soundRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  soundRowSelected: {
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  soundRowText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  soundRowTextSelected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  checkmark: {
-    color: colors.primary,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
   },
 });

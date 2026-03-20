@@ -6,11 +6,10 @@
  * スヌーズ・リマインド通知・Live Activity を開始する。
  *
  * 依存関係: types.ts（定数・型）
- * 呼び出し元: app/wakeup.tsx (handleDismiss), RecoveryService (recoverMissedDismiss)
+ * 呼び出し元: AlarmEventRouter (dismiss 処理), RecoveryService (recoverMissedDismiss)
  */
 
 import { Effect } from 'effect';
-import { toAlarmKitSoundName } from '../../constants/alarm-sounds';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { SessionTodo } from '../../types/morning-session';
@@ -114,11 +113,7 @@ export const handleAlarmDismissEffect = (
         snoozeIds = nativeSnoozeIds;
         yield* kit.clearSnoozeAlarmIds;
       } else {
-        snoozeIds = yield* scheduleSnoozeAlarms(
-          dismissTime,
-          undefined,
-          toAlarmKitSoundName(target.soundId),
-        );
+        snoozeIds = yield* scheduleSnoozeAlarms(dismissTime);
       }
       const snoozeFiresAt = new Date(
         dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,

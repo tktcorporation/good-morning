@@ -151,14 +151,6 @@ export default function RootLayout() {
           title: '',
         }}
       />
-      <Stack.Screen
-        name="wakeup"
-        options={{
-          headerShown: false,
-          gestureEnabled: false,
-          presentation: 'fullScreenModal',
-        }}
-      />
     </Stack>
   );
 }

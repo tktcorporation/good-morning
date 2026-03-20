@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { spacing } from '../../constants/theme';
@@ -10,13 +9,14 @@ interface DemoStepProps {
   readonly onBack: () => void;
 }
 
+/**
+ * オンボーディングのデモステップ。
+ *
+ * 背景: 以前は独自のアラーム画面(wakeup)のデモを表示していたが、
+ * AlarmKit に一本化したため、オンボーディングの説明ステップとして残す。
+ */
 export function DemoStep({ onNext, onBack }: DemoStepProps) {
   const { t } = useTranslation('onboarding');
-  const router = useRouter();
-
-  const handleStartDemo = () => {
-    router.push('/wakeup?demo=true');
-  };
 
   return (
     <View style={styles.container}>
@@ -25,11 +25,9 @@ export function DemoStep({ onNext, onBack }: DemoStepProps) {
       </View>
 
       <View style={styles.buttonsColumn}>
-        <StepButton label={t('demo.start')} onPress={handleStartDemo} variant="primary" />
-
         <View style={styles.buttonsRow}>
           <StepButton label={t('back')} onPress={onBack} variant="secondary" flex={1} />
-          <StepButton label={t('demo.skip')} onPress={onNext} variant="secondary" flex={1} />
+          <StepButton label={t('next')} onPress={onNext} variant="primary" flex={1} />
         </View>
       </View>
     </View>

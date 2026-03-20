@@ -11,7 +11,6 @@
  */
 
 import { Effect } from 'effect';
-import { toAlarmKitSoundName } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { isNextOverrideExpired } from '../types/wake-target';
@@ -68,6 +67,28 @@ function groupDaysByTime(
 // ─── Effect 版スケジュール関数 ──────────────────────────────────
 
 /**
+ * nextOverride のワンショットアラームをスケジュールする。
+ * 有効な nextOverride がなければ何もしない。
+ */
+const scheduleNextOverrideAlarm = (
+  target: WakeTarget,
+): Effect.Effect<string | null, AlarmKitError, AlarmKit> =>
+  Effect.gen(function* () {
+    if (target.nextOverride === null || isNextOverrideExpired(target.nextOverride)) return null;
+    const kit = yield* AlarmKit;
+    const id = yield* kit.generateUUID;
+    const now = new Date();
+    const alarmDate = new Date(now);
+    alarmDate.setHours(target.nextOverride.time.hour, target.nextOverride.time.minute, 0, 0);
+    if (alarmDate.getTime() <= now.getTime()) {
+      alarmDate.setDate(alarmDate.getDate() + 1);
+    }
+    const epochSeconds = Math.floor(alarmDate.getTime() / 1000);
+    const success = yield* kit.scheduleAlarm({ id, epochSeconds, title: 'Good Morning' });
+    return success ? id : null;
+  });
+
+/**
  * WakeTarget の設定に基づいてアラームをスケジュールする。
  *
  * Effect 版: AlarmKit サービスを Context から取得し、
@@ -89,14 +110,10 @@ export const scheduleWakeTargetAlarm = (
 
     if (!target.enabled) return [];
 
-    // スヌーズ音名を App Groups に永続化
-    const soundName = toAlarmKitSoundName(target.soundId);
-    yield* kit.setSnoozeSoundName(soundName);
-
     const ids: string[] = [];
     const groups = groupDaysByTime(target);
 
-    // 曜日グループごとに繰り返しアラームをスケジュール
+    // 曜日グループごとに繰り返しアラームをスケジュール（音は AlarmKit の OS デフォルト）
     for (const [, { time, weekdays }] of groups) {
       const id = yield* kit.generateUUID;
       const success = yield* kit.scheduleRepeatingAlarm({
@@ -105,29 +122,13 @@ export const scheduleWakeTargetAlarm = (
         minute: time.minute,
         weekdays,
         title: 'Good Morning',
-        soundName,
       });
       if (success) ids.push(id);
     }
 
     // nextOverride がある場合はワンショットアラームを追加
-    if (target.nextOverride !== null && !isNextOverrideExpired(target.nextOverride)) {
-      const id = yield* kit.generateUUID;
-      const now = new Date();
-      const alarmDate = new Date(now);
-      alarmDate.setHours(target.nextOverride.time.hour, target.nextOverride.time.minute, 0, 0);
-      if (alarmDate.getTime() <= now.getTime()) {
-        alarmDate.setDate(alarmDate.getDate() + 1);
-      }
-      const epochSeconds = Math.floor(alarmDate.getTime() / 1000);
-      const success = yield* kit.scheduleAlarm({
-        id,
-        epochSeconds,
-        title: 'Good Morning',
-        soundName,
-      });
-      if (success) ids.push(id);
-    }
+    const overrideId = yield* scheduleNextOverrideAlarm(target);
+    if (overrideId !== null) ids.push(overrideId);
 
     return ids;
   });
@@ -139,7 +140,6 @@ export const scheduleWakeTargetAlarm = (
 export const scheduleSnoozeAlarms = (
   baseTime: Date,
   count: number = SNOOZE_MAX_COUNT,
-  soundName?: string,
 ): Effect.Effect<readonly string[], AlarmKitError, AlarmKit> =>
   Effect.gen(function* () {
     const kit = yield* AlarmKit;
@@ -156,7 +156,6 @@ export const scheduleSnoozeAlarms = (
           id,
           epochSeconds,
           title: 'Good Morning',
-          soundName,
           dismissPayload: JSON.stringify({ isSnooze: true }),
         }),
       );

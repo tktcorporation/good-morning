@@ -12,7 +12,6 @@
 import { Effect } from 'effect';
 import { AlarmKit } from './AlarmKitService';
 import { runEffect } from './runtime';
-import { Sound } from './SoundService';
 
 // ─── AlarmKit 互換関数 ─────────────────────────────────────────
 
@@ -72,34 +71,4 @@ export function checkLaunchPayload(): { alarmId: string; payload: string | null 
   } catch {
     return null;
   }
-}
-
-// ─── Sound 互換関数 ──────────────────────────────────────────
-
-/**
- * アラーム音をループ再生する。Effect Sound サービスのラッパー。
- *
- * 呼び出し元: app/wakeup.tsx (デモ再生), app/(tabs)/settings.tsx (プレビュー再生)
- */
-export async function playAlarmSound(soundId?: string): Promise<void> {
-  await runEffect(
-    Effect.gen(function* () {
-      const sound = yield* Sound;
-      yield* sound.playAlarm(soundId);
-    }),
-  );
-}
-
-/**
- * アラーム音を停止してプレーヤーを解放する。Effect Sound サービスのラッパー。
- *
- * 呼び出し元: app/wakeup.tsx (dismiss時), app/(tabs)/settings.tsx (プレビュー停止)
- */
-export async function stopAlarmSound(): Promise<void> {
-  await runEffect(
-    Effect.gen(function* () {
-      const sound = yield* Sound;
-      yield* sound.stopAlarm;
-    }),
-  );
 }
