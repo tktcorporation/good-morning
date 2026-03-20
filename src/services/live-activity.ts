@@ -1,43 +1,35 @@
 /**
- * Live Activity (ロック画面ウィジェット) の管理を担当するモジュール。
- *
- * 背景: alarm-kit.ts が肥大化していたため、Live Activity 関連の関数を分離した。
- * getAlarmKit() と logError を alarm-kit.ts から import して使う。
- *
- * 呼び出し元:
- *   - src/services/session-lifecycle.ts (セッション開始/完了/復元時)
- *   - app/(tabs)/index.tsx (TODO トグル時の進捗更新)
+ * @deprecated Effect 版 (AlarmKitService) に移行済み。
+ * このファイルはレガシーテスト (session-lifecycle.test.ts) が
+ * session-lifecycle.ts 経由で間接的に依存しているため残存。
+ * テストを Effect 版に移行次第、session-lifecycle.ts と共に削除予定。
  */
 
-import { getAlarmKit, logError } from './alarm-kit';
+// biome-ignore lint/suspicious/noConsole: AlarmKit errors need logging for debugging
+const logError = console.error;
 
-/**
- * Live Activity ウィジェットに表示するTODO項目。
- * SessionTodo の軽量サブセットで、ネイティブ側に渡すために plain object にする。
- */
+let kit: Record<string, unknown> | null = null;
+try {
+  kit = require('expo-alarm-kit') as Record<string, unknown>;
+} catch {
+  // no-op
+}
+
 interface LiveActivityTodo {
   readonly id: string;
   readonly title: string;
   readonly completed: boolean;
 }
 
-/**
- * ロック画面にTODO進捗とスヌーズカウントダウンを表示する Live Activity を開始する。
- *
- * ネイティブモジュールが未実装の場合は null を返し、アプリの動作には影響しない（graceful degradation）。
- * 呼び出し元: app/wakeup.tsx (セッション開始＋スヌーズスケジュール後)
- */
 export async function startLiveActivity(
   todos: readonly LiveActivityTodo[],
   snoozeFiresAt: string | null,
 ): Promise<string | null> {
-  const kit = getAlarmKit();
   if (kit === null) return null;
-
   try {
     const snoozeEpoch =
       snoozeFiresAt !== null ? Math.floor(new Date(snoozeFiresAt).getTime() / 1000) : null;
-    const startFn = (kit as Record<string, unknown>).startLiveActivity;
+    const startFn = kit.startLiveActivity;
     if (typeof startFn !== 'function') return null;
     const result = await (
       startFn as (todos: object[], epoch: number | null) => Promise<string | null>
@@ -52,23 +44,14 @@ export async function startLiveActivity(
   }
 }
 
-/**
- * Live Activity のTODO進捗・スヌーズカウントダウンを更新する。
- *
- * 呼び出し元:
- *   - app/(tabs)/index.tsx: TODOトグル時に完了状態を反映
- *   - app/wakeup.tsx: スヌーズ再発火時に新しいカウントダウンを反映
- */
 export async function updateLiveActivity(
   activityId: string,
   todos: readonly LiveActivityTodo[],
   snoozeFiresAt: string | null,
 ): Promise<void> {
-  const kit = getAlarmKit();
   if (kit === null) return;
-
   try {
-    const updateFn = (kit as Record<string, unknown>).updateLiveActivity;
+    const updateFn = kit.updateLiveActivity;
     if (typeof updateFn !== 'function') return;
     const snoozeEpoch =
       snoozeFiresAt !== null ? Math.floor(new Date(snoozeFiresAt).getTime() / 1000) : null;
@@ -82,17 +65,10 @@ export async function updateLiveActivity(
   }
 }
 
-/**
- * Live Activity を終了してロック画面から除去する。
- *
- * 呼び出し元: app/(tabs)/index.tsx (TODO全完了時、セッションクリア前)
- */
 export async function endLiveActivity(activityId: string): Promise<void> {
-  const kit = getAlarmKit();
   if (kit === null) return;
-
   try {
-    const endFn = (kit as Record<string, unknown>).endLiveActivity;
+    const endFn = kit.endLiveActivity;
     if (typeof endFn !== 'function') return;
     await (endFn as (id: string) => Promise<boolean>)(activityId);
   } catch (e) {

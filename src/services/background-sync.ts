@@ -4,7 +4,7 @@
  * 背景: ホームウィジェットのデータをアプリ非使用時にも最新に保つため、
  * expo-background-fetch で iOS に定期実行を登録する。
  * タスクが起動されると全ストアを AsyncStorage から再読み込みし、
- * App Groups UserDefaults にウィジェットデータを書き出す。
+ * Effect ランタイム経由でウィジェットデータを App Groups に書き出す。
  *
  * 呼び出し元: iOS バックグラウンドフェッチ（30分〜数時間間隔）
  * 登録: _layout.tsx の初期化で registerBackgroundSync() を呼ぶ
@@ -12,7 +12,7 @@
 
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
-import { syncWidget } from './widget-sync';
+import { runEffect, syncWidgetEffect } from './effect';
 
 /**
  * バックグラウンドウィジェット同期タスクの識別子。
@@ -42,8 +42,8 @@ TaskManager.defineTask(BACKGROUND_WIDGET_SYNC, async () => {
       useSettingsStore.getState().loadSettings(),
     ]);
 
-    // ウィジェットデータ同期
-    await syncWidget();
+    // ウィジェットデータ同期（Effect ランタイム経由）
+    await runEffect(syncWidgetEffect);
 
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch {

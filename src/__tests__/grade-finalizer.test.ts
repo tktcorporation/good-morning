@@ -1,4 +1,4 @@
-import { buildGradeRecord } from '../services/grade-finalizer';
+import { buildGradeRecord } from '../domain/grade-finalizer';
 import type { AlarmTime } from '../types/alarm';
 import type { WakeRecord } from '../types/wake-record';
 

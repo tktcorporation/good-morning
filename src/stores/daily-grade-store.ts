@@ -11,8 +11,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { applyGradeToStreak } from '../domain/grade-calculator';
 import { runEffectFork, syncWidgetEffect } from '../services/effect';
-import { applyGradeToStreak } from '../services/grade-calculator';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
 

@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { buildGradeRecord } from '../services/grade-finalizer';
+import { buildGradeRecord } from '../domain/grade-finalizer';
 import { getSleepSummary, initHealthKit } from '../services/health';
 import { useDailyGradeStore } from '../stores/daily-grade-store';
 import { useSettingsStore } from '../stores/settings-store';

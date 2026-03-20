@@ -1,3 +1,8 @@
+/**
+ * @deprecated Effect 版に移行済み。新規コードでは services/effect の AlarmKit サービスを使用すること。
+ * このファイルはレガシーテスト（alarm-kit.test.ts, session-lifecycle.test.ts）が依存しているため残存。
+ * テストを Effect 版に移行次第、削除予定。
+ */
 export const APP_GROUP_ID = 'group.com.tktcorporation.goodmorning';
 
 // biome-ignore lint/suspicious/noConsole: AlarmKit errors need logging for debugging — live-activity.ts も使う

@@ -5,7 +5,7 @@
  * 朝の起床結果と夜の就寝時刻を入力とし、1日の総合グレードを算出する。
  * すべて純粋関数で副作用なし — テスト容易性とストアからの分離を重視。
  *
- * 利用箇所: stores/streak-store.ts (将来), app/wakeup/ 画面群
+ * 利用箇所: stores/daily-grade-store.ts, domain/grade-finalizer.ts
  * DailyGrade / StreakState の型が変わればこのファイルも更新が必要。
  */
 

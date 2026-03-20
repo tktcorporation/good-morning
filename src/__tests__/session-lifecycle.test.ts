@@ -5,7 +5,7 @@
  * 個別にテストする。alarm-kit はモック化して副作用を排除し、ストアの状態変化を検証する。
  */
 
-import type { AlarmDismissParams } from '../services/session-lifecycle';
+import type { AlarmDismissParams } from '../services/effect';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
@@ -39,6 +39,12 @@ jest.mock('../services/live-activity', () => ({
 // alarm-sync をモック化: syncAlarms の内部実装ではなくオーケストレーション層をテストする
 jest.mock('../services/alarm-sync', () => ({
   syncAlarms: jest.fn().mockResolvedValue(undefined),
+}));
+
+// todo-reminder をモック化: リマインド通知のスケジュール/キャンセルをスキップ
+jest.mock('../services/todo-reminder', () => ({
+  scheduleReminderNotifications: jest.fn().mockResolvedValue(undefined),
+  cancelReminderNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 
 const { scheduleSnoozeAlarms, cancelAlarmsByIds } = jest.requireMock(

@@ -3,7 +3,7 @@ import {
   calculateDailyGrade,
   evaluateBedtime,
   isMorningPass,
-} from '../services/grade-calculator';
+} from '../domain/grade-calculator';
 import type { StreakState } from '../types/streak';
 import { MAX_FREEZES } from '../types/streak';
 

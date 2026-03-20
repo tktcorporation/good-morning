@@ -4,8 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
-import { handleAlarmDismissEffect, runEffect } from '../src/services/effect';
-import { playAlarmSound, stopAlarmSound } from '../src/services/sound';
+import {
+  handleAlarmDismissEffect,
+  playAlarmSound,
+  runEffect,
+  stopAlarmSound,
+} from '../src/services/effect';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import { formatTime } from '../src/types/alarm';

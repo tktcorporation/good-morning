@@ -6,10 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
 import { colors } from '../src/constants/theme';
-import { checkLaunchPayload } from '../src/services/alarm-kit';
 import { registerBackgroundSync } from '../src/services/background-sync';
 import {
   AlarmKit,
+  checkLaunchPayload,
   handleAlarmEventEffect,
   runEffect,
   runEffectFork,
