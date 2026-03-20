@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
@@ -71,7 +70,7 @@ describe('useWakeTargetStore', () => {
       return Promise.resolve(null);
     });
     await useWakeTargetStore.getState().loadTarget();
-    // loadTarget は期限切れの override をクリアしない（wakeup 画面が参照するため）
+    // loadTarget は期限切れの override をクリアしない（clearExpiredOverride で明示的にクリアする）
     expect(useWakeTargetStore.getState().target?.nextOverride).toEqual({
       time: { hour: 7, minute: 0 },
       targetDate: '2020-01-01',
@@ -172,62 +171,6 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().alarmIds).toEqual(ids);
   });
 
-  test('setSoundId updates the sound and persists', async () => {
-    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-    mockSetItem.mockClear();
-    await useWakeTargetStore.getState().setSoundId('chime');
-    expect(useWakeTargetStore.getState().target?.soundId).toBe('chime');
-    expect(mockSetItem).toHaveBeenCalledWith(
-      'wake-target',
-      expect.stringContaining('"soundId":"chime"'),
-    );
-  });
-
-  test('loadTarget migrates missing soundId to default', async () => {
-    // Simulate a stored target without soundId (pre-migration data)
-    const legacyTarget = {
-      defaultTime: { hour: 7, minute: 0 },
-      dayOverrides: {},
-      nextOverride: null,
-      todos: [],
-      enabled: true,
-    };
-    mockGetItem.mockImplementation((key: string) => {
-      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
-      return Promise.resolve(null);
-    });
-    await useWakeTargetStore.getState().loadTarget();
-    expect(useWakeTargetStore.getState().target?.soundId).toBe(DEFAULT_SOUND_ID);
-  });
-
-  test('setSoundId updates the sound and persists', async () => {
-    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-    mockSetItem.mockClear();
-    await useWakeTargetStore.getState().setSoundId('chime');
-    expect(useWakeTargetStore.getState().target?.soundId).toBe('chime');
-    expect(mockSetItem).toHaveBeenCalledWith(
-      'wake-target',
-      expect.stringContaining('"soundId":"chime"'),
-    );
-  });
-
-  test('loadTarget migrates missing soundId to default', async () => {
-    // Simulate a stored target without soundId (pre-migration data)
-    const legacyTarget = {
-      defaultTime: { hour: 7, minute: 0 },
-      dayOverrides: {},
-      nextOverride: null,
-      todos: [],
-      enabled: true,
-    };
-    mockGetItem.mockImplementation((key: string) => {
-      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));
-      return Promise.resolve(null);
-    });
-    await useWakeTargetStore.getState().loadTarget();
-    expect(useWakeTargetStore.getState().target?.soundId).toBe(DEFAULT_SOUND_ID);
-  });
-
   test('setTargetSleepMinutes sets and persists', async () => {
     await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
     mockSetItem.mockClear();
@@ -256,7 +199,6 @@ describe('useWakeTargetStore', () => {
       nextOverride: null,
       todos: [],
       enabled: true,
-      soundId: 'default',
       bedtimeTarget: { hour: 23, minute: 0 },
     };
     mockGetItem.mockImplementation((key: string) => {
@@ -274,7 +216,6 @@ describe('useWakeTargetStore', () => {
       nextOverride: null,
       todos: [],
       enabled: true,
-      soundId: 'default',
     };
     mockGetItem.mockImplementation((key: string) => {
       if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyTarget));

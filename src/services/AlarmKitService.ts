@@ -36,7 +36,6 @@ export interface AlarmKitService {
     minute: number;
     weekdays: number[];
     title: string;
-    soundName?: string;
   }) => Effect.Effect<boolean, AlarmKitError>;
 
   /** ワンショットアラームをスケジュール */
@@ -44,7 +43,6 @@ export interface AlarmKitService {
     id: string;
     epochSeconds: number;
     title: string;
-    soundName?: string;
     dismissPayload?: string;
   }) => Effect.Effect<boolean, AlarmKitError>;
 
@@ -62,9 +60,6 @@ export interface AlarmKitService {
 
   /** WidgetCenter のタイムラインを全更新 */
   readonly reloadWidgetTimelines: Effect.Effect<void, AlarmKitError>;
-
-  /** スヌーズ音名を App Groups に保存 */
-  readonly setSnoozeSoundName: (name: string | undefined) => Effect.Effect<void, never>;
 
   /** ネイティブが保存したスヌーズアラーム ID を取得 */
   readonly getSnoozeAlarmIds: Effect.Effect<readonly string[], never>;
@@ -217,18 +212,6 @@ export const AlarmKitLive = Layer.effect(
             new AlarmKitOperationError({ operation: 'reloadWidgetTimelines', cause }),
         });
       }),
-
-      setSnoozeSoundName: (name) =>
-        Effect.sync(() => {
-          if (kit === null) return;
-          const fn = (kit as Record<string, unknown>).setSnoozeSoundName;
-          if (typeof fn !== 'function') return;
-          try {
-            (fn as (name: string | null) => void)(name ?? null);
-          } catch {
-            // no-op: setSnoozeSoundName is best-effort
-          }
-        }),
 
       getSnoozeAlarmIds: Effect.sync(() => {
         if (kit === null) return [];

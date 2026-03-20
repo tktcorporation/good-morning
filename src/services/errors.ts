@@ -29,12 +29,6 @@ export class StorageError extends Data.TaggedError('StorageError')<{
   readonly cause?: unknown;
 }> {}
 
-/** オーディオ再生・停止の失敗 */
-export class SoundError extends Data.TaggedError('SoundError')<{
-  readonly operation: 'play' | 'stop' | 'configure';
-  readonly cause?: unknown;
-}> {}
-
 /** expo-notifications の操作失敗 */
 export class NotificationError extends Data.TaggedError('NotificationError')<{
   readonly operation: 'schedule' | 'cancel';

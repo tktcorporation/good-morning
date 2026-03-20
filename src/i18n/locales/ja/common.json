@@ -58,15 +58,8 @@
         "description": "睡眠データの記録に使用します"
       }
     },
-    "alarmSound": "アラーム音",
     "dayBoundary": "日付変更ライン",
     "dayBoundaryDescription": "この時刻より前は前日として扱います",
     "dayBoundaryHour": "{{hour}}:00"
-  },
-  "alarmSounds": {
-    "default": "デフォルト",
-    "chime": "チャイム",
-    "birds": "鳥のさえずり",
-    "bell": "ベル"
   }
 }

@@ -64,7 +64,6 @@ function createTargetWithTodos(): WakeTarget {
       { id: 'todo-2', title: 'Drink water', completed: false },
     ],
     enabled: true,
-    soundId: 'default',
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,
   };
@@ -77,7 +76,6 @@ function createTargetWithoutTodos(): WakeTarget {
     nextOverride: null,
     todos: [],
     enabled: true,
-    soundId: 'default',
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,
   };

@@ -1,4 +1,3 @@
-import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 export type DayOverride =
@@ -21,7 +20,6 @@ export interface WakeTarget {
   readonly nextOverride: NextOverride | null;
   readonly todos: readonly TodoItem[];
   readonly enabled: boolean;
-  readonly soundId: string;
   /**
    * 目標睡眠時間（分）。Daily Grade System で夜の評価に使用。
    * null = 未設定（夜の判定は常に noData → 最大 good まで）。
@@ -103,7 +101,6 @@ export const DEFAULT_WAKE_TARGET: WakeTarget = {
   nextOverride: null,
   todos: [],
   enabled: true,
-  soundId: DEFAULT_SOUND_ID,
   targetSleepMinutes: null,
   wakeUpGoalBufferMinutes: DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
 };

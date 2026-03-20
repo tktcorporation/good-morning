@@ -17,7 +17,6 @@
 import { type Effect, Layer, ManagedRuntime } from 'effect';
 import { type AlarmKit, AlarmKitLive } from './AlarmKitService';
 import { type Notification, NotificationLive } from './NotificationService';
-import { type Sound, SoundLive } from './SoundService';
 import { type Storage, StorageLive } from './StorageService';
 
 // ─── Layer 合成 ────────────────────────────────────────────────
@@ -26,10 +25,10 @@ import { type Storage, StorageLive } from './StorageService';
  * 全サービスを結合した Layer。
  * アプリケーションの全依存関係がここに集約される。
  */
-export const AppLayer = Layer.mergeAll(AlarmKitLive, StorageLive, NotificationLive, SoundLive);
+export const AppLayer = Layer.mergeAll(AlarmKitLive, StorageLive, NotificationLive);
 
 /** AppLayer が提供するサービスの型 */
-export type AppServices = AlarmKit | Storage | Notification | Sound;
+export type AppServices = AlarmKit | Storage | Notification;
 
 // ─── ランタイム ────────────────────────────────────────────────
 
