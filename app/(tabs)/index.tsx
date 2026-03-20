@@ -17,7 +17,7 @@ import {
   isAlarmKitAvailable,
   onAllTodosCompletedEffect,
   runEffectFork,
-} from '../../src/services/effect';
+} from '../../src/services';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';

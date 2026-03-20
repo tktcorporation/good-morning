@@ -1,4 +1,4 @@
-import { initializeAlarmKit } from '../services/alarm-kit';
+import { initializeAlarmKit } from '../services';
 import { initHealthKit } from '../services/health';
 
 /**

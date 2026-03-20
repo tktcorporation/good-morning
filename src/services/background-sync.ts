@@ -12,7 +12,7 @@
 
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
-import { runEffect, syncWidgetEffect } from './effect';
+import { runEffect, syncWidgetEffect } from '.';
 
 /**
  * バックグラウンドウィジェット同期タスクの識別子。

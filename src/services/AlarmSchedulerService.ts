@@ -11,10 +11,10 @@
  */
 
 import { Effect } from 'effect';
-import { toAlarmKitSoundName } from '../../constants/alarm-sounds';
-import type { AlarmTime, DayOfWeek } from '../../types/alarm';
-import type { WakeTarget } from '../../types/wake-target';
-import { isNextOverrideExpired } from '../../types/wake-target';
+import { toAlarmKitSoundName } from '../constants/alarm-sounds';
+import type { AlarmTime, DayOfWeek } from '../types/alarm';
+import type { WakeTarget } from '../types/wake-target';
+import { isNextOverrideExpired } from '../types/wake-target';
 import { AlarmKit, type AlarmKitError } from './AlarmKitService';
 
 /** iOSの標準アラームと同じ9分間隔 */

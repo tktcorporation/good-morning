@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { DEFAULT_SOUND_ID } from '../constants/alarm-sounds';
-import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services/effect';
+import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services';
 import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
 import { createTodoId } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';

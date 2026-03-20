@@ -10,10 +10,10 @@
  */
 
 import { Effect } from 'effect';
-import { useMorningSessionStore } from '../../../stores/morning-session-store';
-import { useWakeRecordStore } from '../../../stores/wake-record-store';
-import type { MorningSession } from '../../../types/morning-session';
-import type { WakeTodoRecord } from '../../../types/wake-record';
+import { useMorningSessionStore } from '../../stores/morning-session-store';
+import { useWakeRecordStore } from '../../stores/wake-record-store';
+import type { MorningSession } from '../../types/morning-session';
+import type { WakeTodoRecord } from '../../types/wake-record';
 import { AlarmKit } from '../AlarmKitService';
 import { cancelAlarmsByIds } from '../AlarmSchedulerService';
 import { syncAlarmsEffect } from '../AlarmSyncService';
