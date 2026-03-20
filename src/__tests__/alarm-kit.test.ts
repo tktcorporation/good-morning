@@ -1,14 +1,21 @@
-// src/__tests__/alarm-kit.test.ts
+/**
+ * AlarmKit サービス・スケジューラーのテスト。
+ *
+ * Effect 版のサービス（AlarmKitService, AlarmSchedulerService, compat.ts）を
+ * runEffect() 経由でテストする。expo-alarm-kit は jest.setup.js でグローバルモック済み。
+ */
 import * as AlarmKit from 'expo-alarm-kit';
-import { APP_GROUP_ID, checkLaunchPayload, initializeAlarmKit } from '../services/alarm-kit';
 import {
   cancelAlarmsByIds,
   cancelAllAlarms,
+  checkLaunchPayload,
+  initializeAlarmKit,
+  runEffect,
   SNOOZE_DURATION_SECONDS,
   SNOOZE_MAX_COUNT,
   scheduleSnoozeAlarms,
   scheduleWakeTargetAlarm,
-} from '../services/alarm-scheduler';
+} from '../services';
 import type { WakeTarget } from '../types/wake-target';
 import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 
@@ -24,7 +31,6 @@ const mockGetLaunchPayload = AlarmKit.getLaunchPayload as jest.Mock;
 describe('alarm-kit service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset defaults
     mockConfigure.mockReturnValue(true);
     mockRequestAuthorization.mockResolvedValue('authorized');
     mockScheduleRepeatingAlarm.mockResolvedValue(true);
@@ -38,7 +44,7 @@ describe('alarm-kit service', () => {
   describe('initializeAlarmKit', () => {
     test('calls configure with app group and requests authorization', async () => {
       const result = await initializeAlarmKit();
-      expect(mockConfigure).toHaveBeenCalledWith(APP_GROUP_ID);
+      expect(mockConfigure).toHaveBeenCalledWith('group.com.tktcorporation.goodmorning');
       expect(mockRequestAuthorization).toHaveBeenCalled();
       expect(result).toBe('authorized');
     });
@@ -55,7 +61,6 @@ describe('alarm-kit service', () => {
     test('cancels all existing alarms before scheduling (孤立アラーム蓄積防止)', async () => {
       let uuidCounter = 0;
       mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
-      // 既存に2本のアラームがある状態でスケジュール
       mockGetAllAlarms.mockReturnValue(['stale-1', 'stale-2']);
 
       const target: WakeTarget = {
@@ -64,13 +69,11 @@ describe('alarm-kit service', () => {
         enabled: true,
       };
 
-      const ids = await scheduleWakeTargetAlarm(target);
+      const ids = await runEffect(scheduleWakeTargetAlarm(target, [], []));
 
-      // cancelAllAlarms() で既存の全アラームをキャンセルすること
       expect(mockGetAllAlarms).toHaveBeenCalled();
       expect(mockCancelAlarm).toHaveBeenCalledWith('stale-1');
       expect(mockCancelAlarm).toHaveBeenCalledWith('stale-2');
-      // Should schedule one repeating alarm with all 7 weekdays
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(1);
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -80,7 +83,6 @@ describe('alarm-kit service', () => {
           launchAppOnDismiss: true,
         }),
       );
-      // ネイティブスヌーズが無効になっていること（JS 側スヌーズと二重にならないよう doSnoozeIntent を削除済み）
       const callArgs = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as Record<string, unknown>;
       expect(callArgs?.doSnoozeIntent).toBeUndefined();
       expect(ids.length).toBe(1);
@@ -95,16 +97,15 @@ describe('alarm-kit service', () => {
         ...DEFAULT_WAKE_TARGET,
         defaultTime: { hour: 7, minute: 0 },
         dayOverrides: {
-          0: { type: 'off' }, // Sunday off
-          6: { type: 'off' }, // Saturday off
+          0: { type: 'off' },
+          6: { type: 'off' },
         },
         enabled: true,
       };
 
-      await scheduleWakeTargetAlarm(target);
+      await runEffect(scheduleWakeTargetAlarm(target, [], []));
 
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(1);
-      // Weekdays only: Mon=2, Tue=3, Wed=4, Thu=5, Fri=6
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledWith(
         expect.objectContaining({
           weekdays: [2, 3, 4, 5, 6],
@@ -121,14 +122,13 @@ describe('alarm-kit service', () => {
         ...DEFAULT_WAKE_TARGET,
         defaultTime: { hour: 7, minute: 0 },
         dayOverrides: {
-          6: { type: 'custom', time: { hour: 8, minute: 30 } }, // Saturday custom
+          6: { type: 'custom', time: { hour: 8, minute: 30 } },
         },
         enabled: true,
       };
 
-      await scheduleWakeTargetAlarm(target);
+      await runEffect(scheduleWakeTargetAlarm(target, [], []));
 
-      // Two separate repeating alarms: default time + Saturday custom time
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(2);
     });
 
@@ -143,9 +143,8 @@ describe('alarm-kit service', () => {
         enabled: true,
       };
 
-      await scheduleWakeTargetAlarm(target);
+      await runEffect(scheduleWakeTargetAlarm(target, [], []));
 
-      // Should schedule one-time alarm for nextOverride
       expect(mockScheduleAlarm).toHaveBeenCalledTimes(1);
       expect(mockScheduleAlarm).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -160,7 +159,7 @@ describe('alarm-kit service', () => {
         enabled: false,
       };
 
-      const ids = await scheduleWakeTargetAlarm(target);
+      const ids = await runEffect(scheduleWakeTargetAlarm(target, [], []));
       expect(ids).toEqual([]);
       expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
     });
@@ -169,7 +168,7 @@ describe('alarm-kit service', () => {
   describe('cancelAllAlarms', () => {
     test('cancels all active alarms', async () => {
       mockGetAllAlarms.mockReturnValue(['alarm-1', 'alarm-2']);
-      await cancelAllAlarms();
+      await runEffect(cancelAllAlarms);
       expect(mockCancelAlarm).toHaveBeenCalledWith('alarm-1');
       expect(mockCancelAlarm).toHaveBeenCalledWith('alarm-2');
     });
@@ -177,14 +176,14 @@ describe('alarm-kit service', () => {
 
   describe('cancelAlarmsByIds', () => {
     test('cancels only the specified alarm IDs', async () => {
-      await cancelAlarmsByIds(['snooze-1', 'snooze-2']);
+      await runEffect(cancelAlarmsByIds(['snooze-1', 'snooze-2']));
       expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-1');
       expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-2');
       expect(mockCancelAlarm).toHaveBeenCalledTimes(2);
     });
 
     test('does nothing when given an empty array', async () => {
-      await cancelAlarmsByIds([]);
+      await runEffect(cancelAlarmsByIds([]));
       expect(mockCancelAlarm).not.toHaveBeenCalled();
     });
   });
@@ -220,11 +219,10 @@ describe('alarm-kit service', () => {
       mockScheduleAlarm.mockResolvedValue(true);
 
       const baseTime = new Date('2026-02-28T07:00:00.000Z');
-      const ids = await scheduleSnoozeAlarms(baseTime, 3);
+      const ids = await runEffect(scheduleSnoozeAlarms(baseTime, 3));
 
       expect(ids).toHaveLength(3);
       expect(mockScheduleAlarm).toHaveBeenCalledTimes(3);
-      // 各アラームが 9分間隔であること
       for (let i = 0; i < 3; i++) {
         const expectedEpoch = Math.floor(
           (baseTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * (i + 1)) / 1000,
@@ -247,9 +245,8 @@ describe('alarm-kit service', () => {
       mockScheduleAlarm.mockResolvedValue(true);
 
       const baseTime = new Date('2026-02-28T07:00:00.000Z');
-      await scheduleSnoozeAlarms(baseTime, 2, 'chime.mp3');
+      await runEffect(scheduleSnoozeAlarms(baseTime, 2, 'chime.mp3'));
 
-      // 各スヌーズアラームに soundName が渡されること
       for (let i = 0; i < 2; i++) {
         expect(mockScheduleAlarm).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -259,23 +256,20 @@ describe('alarm-kit service', () => {
       }
     });
 
-    test('returns empty array when AlarmKit is unavailable', async () => {
-      // AlarmKit mock returns values by default so it's available;
-      // test with count=0 for empty result
-      const ids = await scheduleSnoozeAlarms(new Date(), 0);
+    test('returns empty array when count is 0', async () => {
+      const ids = await runEffect(scheduleSnoozeAlarms(new Date(), 0));
       expect(ids).toHaveLength(0);
     });
 
     test('skips failed schedules and continues with remaining', async () => {
       let uuidCounter = 0;
       mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
-      // First succeeds, second fails, third succeeds
       mockScheduleAlarm
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce(true);
 
-      const ids = await scheduleSnoozeAlarms(new Date(), 3);
+      const ids = await runEffect(scheduleSnoozeAlarms(new Date(), 3));
       expect(ids).toHaveLength(2);
       expect(ids).toEqual(['snooze-uuid-1', 'snooze-uuid-3']);
     });
@@ -285,12 +279,9 @@ describe('alarm-kit service', () => {
       mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
       mockScheduleAlarm.mockResolvedValue(true);
 
-      const ids = await scheduleSnoozeAlarms(new Date());
+      const ids = await runEffect(scheduleSnoozeAlarms(new Date()));
       expect(ids).toHaveLength(SNOOZE_MAX_COUNT);
       expect(mockScheduleAlarm).toHaveBeenCalledTimes(SNOOZE_MAX_COUNT);
     });
   });
-
-  // Live Activity テストは AlarmKitService.ts に統合された。
-  // Effect 版テストへの移行時に AlarmKitService のテストとして書き直す。
 });

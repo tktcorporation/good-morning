@@ -13,8 +13,10 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getAllScheduledNotificationsAsync: jest.fn().mockResolvedValue([]),
   SchedulableTriggerInputTypes: {
     CALENDAR: 'calendar',
+    TIME_INTERVAL: 'timeInterval',
   },
 }));
 
@@ -58,20 +60,6 @@ jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-// Mock expo-alarm-kit
-jest.mock('expo-alarm-kit', () => ({
-  configure: jest.fn(() => true),
-  requestAuthorization: jest.fn().mockResolvedValue('authorized'),
-  generateUUID: jest.fn(() => 'mock-uuid'),
-  scheduleAlarm: jest.fn().mockResolvedValue(true),
-  scheduleRepeatingAlarm: jest.fn().mockResolvedValue(true),
-  cancelAlarm: jest.fn().mockResolvedValue(true),
-  getAllAlarms: jest.fn(() => []),
-  clearAllAlarms: jest.fn(),
-  removeAlarm: jest.fn(),
-  getLaunchPayload: jest.fn(() => null),
-}));
-
 // Mock expo-router
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
@@ -89,7 +77,8 @@ jest.mock('expo-router', () => ({
   },
 }));
 
-// Mock expo-alarm-kit
+// Mock expo-alarm-kit（全メソッド網羅）
+// AlarmKitService.ts の AlarmKitLive Layer がこのモックを使用する。
 jest.mock('expo-alarm-kit', () => ({
   configure: jest.fn().mockReturnValue(true),
   requestAuthorization: jest.fn().mockResolvedValue('authorized'),
@@ -99,6 +88,16 @@ jest.mock('expo-alarm-kit', () => ({
   getAllAlarms: jest.fn().mockReturnValue([]),
   generateUUID: jest.fn().mockReturnValue('test-uuid-1'),
   getLaunchPayload: jest.fn().mockReturnValue(null),
+  syncWidgetData: jest.fn().mockResolvedValue(undefined),
+  reloadWidgetTimelines: jest.fn().mockResolvedValue(undefined),
+  setSnoozeSoundName: jest.fn(),
+  getSnoozeAlarmIds: jest.fn().mockReturnValue([]),
+  clearSnoozeAlarmIds: jest.fn(),
+  getDismissEvents: jest.fn().mockReturnValue([]),
+  clearDismissEvents: jest.fn(),
+  startLiveActivity: jest.fn().mockResolvedValue('activity-1'),
+  updateLiveActivity: jest.fn().mockResolvedValue(true),
+  endLiveActivity: jest.fn().mockResolvedValue(true),
 }));
 
 // Mock react-native-svg

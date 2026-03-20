@@ -7,10 +7,10 @@
  * 依存関係: このファイルは他の session/ ファイルに依存しない（リーフモジュール）。
  */
 
-import type { AlarmTime } from '../../../types/alarm';
-import type { WakeTarget } from '../../../types/wake-target';
-import { resolveTimeForDate } from '../../../types/wake-target';
-import { getLogicalDateString } from '../../../utils/date';
+import type { AlarmTime } from '../../types/alarm';
+import type { WakeTarget } from '../../types/wake-target';
+import { resolveTimeForDate } from '../../types/wake-target';
+import { getLogicalDateString } from '../../utils/date';
 import type { AlarmKitError } from '../AlarmKitService';
 import type { NotificationError } from '../errors';
 

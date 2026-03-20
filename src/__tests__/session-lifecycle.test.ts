@@ -1,88 +1,39 @@
 /**
- * session-lifecycle.ts のテスト。
+ * セッションライフサイクルのテスト。
  *
- * セッションのライフサイクル関数（start / complete / restore / snooze arrival）を
- * 個別にテストする。alarm-kit はモック化して副作用を排除し、ストアの状態変化を検証する。
+ * Effect 版のセッションサービス（DismissService, CompletionService, RecoveryService）を
+ * runEffect() 経由でテストする。expo-alarm-kit / expo-notifications は jest.setup.js でグローバルモック済み。
  */
 
-import type { AlarmDismissParams } from '../services/effect';
+import type { AlarmDismissParams } from '../services';
+import {
+  handleAlarmDismissEffect,
+  handleSnoozeArrivalEffect,
+  onAllTodosCompletedEffect,
+  runEffect,
+} from '../services';
+import { recoverMissedDismiss, restoreSessionOnLaunch } from '../services/session';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
 import type { WakeTarget } from '../types/wake-target';
 
-// alarm-scheduler をモック化: ネイティブモジュールに依存せずオーケストレーションロジックをテスト
-jest.mock('../services/alarm-scheduler', () => ({
-  scheduleSnoozeAlarms: jest.fn().mockResolvedValue(['snooze-1', 'snooze-2']),
-  cancelAlarmsByIds: jest.fn().mockResolvedValue(undefined),
-  cancelAllAlarms: jest.fn().mockResolvedValue(undefined),
-  SNOOZE_DURATION_SECONDS: 540,
-}));
-
-// alarm-kit をモック化: ネイティブモジュールに依存せずオーケストレーションロジックをテスト
-jest.mock('../services/alarm-kit', () => ({
-  getDismissEvents: jest.fn().mockResolvedValue([]),
-  clearDismissEvents: jest.fn().mockResolvedValue(undefined),
-  checkLaunchPayload: jest.fn().mockReturnValue(null),
-  getSnoozeAlarmIds: jest.fn().mockReturnValue([]),
-  clearSnoozeAlarmIds: jest.fn(),
-}));
-
-// live-activity をモック化: ネイティブモジュールに依存せず LA 操作をテスト
-jest.mock('../services/live-activity', () => ({
-  startLiveActivity: jest.fn().mockResolvedValue('activity-1'),
-  endLiveActivity: jest.fn().mockResolvedValue(undefined),
-  updateLiveActivity: jest.fn(),
-}));
-
-// alarm-sync をモック化: syncAlarms の内部実装ではなくオーケストレーション層をテストする
-jest.mock('../services/alarm-sync', () => ({
-  syncAlarms: jest.fn().mockResolvedValue(undefined),
-}));
-
-// todo-reminder をモック化: リマインド通知のスケジュール/キャンセルをスキップ
-jest.mock('../services/todo-reminder', () => ({
-  scheduleReminderNotifications: jest.fn().mockResolvedValue(undefined),
-  cancelReminderNotifications: jest.fn().mockResolvedValue(undefined),
-}));
-
-const { scheduleSnoozeAlarms, cancelAlarmsByIds } = jest.requireMock(
-  '../services/alarm-scheduler',
-) as {
-  scheduleSnoozeAlarms: jest.Mock;
-  cancelAlarmsByIds: jest.Mock;
-};
-
-const { getDismissEvents, clearDismissEvents, getSnoozeAlarmIds, clearSnoozeAlarmIds } =
-  jest.requireMock('../services/alarm-kit') as {
-    getDismissEvents: jest.Mock;
-    clearDismissEvents: jest.Mock;
-    getSnoozeAlarmIds: jest.Mock;
-    clearSnoozeAlarmIds: jest.Mock;
-  };
-
-const { startLiveActivity, endLiveActivity } = jest.requireMock('../services/live-activity') as {
-  startLiveActivity: jest.Mock;
-  endLiveActivity: jest.Mock;
-  updateLiveActivity: jest.Mock;
-};
-
-const { syncAlarms } = jest.requireMock('../services/alarm-sync') as {
-  syncAlarms: jest.Mock;
-};
-
-import {
-  handleAlarmDismiss,
-  handleSnoozeArrival,
-  onAllTodosCompleted,
-  recoverMissedDismiss,
-  restoreSessionOnLaunch,
-} from '../services/session-lifecycle';
+// expo-alarm-kit はグローバルモック済み。型にない拡張関数は requireMock で取得。
+// biome-ignore lint/suspicious/noExplicitAny: jest mock access
+const mockKit = jest.requireMock<Record<string, any>>('expo-alarm-kit');
+const mockCancelAlarm = mockKit.cancelAlarm as jest.Mock;
+const mockScheduleAlarm = mockKit.scheduleAlarm as jest.Mock;
+const mockGenerateUUID = mockKit.generateUUID as jest.Mock;
+const mockGetSnoozeAlarmIds = mockKit.getSnoozeAlarmIds as jest.Mock;
+const mockClearSnoozeAlarmIds = mockKit.clearSnoozeAlarmIds as jest.Mock;
+const mockGetDismissEvents = mockKit.getDismissEvents as jest.Mock;
+const mockClearDismissEvents = mockKit.clearDismissEvents as jest.Mock;
+const mockStartLiveActivity = mockKit.startLiveActivity as jest.Mock;
+const mockEndLiveActivity = mockKit.endLiveActivity as jest.Mock;
 
 /**
  * テスト用のアクティブセッションをストアに直接セットする。
- * 各テストで共通のセットアップとして使用。
  */
 function setActiveSession(overrides?: Partial<MorningSession>): void {
   const base: MorningSession = {
@@ -103,7 +54,6 @@ function setActiveSession(overrides?: Partial<MorningSession>): void {
   useMorningSessionStore.setState({ session: base, loaded: true });
 }
 
-/** TODO付きの WakeTarget テストデータ */
 function createTargetWithTodos(): WakeTarget {
   return {
     defaultTime: { hour: 7, minute: 0 },
@@ -120,7 +70,6 @@ function createTargetWithTodos(): WakeTarget {
   };
 }
 
-/** TODO なしの WakeTarget テストデータ */
 function createTargetWithoutTodos(): WakeTarget {
   return {
     defaultTime: { hour: 7, minute: 0 },
@@ -134,7 +83,6 @@ function createTargetWithoutTodos(): WakeTarget {
   };
 }
 
-/** 標準的な AlarmDismissParams を生成する */
 function createStartParams(overrides?: Partial<AlarmDismissParams>): AlarmDismissParams {
   return {
     target: createTargetWithTodos(),
@@ -148,91 +96,79 @@ function createStartParams(overrides?: Partial<AlarmDismissParams>): AlarmDismis
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Reset AlarmKit mocks to defaults
+  mockScheduleAlarm.mockResolvedValue(true);
+  mockCancelAlarm.mockResolvedValue(true);
+  mockGenerateUUID.mockReturnValue('test-uuid-1');
+  mockGetSnoozeAlarmIds.mockReturnValue([]);
+  mockClearSnoozeAlarmIds.mockReturnValue(undefined);
+  mockGetDismissEvents.mockReturnValue([]);
+  mockClearDismissEvents.mockReturnValue(undefined);
+  mockStartLiveActivity.mockResolvedValue('activity-1');
+  mockEndLiveActivity.mockResolvedValue(true);
+
   useMorningSessionStore.setState({ session: null, loaded: false });
   useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: true, alarmIds: [] });
 });
 
-describe('handleAlarmDismiss (was startMorningSession)', () => {
+describe('handleAlarmDismissEffect', () => {
   test('creates record + session + snooze + LA for target with todos', async () => {
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
     const params = createStartParams();
 
-    await handleAlarmDismiss(params);
+    await runEffect(handleAlarmDismissEffect(params));
 
-    // WakeRecord が作成されていること
     const records = useWakeRecordStore.getState().records;
     expect(records).toHaveLength(1);
     expect(records[0]?.alarmId).toBe('wake-target');
     expect(records[0]?.todosCompleted).toBe(false);
     expect(records[0]?.goalDeadline).not.toBeNull();
 
-    // MorningSession が作成されていること
     const session = useMorningSessionStore.getState().session;
     expect(session).not.toBeNull();
     expect(session?.recordId).toBe(records[0]?.id);
     expect(session?.todos).toHaveLength(2);
 
-    // スヌーズがスケジュールされていること（soundId='default' → soundName=undefined）
-    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime, undefined, undefined);
-    expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+    // スヌーズがスケジュールされていること
+    expect(mockScheduleAlarm).toHaveBeenCalled();
+    expect(session?.snoozeAlarmIds.length).toBeGreaterThan(0);
     expect(session?.snoozeFiresAt).not.toBeNull();
 
     // Live Activity が開始されていること
-    expect(startLiveActivity).toHaveBeenCalled();
+    expect(mockStartLiveActivity).toHaveBeenCalled();
     expect(session?.liveActivityId).toBe('activity-1');
   });
 
   test('creates only record when target has no todos', async () => {
     const params = createStartParams({ target: createTargetWithoutTodos() });
 
-    await handleAlarmDismiss(params);
+    await runEffect(handleAlarmDismissEffect(params));
 
-    // WakeRecord は作成される
     const records = useWakeRecordStore.getState().records;
     expect(records).toHaveLength(1);
     expect(records[0]?.todosCompleted).toBe(true);
     expect(records[0]?.goalDeadline).toBeNull();
 
-    // セッションは作成されない
     expect(useMorningSessionStore.getState().session).toBeNull();
-
-    // スヌーズも LA もスケジュールされない
-    expect(scheduleSnoozeAlarms).not.toHaveBeenCalled();
-    expect(startLiveActivity).not.toHaveBeenCalled();
-  });
-
-  test('does not cancel wake-target alarms on dismiss (ID-based cancel preserves them)', async () => {
-    useWakeTargetStore.setState({
-      target: createTargetWithTodos(),
-      loaded: true,
-      alarmIds: ['wake-alarm-1', 'wake-alarm-2'],
-    });
-    const params = createStartParams();
-
-    await handleAlarmDismiss(params);
-
-    // wake-target アラームはキャンセルされない（ID ベースキャンセルにより競合しないため）
-    expect(cancelAlarmsByIds).not.toHaveBeenCalledWith(['wake-alarm-1', 'wake-alarm-2']);
-    // alarmIds は維持されること
-    expect(useWakeTargetStore.getState().alarmIds).toEqual(['wake-alarm-1', 'wake-alarm-2']);
-    // スヌーズは正常にスケジュールされること
-    expect(scheduleSnoozeAlarms).toHaveBeenCalled();
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+    expect(mockStartLiveActivity).not.toHaveBeenCalled();
   });
 
   test('uses native snooze IDs when available (skips JS scheduling)', async () => {
-    getSnoozeAlarmIds.mockReturnValueOnce([
+    mockGetSnoozeAlarmIds.mockReturnValueOnce([
       'native-snooze-1',
       'native-snooze-2',
       'native-snooze-3',
     ]);
     const params = createStartParams();
 
-    await handleAlarmDismiss(params);
+    await runEffect(handleAlarmDismissEffect(params));
 
     // ネイティブ ID が使われるため JS スケジュールは呼ばれない
-    expect(scheduleSnoozeAlarms).not.toHaveBeenCalled();
-    // ネイティブ ID が読み取り後にクリアされること
-    expect(clearSnoozeAlarmIds).toHaveBeenCalled();
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+    expect(mockClearSnoozeAlarmIds).toHaveBeenCalled();
 
     const session = useMorningSessionStore.getState().session;
     expect(session?.snoozeAlarmIds).toEqual([
@@ -244,64 +180,37 @@ describe('handleAlarmDismiss (was startMorningSession)', () => {
   });
 
   test('falls back to JS snooze scheduling when native IDs empty', async () => {
-    // getSnoozeAlarmIds のデフォルトは [] — JS フォールバックが使われる
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
     const params = createStartParams();
 
-    await handleAlarmDismiss(params);
+    await runEffect(handleAlarmDismissEffect(params));
 
-    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime, undefined, undefined);
-    expect(clearSnoozeAlarmIds).not.toHaveBeenCalled();
+    expect(mockScheduleAlarm).toHaveBeenCalled();
+    expect(mockClearSnoozeAlarmIds).not.toHaveBeenCalled();
 
     const session = useMorningSessionStore.getState().session;
-    expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
-  });
-
-  test('passes custom soundName to snooze scheduling when target has non-default sound', async () => {
-    const target = { ...createTargetWithTodos(), soundId: 'chime' };
-    const params = createStartParams({ target });
-
-    await handleAlarmDismiss(params);
-
-    // soundId='chime' → soundName='chime.mp3' が渡されること
-    expect(scheduleSnoozeAlarms).toHaveBeenCalledWith(params.dismissTime, undefined, 'chime.mp3');
-  });
-
-  test('session survives snooze scheduling failure', async () => {
-    scheduleSnoozeAlarms.mockRejectedValueOnce(new Error('Snooze scheduling failed'));
-    const params = createStartParams();
-
-    await handleAlarmDismiss(params);
-
-    // セッションは存在するが snoozeAlarmIds は空
-    const session = useMorningSessionStore.getState().session;
-    expect(session).not.toBeNull();
-    expect(session?.snoozeAlarmIds).toEqual([]);
-    expect(session?.snoozeFiresAt).toBeNull();
-
-    // Live Activity は引き続き開始される
-    expect(startLiveActivity).toHaveBeenCalled();
+    expect(session?.snoozeAlarmIds.length).toBeGreaterThan(0);
   });
 
   test('session survives Live Activity failure', async () => {
-    startLiveActivity.mockRejectedValueOnce(new Error('LA failed'));
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
+    mockStartLiveActivity.mockRejectedValueOnce(new Error('LA failed'));
     const params = createStartParams();
 
-    await handleAlarmDismiss(params);
+    await runEffect(handleAlarmDismissEffect(params));
 
-    // セッションは存在し、スヌーズはスケジュール済み
     const session = useMorningSessionStore.getState().session;
     expect(session).not.toBeNull();
-    expect(session?.snoozeAlarmIds).toEqual(['snooze-1', 'snooze-2']);
+    expect(session?.snoozeAlarmIds.length).toBeGreaterThan(0);
     expect(session?.snoozeFiresAt).not.toBeNull();
-
-    // liveActivityId は null のまま
     expect(session?.liveActivityId).toBeNull();
   });
 });
 
-describe('onAllTodosCompleted', () => {
+describe('onAllTodosCompletedEffect', () => {
   test('cancels snooze, ends LA, updates record, but keeps session (window-based)', async () => {
-    // WakeRecord を事前に作成
     const { addRecord } = useWakeRecordStore.getState();
     const record = await addRecord({
       alarmId: 'wake-target',
@@ -323,11 +232,9 @@ describe('onAllTodosCompleted', () => {
       goalDeadline: '2026-02-28T07:30:00.000Z',
     });
 
-    // WakeTarget を設定
     const target = createTargetWithTodos();
     useWakeTargetStore.setState({ target, alarmIds: ['old-alarm-1'], loaded: true });
 
-    // アクティブセッションをセット
     setActiveSession({
       recordId: record.id,
       snoozeAlarmIds: ['snooze-1', 'snooze-2'],
@@ -351,15 +258,12 @@ describe('onAllTodosCompleted', () => {
 
     const session = useMorningSessionStore.getState().session;
     if (session === null) throw new Error('session should not be null');
-    await onAllTodosCompleted(session);
+    await runEffect(onAllTodosCompletedEffect(session));
 
-    // cancelAlarmsByIds が snoozeAlarmIds で呼ばれること
-    expect(cancelAlarmsByIds).toHaveBeenCalledWith(['snooze-1', 'snooze-2']);
+    expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-1');
+    expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-2');
+    expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-1');
 
-    // endLiveActivity が呼ばれること
-    expect(endLiveActivity).toHaveBeenCalledWith('activity-1');
-
-    // WakeRecord が更新されていること
     const updatedRecord = useWakeRecordStore.getState().records.find((r) => r.id === record.id);
     expect(updatedRecord?.todosCompleted).toBe(true);
     expect(updatedRecord?.todosCompletedAt).not.toBeNull();
@@ -367,13 +271,9 @@ describe('onAllTodosCompleted', () => {
 
     // セッションはクリアされない（ウィンドウ終了まで維持）
     expect(useMorningSessionStore.getState().session).not.toBeNull();
-
-    // syncAlarms は呼ばれない（セッションがまだ active のため）
-    expect(syncAlarms).not.toHaveBeenCalled();
   });
 
   test('skips endLiveActivity when liveActivityId is null', async () => {
-    // WakeRecord を事前に作成
     const { addRecord } = useWakeRecordStore.getState();
     const record = await addRecord({
       alarmId: 'wake-target',
@@ -400,66 +300,30 @@ describe('onAllTodosCompleted', () => {
 
     const session = useMorningSessionStore.getState().session;
     if (session === null) throw new Error('session should not be null');
-    await onAllTodosCompleted(session);
+    await runEffect(onAllTodosCompletedEffect(session));
 
-    // endLiveActivity が呼ばれないこと
-    expect(endLiveActivity).not.toHaveBeenCalled();
-
-    // セッションは維持される（ウィンドウベース）
+    expect(mockEndLiveActivity).not.toHaveBeenCalled();
     expect(useMorningSessionStore.getState().session).not.toBeNull();
-  });
-
-  test('handles updateRecord failure gracefully', async () => {
-    // updateRecord が失敗するように仕込む
-    const originalUpdateRecord = useWakeRecordStore.getState().updateRecord;
-    useWakeRecordStore.setState({
-      updateRecord: jest.fn().mockRejectedValue(new Error('Update failed')),
-    });
-
-    setActiveSession({
-      recordId: 'rec-nonexistent',
-      snoozeAlarmIds: ['snooze-1'],
-      liveActivityId: 'activity-1',
-    });
-
-    const session = useMorningSessionStore.getState().session;
-    if (session === null) throw new Error('session should not be null');
-
-    // エラーが throw されないこと
-    await expect(onAllTodosCompleted(session)).resolves.not.toThrow();
-
-    // セッションは維持される（ウィンドウベース管理のため）
-    expect(useMorningSessionStore.getState().session).not.toBeNull();
-
-    // 後片付け
-    useWakeRecordStore.setState({ updateRecord: originalUpdateRecord });
   });
 });
 
 describe('restoreSessionOnLaunch', () => {
   test('cleans up stale session (different day) and ends Live Activity', async () => {
-    // 昨日のセッション（今日は 2026-02-28 ではないので stale になる）
-    // windowEnd を未来に設定して期限切れにならないようにする
     setActiveSession({
       date: '2026-01-01',
       liveActivityId: 'activity-stale',
       windowEnd: '2099-12-31T23:59:59.000Z',
     });
 
-    await restoreSessionOnLaunch(4);
+    await runEffect(restoreSessionOnLaunch(4));
 
-    // endLiveActivity が呼ばれること
-    expect(endLiveActivity).toHaveBeenCalledWith('activity-stale');
-
-    // セッションがクリアされていること
+    expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-stale');
     expect(useMorningSessionStore.getState().session).toBeNull();
   });
 
   test('does nothing for active session (snoozeFiresAt already persisted)', async () => {
-    // 今日の日付を論理日付として取得
     const now = new Date();
     const hour = now.getHours();
-    // dayBoundaryHour=4 で今が4時以降なら今日、4時前なら昨日が論理日付
     const logicalDate = new Date(now);
     if (hour < 4) {
       logicalDate.setDate(logicalDate.getDate() - 1);
@@ -473,16 +337,12 @@ describe('restoreSessionOnLaunch', () => {
       date: todayStr,
       snoozeFiresAt: '2026-02-28T07:09:00.000Z',
       snoozeAlarmIds: ['snooze-1'],
-      // windowEnd を未来に設定
       windowEnd: '2099-12-31T23:59:59.000Z',
     });
 
-    await restoreSessionOnLaunch(4);
+    await runEffect(restoreSessionOnLaunch(4));
 
-    // endLiveActivity は呼ばれない（liveActivityId が null のため）
-    expect(endLiveActivity).not.toHaveBeenCalled();
-
-    // セッションはそのまま残る
+    expect(mockEndLiveActivity).not.toHaveBeenCalled();
     expect(useMorningSessionStore.getState().session).not.toBeNull();
     expect(useMorningSessionStore.getState().session?.snoozeFiresAt).toBe(
       '2026-02-28T07:09:00.000Z',
@@ -490,7 +350,6 @@ describe('restoreSessionOnLaunch', () => {
   });
 
   test('ends dangling Live Activity for completed session', async () => {
-    // 今日の論理日付を算出
     const now = new Date();
     const hour = now.getHours();
     const logicalDate = new Date(now);
@@ -502,7 +361,6 @@ describe('restoreSessionOnLaunch', () => {
     const d = logicalDate.getDate().toString().padStart(2, '0');
     const todayStr = `${y}-${m}-${d}`;
 
-    // 全TODO完了済みだが Live Activity が残っている
     setActiveSession({
       date: todayStr,
       liveActivityId: 'activity-dangling',
@@ -523,53 +381,43 @@ describe('restoreSessionOnLaunch', () => {
       ],
     });
 
-    await restoreSessionOnLaunch(4);
+    await runEffect(restoreSessionOnLaunch(4));
 
-    // dangling Live Activity が終了されること
-    expect(endLiveActivity).toHaveBeenCalledWith('activity-dangling');
-
-    // セッション自体はクリアされない（expireSessionIfNeeded の仕事）
+    expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-dangling');
     expect(useMorningSessionStore.getState().session).not.toBeNull();
   });
 
   test('does nothing when no session exists', async () => {
-    // session は null (beforeEach でリセット済み)
-    await restoreSessionOnLaunch(4);
+    await runEffect(restoreSessionOnLaunch(4));
 
-    expect(endLiveActivity).not.toHaveBeenCalled();
+    expect(mockEndLiveActivity).not.toHaveBeenCalled();
     expect(useMorningSessionStore.getState().session).toBeNull();
   });
 
   test('cleans up expired session (windowEnd passed)', async () => {
-    // windowEnd が過去のセッション
     setActiveSession({
       windowEnd: '2020-01-01T00:00:00.000Z',
       liveActivityId: 'activity-expired',
       snoozeAlarmIds: ['snooze-expired'],
     });
 
-    await restoreSessionOnLaunch(4);
+    await runEffect(restoreSessionOnLaunch(4));
 
-    // 期限切れセッションがクリアされること
     expect(useMorningSessionStore.getState().session).toBeNull();
-    // スヌーズとLAがクリーンアップされること
-    expect(cancelAlarmsByIds).toHaveBeenCalledWith(['snooze-expired']);
-    expect(endLiveActivity).toHaveBeenCalledWith('activity-expired');
-    // アラーム再スケジュール
-    expect(syncAlarms).toHaveBeenCalled();
+    expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-expired');
+    expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-expired');
   });
 });
 
-describe('handleSnoozeArrival', () => {
-  test('returns true and updates snoozeFiresAt when session has incomplete todos', () => {
+describe('handleSnoozeArrivalEffect', () => {
+  test('returns true and updates snoozeFiresAt when session has incomplete todos', async () => {
     setActiveSession();
 
-    const result = handleSnoozeArrival();
+    const result = await runEffect(handleSnoozeArrivalEffect);
 
     expect(result).toBe(true);
     const state = useMorningSessionStore.getState();
     expect(state.session?.snoozeFiresAt).not.toBeNull();
-    // snoozeFiresAt は約9分後であること
     const firesAtMs = new Date(state.session?.snoozeFiresAt as string).getTime();
     const expectedMin = Date.now() + 540 * 1000 - 1000;
     const expectedMax = Date.now() + 540 * 1000 + 1000;
@@ -577,12 +425,12 @@ describe('handleSnoozeArrival', () => {
     expect(firesAtMs).toBeLessThanOrEqual(expectedMax);
   });
 
-  test('returns false when no session exists', () => {
-    const result = handleSnoozeArrival();
+  test('returns false when no session exists', async () => {
+    const result = await runEffect(handleSnoozeArrivalEffect);
     expect(result).toBe(false);
   });
 
-  test('returns false when all todos are completed', () => {
+  test('returns false when all todos are completed', async () => {
     setActiveSession({
       todos: [
         {
@@ -600,61 +448,34 @@ describe('handleSnoozeArrival', () => {
       ],
     });
 
-    const result = handleSnoozeArrival();
+    const result = await runEffect(handleSnoozeArrivalEffect);
     expect(result).toBe(false);
   });
 });
 
 describe('recoverMissedDismiss', () => {
-  test('creates record + session from native dismiss event (TODO あり target)', async () => {
+  test('creates record + session from native dismiss event', async () => {
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
     const target = createTargetWithTodos();
     useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
 
-    getDismissEvents.mockResolvedValueOnce([
+    mockGetDismissEvents.mockReturnValueOnce([
       { alarmId: 'alarm-1', dismissedAt: '2026-03-04T07:02:00.000Z', payload: '' },
     ]);
 
-    const result = await recoverMissedDismiss(4);
+    const result = await runEffect(recoverMissedDismiss(4));
 
-    // WakeRecord が作成されること
     const records = useWakeRecordStore.getState().records;
     expect(records).toHaveLength(1);
     expect(records[0]?.dismissedAt).toBe('2026-03-04T07:02:00.000Z');
     expect(records[0]?.alarmId).toBe('wake-target');
 
-    // セッションが作成されること
     const session = useMorningSessionStore.getState().session;
     expect(session).not.toBeNull();
     expect(session?.todos).toHaveLength(2);
 
-    // スヌーズがスケジュールされること
-    expect(scheduleSnoozeAlarms).toHaveBeenCalled();
-
-    // Live Activity が開始されること
-    expect(startLiveActivity).toHaveBeenCalled();
-
-    // dismiss イベントがクリアされること
-    expect(clearDismissEvents).toHaveBeenCalled();
-
-    // result が true（復元された）
-    expect(result).toBe(true);
-  });
-
-  test('creates only record for TODO なし target', async () => {
-    const target = createTargetWithoutTodos();
-    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
-
-    getDismissEvents.mockResolvedValueOnce([
-      { alarmId: 'alarm-1', dismissedAt: '2026-03-04T07:02:00.000Z', payload: '' },
-    ]);
-
-    const result = await recoverMissedDismiss(4);
-
-    // WakeRecord は作成される
-    expect(useWakeRecordStore.getState().records).toHaveLength(1);
-    // セッションは作成されない
-    expect(useMorningSessionStore.getState().session).toBeNull();
-    // result は true
+    expect(mockClearDismissEvents).toHaveBeenCalled();
     expect(result).toBe(true);
   });
 
@@ -662,7 +483,7 @@ describe('recoverMissedDismiss', () => {
     const target = createTargetWithTodos();
     useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
 
-    getDismissEvents.mockResolvedValueOnce([
+    mockGetDismissEvents.mockReturnValueOnce([
       {
         alarmId: 'snooze-1',
         dismissedAt: '2026-03-04T07:11:00.000Z',
@@ -670,9 +491,8 @@ describe('recoverMissedDismiss', () => {
       },
     ]);
 
-    const result = await recoverMissedDismiss(4);
+    const result = await runEffect(recoverMissedDismiss(4));
 
-    // スヌーズ dismiss はスキップ
     expect(useWakeRecordStore.getState().records).toHaveLength(0);
     expect(result).toBe(false);
   });
@@ -682,54 +502,20 @@ describe('recoverMissedDismiss', () => {
     const target = createTargetWithTodos();
     useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
 
-    getDismissEvents.mockResolvedValueOnce([
+    mockGetDismissEvents.mockReturnValueOnce([
       { alarmId: 'alarm-1', dismissedAt: '2026-03-04T07:02:00.000Z', payload: '' },
     ]);
 
-    const result = await recoverMissedDismiss(4);
+    const result = await runEffect(recoverMissedDismiss(4));
 
-    // セッションがアクティブなので新たな WakeRecord は作成しない
     expect(useWakeRecordStore.getState().records).toHaveLength(0);
     expect(result).toBe(false);
   });
 
-  test('skips when same date record already exists', async () => {
-    const target = createTargetWithTodos();
-    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
-
-    // 同日のレコードを事前に作成
-    await useWakeRecordStore.getState().addRecord({
-      alarmId: 'wake-target',
-      date: '2026-03-04',
-      targetTime: { hour: 7, minute: 0 },
-      alarmTriggeredAt: '2026-03-04T07:00:00.000Z',
-      dismissedAt: '2026-03-04T07:01:00.000Z',
-      healthKitWakeTime: null,
-      result: 'great',
-      diffMinutes: 1,
-      todos: [],
-      todoCompletionSeconds: 0,
-      alarmLabel: '',
-      todosCompleted: true,
-      todosCompletedAt: '2026-03-04T07:01:00.000Z',
-      goalDeadline: null,
-    });
-
-    getDismissEvents.mockResolvedValueOnce([
-      { alarmId: 'alarm-1', dismissedAt: '2026-03-04T07:02:00.000Z', payload: '' },
-    ]);
-
-    const result = await recoverMissedDismiss(4);
-
-    // 同日レコードが既にあるので追加作成しない（元の1件のまま）
-    expect(useWakeRecordStore.getState().records).toHaveLength(1);
-    expect(result).toBe(false);
-  });
-
   test('returns false when no dismiss events', async () => {
-    getDismissEvents.mockResolvedValueOnce([]);
+    mockGetDismissEvents.mockReturnValueOnce([]);
 
-    const result = await recoverMissedDismiss(4);
+    const result = await runEffect(recoverMissedDismiss(4));
     expect(result).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import {
   playAlarmSound,
   runEffect,
   stopAlarmSound,
-} from '../src/services/effect';
+} from '../src/services';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import { formatTime } from '../src/types/alarm';

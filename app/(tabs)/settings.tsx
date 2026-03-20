@@ -18,7 +18,7 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
-import { playAlarmSound, stopAlarmSound } from '../../src/services/effect';
+import { playAlarmSound, stopAlarmSound } from '../../src/services';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 

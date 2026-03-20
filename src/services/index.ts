@@ -1,7 +1,22 @@
 /**
- * Effect サービス層のバレルエクスポート。
+ * サービス層のバレルエクスポート。
  *
- * 全サービスタグ、Layer、ランタイム、エラー型、Effect プログラムをここから import できる。
+ * 全 Effect サービスタグ、Layer、ランタイム、エラー型、Effect プログラムをここから import できる。
+ * レガシーサービスは削除済み — 全機能が Effect ベースに統一されている。
+ *
+ * 構成:
+ * - AlarmKitService  : ネイティブ AlarmKit ブリッジ（スケジュール、Live Activity、dismiss イベント）
+ * - AlarmSchedulerService : アラームスケジュール・スヌーズロジック
+ * - AlarmSyncService : ストア状態 ↔ AlarmKit の同期
+ * - StorageService   : AsyncStorage 抽象化
+ * - SoundService     : アラーム音再生
+ * - NotificationService : expo-notifications 抽象化
+ * - TodoReminderService : TODO 未完了リマインド通知
+ * - WidgetSyncService : App Groups ウィジェットデータ同期
+ * - session/         : セッションライフサイクル（dismiss → completion → recovery）
+ * - compat.ts        : React コンポーネント用の async/sync ラッパー
+ * - health.ts        : HealthKit 睡眠データ取得（Effect 非依存の純粋ラッパー）
+ * - background-sync.ts : バックグラウンドウィジェット同期タスク
  */
 
 export type { AlarmKitError, AlarmKitService } from './AlarmKitService';
@@ -20,6 +35,7 @@ export { syncAlarmsEffect } from './AlarmSyncService';
 // Legacy-compatible wrappers (Effect サービスを async/sync 関数として提供)
 export {
   checkLaunchPayload,
+  initializeAlarmKit,
   isAlarmKitAvailable,
   playAlarmSound,
   stopAlarmSound,

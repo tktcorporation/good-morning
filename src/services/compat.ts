@@ -10,10 +10,32 @@
  */
 
 import { Effect } from 'effect';
+import { AlarmKit } from './AlarmKitService';
 import { runEffect } from './runtime';
 import { Sound } from './SoundService';
 
 // ─── AlarmKit 互換関数 ─────────────────────────────────────────
+
+/**
+ * AlarmKit の認可をリクエストし、App Group を設定する。
+ *
+ * 背景: permissions.ts のオンボーディング・設定画面から呼ばれる。
+ * Effect の AlarmKit.initialize を async 関数として提供する。
+ *
+ * 呼び出し元: src/constants/permissions.ts
+ */
+export async function initializeAlarmKit(): Promise<'authorized' | 'denied'> {
+  try {
+    return await runEffect(
+      Effect.gen(function* () {
+        const kit = yield* AlarmKit;
+        return yield* kit.initialize;
+      }),
+    );
+  } catch {
+    return 'denied';
+  }
+}
 
 /**
  * AlarmKit ネイティブモジュールが利用可能かどうかを返す。

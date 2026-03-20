@@ -9,8 +9,8 @@
  */
 
 import { Effect, Ref } from 'effect';
-import { useMorningSessionStore } from '../../stores/morning-session-store';
-import { useWakeTargetStore } from '../../stores/wake-target-store';
+import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmKit, AlarmKitError } from './AlarmKitService';
 import {
   cancelAlarmsByIds,

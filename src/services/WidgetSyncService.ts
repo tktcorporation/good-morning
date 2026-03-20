@@ -11,7 +11,7 @@
  */
 
 import { Effect } from 'effect';
-import { buildWidgetData } from '../../domain/widget-data';
+import { buildWidgetData } from '../domain/widget-data';
 import { AlarmKit, type AlarmKitError } from './AlarmKitService';
 
 /**

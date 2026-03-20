@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
 import { colors } from '../src/constants/theme';
-import { registerBackgroundSync } from '../src/services/background-sync';
 import {
   AlarmKit,
   checkLaunchPayload,
@@ -15,7 +14,8 @@ import {
   runEffectFork,
   syncAlarmsEffect,
   syncWidgetEffect,
-} from '../src/services/effect';
+} from '../src/services';
+import { registerBackgroundSync } from '../src/services/background-sync';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';

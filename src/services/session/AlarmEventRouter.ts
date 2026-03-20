@@ -13,11 +13,11 @@
  */
 
 import { Effect } from 'effect';
-import { useMorningSessionStore } from '../../../stores/morning-session-store';
-import { useWakeRecordStore } from '../../../stores/wake-record-store';
-import { useWakeTargetStore } from '../../../stores/wake-target-store';
-import type { SessionTodo } from '../../../types/morning-session';
-import type { WakeTarget } from '../../../types/wake-target';
+import { useMorningSessionStore } from '../../stores/morning-session-store';
+import { useWakeRecordStore } from '../../stores/wake-record-store';
+import { useWakeTargetStore } from '../../stores/wake-target-store';
+import type { SessionTodo } from '../../types/morning-session';
+import type { WakeTarget } from '../../types/wake-target';
 import { AlarmKit } from '../AlarmKitService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
