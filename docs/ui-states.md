@@ -1,11 +1,9 @@
 # UI 状態カタログ
 
-各画面のすべてのUI状態を網羅する。UX改善・デザインレビュー時にこのドキュメントを参照し、
-改善対象の画面と状態を特定する。
+> **このファイルは自動生成されています。** 直接編集しないでください。
+> ソース: `src/docs/screen-states.ts` → `pnpm generate:ui-docs` で再生成
 
-> **スクリーンショット**: `docs/screenshots/` に配置する。
-> ファイル名は `{画面名}--{状態名}.png`（例: `dashboard--loading.png`）。
-> 実機で Expo dev tools または Xcode でキャプチャし、各状態を再現して撮影する。
+全 7 画面・25 状態 | スクリーンショット: 0/25 撮影済み
 
 ---
 
@@ -15,11 +13,11 @@
 |---|------|--------|------|--------|
 | 1 | ダッシュボード | `/(tabs)/index` | タブ | 6 |
 | 2 | 設定 | `/(tabs)/settings` | タブ | 3 |
-| 3 | オンボーディング | `/onboarding` | スタック | 6 (各ステップ) |
+| 3 | オンボーディング | `/onboarding` | スタック | 6 |
 | 4 | 時刻変更 | `/target-edit` | モーダル | 2 |
 | 5 | スケジュール | `/schedule` | モーダル | 3 |
-| 6 | 日次レビュー | `/day-review` | モーダル | 4 |
-| 7 | タブバー (共通) | `/(tabs)/_layout` | レイアウト | 2 |
+| 6 | 日次レビュー | `/day-review` | モーダル | 3 |
+| 7 | タブバー（共通） | `/(tabs)/_layout` | レイアウト | 2 |
 
 ---
 
@@ -32,61 +30,32 @@
 | 状態 | 条件 | スクリーンショット |
 |------|------|-------------------|
 | Loading | `loaded === false` | `dashboard--loading.png` |
-| Idle（セッションなし・TODOあり） | `session === null && target.todos.length > 0` | `dashboard--idle-with-todos.png` |
-| Idle（セッションなし・TODOなし） | `session === null && target.todos.length === 0` | `dashboard--idle-no-todos.png` |
+| Idle（TODOあり） | `session === null && target.todos.length > 0` | `dashboard--idle-with-todos.png` |
+| Idle（TODOなし） | `session === null && target.todos.length === 0` | `dashboard--idle-no-todos.png` |
 | Session Active（ゴール内） | `session !== null && !goalExceeded` | `dashboard--session-active.png` |
 | Session Active（ゴール超過） | `session !== null && goalExceeded` | `dashboard--session-exceeded.png` |
 | AlarmKit エラー | `!isAlarmKitAvailable()` | `dashboard--alarmkit-error.png` |
 
-### 各状態の構成要素
-
 #### Loading
+
+- **条件**: `loaded === false`
+- **スクリーンショット**: `dashboard--loading.png` (未撮影)
+
 ```
 ┌─────────────────────────┐
 │                         │
-│       Loading...        │  ← 中央配置テキスト
+│       Loading...        │
 │                         │
 └─────────────────────────┘
 ```
-- **表示**: "Loading..." テキストのみ
-- **UX メモ**: スピナーなし、テキストのみ。初回起動で数秒かかる場合にユーザーが不安に感じる可能性
 
-#### Idle（セッションなし）
-```
-┌─────────────────────────┐
-│  [AlarmKit エラーバナー]  │  ← 条件付き
-├─────────────────────────┤
-│     明日, 月曜日          │
-│       07:00              │  ← タップで target-edit へ
-│     [OVERRIDE]           │  ← nextOverride がある場合のみ
-├─────────────────────────┤
-│  睡眠時間カード            │  ← SleepDurationCard
-│  7h → 23:00 就寝          │
-├─────────────────────────┤
-│  起床目標バッファ          │  ← GoalBufferSection
-│  [-] 30分 [+]             │
-│  目標: 07:30              │
-├─────────────────────────┤
-│  朝のタスク               │  ← TodoEditSection
-│  ● 顔を洗う     [x]      │  ← TODOあり時: 一覧 + 削除ボタン
-│  ● 水を飲む     [x]      │
-│  [入力欄        ] [+]    │  ← 追加用
-│  ---                     │
-│  「タスクなし」           │  ← TODOなし時: 空メッセージ
-├─────────────────────────┤
-│  🔥 3日連続               │  ← StreakBadge
-├─────────────────────────┤
-│  週間カレンダー           │  ← WeeklyCalendar (GradeIcon × 7日)
-│  月 火 水 木 金 土 日     │
-├─────────────────────────┤
-│  今日の睡眠              │  ← SleepCard
-├─────────────────────────┤
-│  週間スタッツ            │  ← WeeklyStatsCard (records > 0 の場合のみ)
-│  5/7 成功                │
-└─────────────────────────┘
-```
+> **UX メモ**: スピナーなし、テキストのみ。初回起動で数秒かかる場合にユーザーが不安に感じる可能性
 
-#### Session Active（朝ルーティン中）
+#### Idle（TODOあり）
+
+- **条件**: `session === null && target.todos.length > 0`
+- **スクリーンショット**: `dashboard--idle-with-todos.png` (未撮影)
+
 ```
 ┌─────────────────────────┐
 │     明日, 月曜日          │
@@ -94,327 +63,338 @@
 ├─────────────────────────┤
 │  睡眠時間カード            │
 ├─────────────────────────┤
-│  ★ GoalBufferSection 非表示 ★
+│  起床目標バッファ          │
+│  [-] 30分 [+]             │
 ├─────────────────────────┤
-│  今朝のルーティン         │  ← MorningRoutineSection
-│  ████████░░  3/5         │  ← プログレスバー
-│  目標まで 12:34          │  ← goalRemaining (ゴール内: 青系)
-│  目標を 5:32 超過!       │  ← goalRemaining (ゴール超過: 赤系)
-│  次のスヌーズ 3:45       │  ← snoozeRemaining (あれば)
-│  ☐ 顔を洗う              │  ← TodoListItem (チェック可)
-│  ☑ 水を飲む              │
+│  朝のタスク               │
+│  ● 顔を洗う     [x]      │
+│  [入力欄        ] [+]    │
 ├─────────────────────────┤
-│  🔥 3日連続               │
-│  週間カレンダー / 睡眠 / 統計 │
+│  🔥 3日連続 / 週間 / 睡眠 │
 └─────────────────────────┘
 ```
 
-- **違い**: GoalBufferSection / TodoEditSection が消え、MorningRoutineSection が表示
-- **UX メモ**: セッション中はタスク追加・削除ができない（テンプレートはセッション開始時にコピー済み）
+#### Idle（TODOなし）
 
-#### AlarmKit エラーバナー
-- **表示条件**: `isAlarmKitAvailable()` が `false`
-- **見た目**: 赤背景 + 赤ボーダーのバナーがスクロール最上部に表示
-- **UX メモ**: タップアクションなし。ユーザーが設定→権限で解決すべきだが導線がない
+- **条件**: `session === null && target.todos.length === 0`
+- **スクリーンショット**: `dashboard--idle-no-todos.png` (未撮影)
+
+```
+┌─────────────────────────┐
+│     明日, 月曜日          │
+│       07:00              │
+├─────────────────────────┤
+│  朝のタスク               │
+│  「タスクなし」           │
+│  [入力欄        ] [+]    │
+└─────────────────────────┘
+```
+
+#### Session Active（ゴール内）
+
+- **条件**: `session !== null && !goalExceeded`
+- **スクリーンショット**: `dashboard--session-active.png` (未撮影)
+
+```
+┌─────────────────────────┐
+│     明日, 月曜日          │
+│       07:00              │
+├─────────────────────────┤
+│  今朝のルーティン         │
+│  ████████░░  3/5         │
+│  目標まで 12:34          │
+│  次のスヌーズ 3:45       │
+│  ☐ 顔を洗う              │
+│  ☑ 水を飲む              │
+└─────────────────────────┘
+```
+
+> **UX メモ**: GoalBufferSection / TodoEditSection が消え、MorningRoutineSection が表示。セッション中はタスク追加・削除不可。
+
+#### Session Active（ゴール超過）
+
+- **条件**: `session !== null && goalExceeded`
+- **スクリーンショット**: `dashboard--session-exceeded.png` (未撮影)
+
+> **UX メモ**: goalRemaining が赤系テキスト (colors.primary) で「目標を X:XX 超過!」と表示。
+
+#### AlarmKit エラー
+
+- **条件**: `!isAlarmKitAvailable()`
+- **スクリーンショット**: `dashboard--alarmkit-error.png` (未撮影)
+
+> **UX メモ**: 赤背景バナーがスクロール最上部に表示。タップアクションなし — 設定→権限への導線がない。
 
 ---
 
 ## 2. 設定 (`app/(tabs)/settings.tsx`)
 
+アラーム有効/無効、権限管理、日付変更ラインの設定。
+
 ### 状態一覧
 
 | 状態 | 条件 | スクリーンショット |
 |------|------|-------------------|
-| 通常 | - | `settings--normal.png` |
-| アラーム有効 | `target.enabled === true` | `settings--alarm-enabled.png` |
-| アラーム無効 | `target.enabled === false` | `settings--alarm-disabled.png` |
+| 通常（アラーム有効） | `target.enabled === true` | `settings--alarm-enabled.png` |
+| 通常（アラーム無効） | `target.enabled === false` | `settings--alarm-disabled.png` |
+| 権限 denied 後 | `permissionStatuses[perm.id] === "denied" → Alert表示` | `settings--permission-denied.png` |
 
-### 画面構成
+#### 通常（アラーム有効）
+
+- **条件**: `target.enabled === true`
+- **スクリーンショット**: `settings--alarm-enabled.png` (未撮影)
+
 ```
 ┌─────────────────────────┐
-│  スケジュール        [>] │  ← /schedule へ遷移
+│  スケジュール        [>] │
 ├─────────────────────────┤
-│  有効 / 無効       [⊙]  │  ← Switch (enabled ? "有効" : "無効")
+│  有効              [⊙]  │
 ├─────────────────────────┤
 │  日付変更ライン          │
-│  DayBoundaryPicker       │  ← 時刻選択 (0-23)
 ├─────────────────────────┤
 │  権限                    │
-│  🔔 AlarmKit   [Granted] │  ← 緑バッジ or オレンジバッジ
+│  🔔 AlarmKit   [Granted] │
 │  ❤️ HealthKit  [Denied]  │
 ├─────────────────────────┤
-│  このアプリについて       │
 │  Version 1.x.x           │
-│  説明テキスト             │
 └─────────────────────────┘
 ```
 
-### 権限状態の遷移
-```
-pending → (request) → granted  (緑 "Granted", 非活性)
-pending → (request) → denied   (オレンジ "Denied", タップ可 → Alert)
-```
+#### 通常（アラーム無効）
 
-- **UX メモ**: 権限が `denied` の場合、タップで再リクエストするが iOS は2回目以降拒否する。Alert で「設定アプリへ」とガイドするが、設定アプリへの直接遷移ボタンがない
+- **条件**: `target.enabled === false`
+- **スクリーンショット**: `settings--alarm-disabled.png` (未撮影)
+
+#### 権限 denied 後
+
+- **条件**: `permissionStatuses[perm.id] === "denied" → Alert表示`
+- **スクリーンショット**: `settings--permission-denied.png` (未撮影)
+
+> **UX メモ**: Alert で「設定アプリへ」とガイドするが、Linking.openSettings() へのボタンがない
 
 ---
 
 ## 3. オンボーディング (`app/onboarding.tsx`)
 
-### 6ステップのウィザード
-
-| ステップ | コンポーネント | 説明 | スクリーンショット |
-|---------|--------------|------|-------------------|
-| 0 | WelcomeStep | アプリ紹介 | `onboarding--step0-welcome.png` |
-| 1 | TimeStep | デフォルト起床時刻の設定 | `onboarding--step1-time.png` |
-| 2 | TodosStep | 朝タスクの登録 | `onboarding--step2-todos.png` |
-| 3 | PermissionStep | OS権限リクエスト | `onboarding--step3-permission.png` |
-| 4 | ConfirmStep | アラーム有効/無効の確認 | `onboarding--step4-confirm.png` |
-| 5 | DemoStep | デモサウンド再生 | `onboarding--step5-demo.png` |
-
-### 共通UIフレーム
-```
-┌─────────────────────────┐
-│    ○ ○ ●━━ ○ ○ ○       │  ← ドットインジケーター (アクティブは幅24)
-├─────────────────────────┤
-│                         │
-│   [各ステップの内容]     │  ← ステップごとに差し替え
-│                         │
-│   [戻る]    [次へ]      │
-└─────────────────────────┘
-```
-
-- **UX メモ**: 「戻る」ボタンは step === 0 では表示されない。ドットは `colors.border`（非活性）/ `colors.primary`（活性）
-
----
-
-## 4. 時刻変更 (`app/target-edit.tsx`)
+初回起動時の6ステップウィザード。時刻設定・TODO登録・権限リクエスト。
 
 ### 状態一覧
 
 | 状態 | 条件 | スクリーンショット |
 |------|------|-------------------|
-| 明日だけ変更モード | `mode === 'tomorrowOnly'` | `target-edit--tomorrow-only.png` |
-| デフォルト変更モード | `mode === 'changeDefault'` | `target-edit--change-default.png` |
+| Step 0: Welcome | `step === 0` | `onboarding--step0-welcome.png` |
+| Step 1: Time | `step === 1` | `onboarding--step1-time.png` |
+| Step 2: Todos | `step === 2` | `onboarding--step2-todos.png` |
+| Step 3: Permission | `step === 3` | `onboarding--step3-permission.png` |
+| Step 4: Confirm | `step === 4` | `onboarding--step4-confirm.png` |
+| Step 5: Demo | `step === 5` | `onboarding--step5-demo.png` |
 
-### 画面構成
+#### Step 0: Welcome
+
+- **条件**: `step === 0`
+- **スクリーンショット**: `onboarding--step0-welcome.png` (未撮影)
+
+#### Step 1: Time
+
+- **条件**: `step === 1`
+- **スクリーンショット**: `onboarding--step1-time.png` (未撮影)
+
+#### Step 2: Todos
+
+- **条件**: `step === 2`
+- **スクリーンショット**: `onboarding--step2-todos.png` (未撮影)
+
+#### Step 3: Permission
+
+- **条件**: `step === 3`
+- **スクリーンショット**: `onboarding--step3-permission.png` (未撮影)
+
+#### Step 4: Confirm
+
+- **条件**: `step === 4`
+- **スクリーンショット**: `onboarding--step4-confirm.png` (未撮影)
+
+#### Step 5: Demo
+
+- **条件**: `step === 5`
+- **スクリーンショット**: `onboarding--step5-demo.png` (未撮影)
+
+---
+
+## 4. 時刻変更 (`app/target-edit.tsx`)
+
+起床時刻の変更。「明日だけ」と「デフォルト変更」の2モード。
+
+### 状態一覧
+
+| 状態 | 条件 | スクリーンショット |
+|------|------|-------------------|
+| 明日だけ変更モード | `mode === "tomorrowOnly"` | `target-edit--tomorrow-only.png` |
+| デフォルト変更モード | `mode === "changeDefault"` | `target-edit--change-default.png` |
+
+#### 明日だけ変更モード
+
+- **条件**: `mode === "tomorrowOnly"`
+- **スクリーンショット**: `target-edit--tomorrow-only.png` (未撮影)
+
 ```
 ┌─────────────────────────┐
 │      起床時刻を変更       │
-├─────────────────────────┤
 │         ▲    ▲          │
-│       07  :  00          │  ← 5分刻みで調整
+│       07  :  00          │
 │         ▼    ▼          │
 ├─────────────────────────┤
-│ ◉ 明日だけ変更           │  ← ラジオボタン
+│ ◉ 明日だけ変更           │
 │ ○ デフォルトを変更        │
 ├─────────────────────────┤
-│      [ 保存 ]            │  ← プライマリボタン
+│      [ 保存 ]            │
 └─────────────────────────┘
 ```
 
-- **UX メモ**: 現在の値と変更後の差分が視覚的に分からない。「現在の設定: 06:00 → 変更: 07:00」のような差分表示がない
+> **UX メモ**: 現在の値と変更後の差分が視覚的に分からない
+
+#### デフォルト変更モード
+
+- **条件**: `mode === "changeDefault"`
+- **スクリーンショット**: `target-edit--change-default.png` (未撮影)
 
 ---
 
 ## 5. スケジュール (`app/schedule.tsx`)
+
+曜日ごとのアラーム時刻設定。デフォルト/カスタム/OFFの3状態。
 
 ### 状態一覧
 
 | 状態 | 条件 | スクリーンショット |
 |------|------|-------------------|
 | Loading | `target === null` | `schedule--loading.png` |
-| 全曜日デフォルト | `dayOverrides` が空 | `schedule--all-default.png` |
-| カスタムあり | 一部の曜日にオーバーライド | `schedule--with-overrides.png` |
+| 全曜日デフォルト | `dayOverrides が空` | `schedule--all-default.png` |
+| カスタムあり + 編集中 | `一部の曜日にオーバーライド && editingDay !== null` | `schedule--with-overrides.png` |
 
-### 曜日ごとの3状態
+#### Loading
+
+- **条件**: `target === null`
+- **スクリーンショット**: `schedule--loading.png` (未撮影)
+
+#### 全曜日デフォルト
+
+- **条件**: `dayOverrides が空`
+- **スクリーンショット**: `schedule--all-default.png` (未撮影)
+
+#### カスタムあり + 編集中
+
+- **条件**: `一部の曜日にオーバーライド && editingDay !== null`
+- **スクリーンショット**: `schedule--with-overrides.png` (未撮影)
+
 ```
 ┌─────────────────────────┐
-│  デフォルト: 07:00       │  ← 上部に表示
+│  デフォルト: 07:00       │
 ├─────────────────────────┤
-│  月曜日                  │
-│  デフォルト使用   07:00  │  ← state=default: グレー背景
-├─────────────────────────┤
-│  火曜日                  │
-│  カスタム時刻    08:00   │  ← state=custom: ハイライト背景
-│  ┌── インラインピッカー ─┐│
-│  │    ▲    ▲           ││
-│  │  08  :  00           ││  ← editingDay === day の場合のみ表示
-│  │    ▼    ▼           ││
+│  月  デフォルト   07:00  │
+│  火  カスタム    08:00   │
+│  ┌── ピッカー ──────────┐│
+│  │  ▲ 08 : 00 ▲       ││
 │  └─────────────────────┘│
-├─────────────────────────┤
-│  水曜日                  │
-│  OFF            OFF     │  ← state=off: テキスト色がミュート
+│  水  OFF        OFF     │
 └─────────────────────────┘
 ```
 
-### 曜日タップ時の状態遷移
-```
-default → custom (ピッカー表示) → off (ピッカー非表示) → default
-```
-
-- **UX メモ**: 状態遷移のサイクルが直感的でない可能性（custom→off が「もう1回タップ」で切り替わる）
+> **UX メモ**: 曜日タップ: default→custom→off→default のサイクル。直感的でない可能性。
 
 ---
 
 ## 6. 日次レビュー (`app/day-review.tsx`)
+
+特定日の起床記録・睡眠データ・デイリーグレードを確認する。
 
 ### 状態一覧
 
 | 状態 | 条件 | スクリーンショット |
 |------|------|-------------------|
 | 記録なし | `record === undefined && gradeRecord === undefined` | `day-review--no-record.png` |
-| アラーム記録あり | `record !== undefined` | `day-review--with-record.png` |
+| アラーム記録あり（TODO含む） | `record !== undefined && record.todos.length > 0` | `day-review--with-record.png` |
 | アラーム未使用 + グレードあり | `record === undefined && gradeRecord !== undefined` | `day-review--no-alarm.png` |
-| 全データあり（TODO含む） | `record !== undefined && record.todos.length > 0` | `day-review--full-data.png` |
 
-### 「記録なし」状態
-```
-┌─────────────────────────┐
-│                         │
-│  この日の記録はありません  │  ← 中央配置
-│                         │
-└─────────────────────────┘
-```
+#### 記録なし
 
-### 「全データあり」状態
+- **条件**: `record === undefined && gradeRecord === undefined`
+- **スクリーンショット**: `day-review--no-record.png` (未撮影)
+
+#### アラーム記録あり（TODO含む）
+
+- **条件**: `record !== undefined && record.todos.length > 0`
+- **スクリーンショット**: `day-review--with-record.png` (未撮影)
+
 ```
 ┌─────────────────────────┐
 │     2026-03-22           │
+│     [ Great ]            │
 ├─────────────────────────┤
-│     [ Great ]            │  ← 結果バッジ (色付き pill)
+│  目標 07:00 / 実際 06:55 │
+│  結果 -5 min             │
 ├─────────────────────────┤
-│  目標      07:00         │
-│  実際      06:55         │
-│  結果      -5 min        │  ← 色: RESULT_COLORS[result]
+│  ✓ 顔を洗う              │
+│  ○ 水を飲む              │
 ├─────────────────────────┤
-│  タスク完了状況           │  ← record.todos.length > 0 の場合のみ
-│  ✓ 顔を洗う              │  ← 完了: 取り消し線
-│  ○ 水を飲む              │  ← 未完了
-├─────────────────────────┤
-│  睡眠データ              │  ← SleepDetailSection
-├─────────────────────────┤
-│  デイリーグレード         │  ← DailyGradeSection
-│  朝: Pass / 夜: On Time  │
-│  グレード: Excellent      │
+│  睡眠データ / グレード    │
 └─────────────────────────┘
 ```
 
-### 結果バッジの色分け (`RESULT_COLORS`)
-| 結果 | ラベル | 色 |
-|------|-------|----|
-| great | Great | 緑系 |
-| ok | OK | 青系 |
-| late | Late | オレンジ系 |
-| missed | Missed | 赤系 |
+#### アラーム未使用 + グレードあり
+
+- **条件**: `record === undefined && gradeRecord !== undefined`
+- **スクリーンショット**: `day-review--no-alarm.png` (未撮影)
+
+> **UX メモ**: アラーム未使用日でも useGradeFinalization がグレードを自動生成するため、この状態が発生する
 
 ---
 
-## 7. タブバー共通 (`app/(tabs)/_layout.tsx`)
+## 7. タブバー（共通） (`app/(tabs)/_layout.tsx`)
+
+タブバー + MorningRoutineBanner。セッション中はバナーが表示。
 
 ### 状態一覧
 
 | 状態 | 条件 | スクリーンショット |
 |------|------|-------------------|
 | セッションなし | `session === null` | `tabbar--no-session.png` |
-| セッション中 | `session !== null` | `tabbar--with-banner.png` |
+| セッション中（バナー表示） | `session !== null` | `tabbar--with-banner.png` |
 
-### MorningRoutineBanner
-タブバーの **上** にセッション中のみ表示されるバナー。
+#### セッションなし
 
-```
-┌─────────────────────────┐
-│  MorningRoutineBanner    │  ← セッション中のみ
-├─────────────────────────┤
-│  🏠 ダッシュ  ⚙ 設定    │  ← タブバー
-└─────────────────────────┘
-```
+- **条件**: `session === null`
+- **スクリーンショット**: `tabbar--no-session.png` (未撮影)
 
-- **UX メモ**: 設定タブに切り替えても進捗が見える。ただしバナーのタップで何が起きるかはコンポーネント実装による
+#### セッション中（バナー表示）
 
----
+- **条件**: `session !== null`
+- **スクリーンショット**: `tabbar--with-banner.png` (未撮影)
 
-## スクリーンショット撮影ガイド
-
-### 必要な環境
-- iOS 実機 or シミュレータ
-- Expo dev server (`pnpm start`)
-- 各状態を再現するためのテストデータ
-
-### 各状態の再現方法
-
-| 状態 | 再現手順 |
-|------|---------|
-| Dashboard Loading | AsyncStorage を全クリアしてアプリ起動 |
-| Dashboard Idle (TODOあり) | オンボーディング完了後の通常状態 |
-| Dashboard Idle (TODOなし) | 全TODOを削除 |
-| Dashboard Session Active | アラーム発火後にdismiss（デモモードで再現可能） |
-| Dashboard Session Exceeded | セッション開始後、goalDeadline を過去に設定 |
-| Dashboard AlarmKit Error | AlarmKit 権限を拒否 |
-| Settings Normal | 通常状態 |
-| Settings Alarm Disabled | アラームスイッチをOFF |
-| Onboarding Step 0-5 | オンボーディング未完了で起動し、各ステップへ進む |
-| Target Edit | ダッシュボードの時刻をタップ |
-| Schedule All Default | オーバーライドなし |
-| Schedule With Overrides | 曜日をタップしてカスタム/OFFに変更 |
-| Day Review No Record | 記録のない日をタップ |
-| Day Review Full Data | アラーム記録がある日をタップ |
+> **UX メモ**: タブバーの上にバナーが表示。設定タブに切り替えても進捗が見える。
 
 ---
 
-## 画面遷移フロー図
-
-```
-                    ┌─────────────┐
-                    │ App Launch  │
-                    └─────┬───────┘
-                          │
-                    ┌─────▼───────┐     NO     ┌──────────────┐
-                    │ Onboarding  ├────────────►│ /(tabs)      │
-                    │ Completed?  │             │  ┌──────────┐│
-                    └─────┬───────┘             │  │Dashboard ││
-                     YES  │                     │  └────┬─────┘│
-                          │                     │       │      │
-                    ┌─────▼───────┐             │  ┌────▼─────┐│
-                    │ /onboarding │             │  │ Settings ││
-                    │ (6 steps)   │             │  └──────────┘│
-                    └─────┬───────┘             └──────────────┘
-                          │ complete                 │  │  │
-                          └─────────────────────────►│  │  │
-                                                     │  │  │
-                                          ┌──────────┘  │  └──────────┐
-                                          ▼             ▼             ▼
-                                   /target-edit    /schedule     /day-review
-                                   (モーダル)      (モーダル)    (モーダル)
-```
-
-### アラーム発火フロー
-```
-AlarmKit 発火 → _layout.tsx handleAlarmEventEffect
-                     │
-                     ├─ 初回アラーム: router.push('/') → Dashboard (Session Active)
-                     │
-                     └─ スヌーズ再発火: Live Activity 更新 → router.push('/')
-```
-
----
-
-## UX 改善候補（コードリーディングから抽出）
-
-> 以下は実装を読んで発見した改善ポイント。優先度付けは実際のスクリーンショット確認後に行う。
+## UX 改善候補
 
 ### P1: 高優先度
-1. **Loading 画面にスピナーがない** — テキストのみで、初回起動の長時間ロードで不安を与える
-2. **AlarmKit エラーバナーに解決導線がない** — 「設定へ」ボタンが必要
-3. **wakeup 画面が存在しない** — `user-flows.md` には記載あるが実装なし。アラーム解除UIが不明
+
+- Loading 画面にスピナーがない — テキストのみで、初回起動の長時間ロードで不安を与える
+- AlarmKit エラーバナーに解決導線がない — 「設定へ」ボタンが必要
 
 ### P2: 中優先度
-4. **target-edit の差分表示なし** — 現在値 → 変更値の比較ができない
-5. **スケジュールの状態遷移** — default→custom→off→default のサイクルが分かりにくい
-6. **権限 denied 時の設定アプリ遷移** — Alert のみでリンクなし（`Linking.openSettings()` を使うべき）
-7. **セッション中に TODO 追加不可** — 忘れていたタスクを追加したい場合の手段がない
+
+- target-edit の差分表示なし — 現在値 → 変更値の比較ができない
+- スケジュールの状態遷移 — default→custom→off→default のサイクルが分かりにくい
+- 権限 denied 時の設定アプリ遷移 — Alert のみでリンクなし（Linking.openSettings() を使うべき）
+- セッション中に TODO 追加不可 — 忘れていたタスクを追加したい場合の手段がない
 
 ### P3: 低優先度
-8. **WeeklyStatsCard の条件** — レコード0件で非表示だが、初回ユーザーにはガイドテキストがあるとよい
-9. **日次レビューの日付フォーマット** — "2026-03-22" のような ISO 形式で、ユーザーフレンドリーではない
-10. **SleepCard の空状態** — HealthKit データなし時のフォールバック表示
+
+- WeeklyStatsCard — レコード0件で非表示だが、初回ユーザーにはガイドテキストがあるとよい
+- 日次レビューの日付フォーマット — ISO形式 (2026-03-22) でユーザーフレンドリーではない
+- SleepCard の空状態 — HealthKit データなし時のフォールバック表示
+
+---
+
+*Generated at 2026-03-23T02:00:19 from `src/docs/screen-states.ts`*

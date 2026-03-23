@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "doctor": "expo doctor",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "generate:ui-docs": "tsx scripts/generate-ui-docs.ts"
   },
   "dependencies": {
     "@kingstinct/react-native-healthkit": "^13.2.3",
@@ -61,6 +62,7 @@
     "jest": "~29.7.0",
     "jest-expo": "55.0.11",
     "knip": "^5.88.1",
+    "tsx": "^4.21.0",
     "typescript": "5.9.3"
   },
   "expo": {
