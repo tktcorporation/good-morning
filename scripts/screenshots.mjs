@@ -6,14 +6,21 @@
  * Claude の Chrome DevTools MCP や Read ツールで確認可能。
  *
  * 使い方:
- *   1. `pnpm web` で Expo Web dev server を起動
- *   2. `node scripts/screenshots.mjs` で全画面のスクショを取得
+ *   pnpm screenshots        # サーバー起動 → 撮影 → 停止をワンコマンドで実行
+ *   pnpm screenshots:only   # 既に pnpm web で起動中の場合、撮影のみ
  *
  * 前提:
  *   - Playwright がインストール済み（pnpm add -D playwright）
  *   - Chrome がシステムにインストール済み
+ *
+ * 環境変数:
+ *   EXPO_WEB_URL     - dev server の URL（デフォルト: http://localhost:8081）
+ *   SCREENSHOT_DIR   - 出力先（デフォルト: /tmp/screenshots）
+ *   CHROME_PATH      - Chrome のパス
+ *   SKIP_SERVER      - "true" でサーバー起動をスキップ（既に起動中の場合）
  */
 
+import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
@@ -21,6 +28,7 @@ import { chromium } from 'playwright';
 const BASE_URL = process.env.EXPO_WEB_URL || 'http://localhost:8081';
 const OUTPUT_DIR = process.env.SCREENSHOT_DIR || '/tmp/screenshots';
 const CHROME_PATH = process.env.CHROME_PATH || '/tmp/chrome-linux64/chrome';
+const SKIP_SERVER = process.env.SKIP_SERVER === 'true';
 
 // biome-ignore lint/suspicious/noConsole: CLI スクリプトのため console 出力は必須
 const log = console.log;
@@ -50,7 +58,41 @@ const SCREENS = [
   { name: '06-day-review', path: '/day-review' },
 ];
 
-async function main() {
+/**
+ * URL にリクエストを送り、200 が返るまでポーリングする。
+ * Expo Web の Metro bundler は起動に時間がかかるため、
+ * 初回バンドルが完了するまで最大 2 分待つ。
+ */
+async function waitForServer(url, maxRetries = 40, intervalMs = 3000) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return;
+    } catch {
+      // サーバーがまだ起動していない
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`Server did not start within ${(maxRetries * intervalMs) / 1000}s`);
+}
+
+/**
+ * Expo Web dev server を子プロセスとして起動する。
+ * execFile を使いシェルインジェクションを防止。
+ * 撮影完了後に kill するため、プロセス参照を返す。
+ */
+function startExpoWeb() {
+  const child = execFile('npx', ['expo', 'start', '--web', '--port', '8081'], {
+    cwd: process.cwd(),
+    env: { ...process.env, BROWSER: 'none' },
+  });
+  // 子プロセスの出力はデバッグ時のみ必要なので、デフォルトでは捨てる
+  child.stdout?.resume();
+  child.stderr?.resume();
+  return child;
+}
+
+async function takeScreenshots() {
   if (!existsSync(OUTPUT_DIR)) {
     mkdirSync(OUTPUT_DIR, { recursive: true });
   }
@@ -63,8 +105,6 @@ async function main() {
   }
 
   const browser = await chromium.launch(launchOptions);
-
-  // オンボーディング完了状態を設定するためのコンテキスト
   const context = await browser.newContext(DEVICE);
 
   // AsyncStorage にオンボーディング完了フラグを設定
@@ -108,6 +148,27 @@ async function main() {
 
   await browser.close();
   log(`\nDone! Screenshots saved to ${OUTPUT_DIR}/`);
+}
+
+async function main() {
+  let serverProcess = null;
+
+  try {
+    if (SKIP_SERVER) {
+      log('SKIP_SERVER=true: using existing server');
+    } else {
+      log('Starting Expo Web dev server...');
+      serverProcess = startExpoWeb();
+      await waitForServer(BASE_URL);
+      log('Server ready.\n');
+    }
+
+    await takeScreenshots();
+  } finally {
+    if (serverProcess) {
+      serverProcess.kill('SIGTERM');
+    }
+  }
 }
 
 main().catch((e) => {
