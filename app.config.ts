@@ -34,6 +34,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'com.apple.security.application-groups': ['group.com.tktcorporation.goodmorning'],
     },
   },
+  web: {
+    bundler: 'metro',
+    favicon: './assets/icon.png',
+  },
   android: {
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
