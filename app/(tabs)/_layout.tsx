@@ -1,7 +1,7 @@
 import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { MorningRoutineBanner } from '../../src/components/MorningRoutineBanner';
 import { colors } from '../../src/constants/theme';
 
@@ -26,9 +26,16 @@ export default function TabLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
 
+  // Web では BottomTabBar が FrameSizeProvider を必要とするが、
+  // カスタム tabBar ではプロバイダが提供されないため、デフォルトの tabBar を使用する。
+  const tabBarProps =
+    Platform.OS === 'web'
+      ? {}
+      : { tabBar: (props: BottomTabBarProps) => <TabBarWithBanner {...props} /> };
+
   return (
     <Tabs
-      tabBar={(props) => <TabBarWithBanner {...props} />}
+      {...tabBarProps}
       screenOptions={{
         tabBarStyle: {
           backgroundColor: colors.background,
