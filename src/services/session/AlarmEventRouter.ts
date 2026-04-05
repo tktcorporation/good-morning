@@ -60,6 +60,9 @@ const tryAutoStartSession = (
       title: todo.title,
       completed: false,
       completedAt: null,
+      type: todo.type,
+      requiredCount: todo.requiredCount,
+      currentCount: 0,
     }));
 
     yield* Effect.promise(() =>

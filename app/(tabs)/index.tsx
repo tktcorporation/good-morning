@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
 import { SleepDurationCard } from '../../src/components/SleepDurationCard';
+import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
@@ -115,6 +116,8 @@ function MorningRoutineSection({
   goalExceeded,
   snoozeRemaining,
   onToggleTodo,
+  onIncrementTodo,
+  onCompleteTodo,
 }: {
   readonly session: import('../../src/types/morning-session').MorningSession;
   readonly progress: { completed: number; total: number };
@@ -122,6 +125,8 @@ function MorningRoutineSection({
   readonly goalExceeded: boolean;
   readonly snoozeRemaining: string | null;
   readonly onToggleTodo: (id: string) => void;
+  readonly onIncrementTodo: (id: string) => void;
+  readonly onCompleteTodo: (id: string) => void;
 }) {
   const { t } = useTranslation('dashboard');
   return (
@@ -160,13 +165,22 @@ function MorningRoutineSection({
           {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
         </Text>
       )}
-      {session.todos.map((todo) => (
-        <TodoListItem
-          key={todo.id}
-          item={{ id: todo.id, title: todo.title, completed: todo.completed }}
-          onToggle={onToggleTodo}
-        />
-      ))}
+      {session.todos.map((todo) =>
+        (todo.type ?? 'checkbox') === 'squat' ? (
+          <SquatChallengeItem
+            key={todo.id}
+            todo={todo}
+            onIncrement={onIncrementTodo}
+            onComplete={onCompleteTodo}
+          />
+        ) : (
+          <TodoListItem
+            key={todo.id}
+            item={{ id: todo.id, title: todo.title, completed: todo.completed }}
+            onToggle={onToggleTodo}
+          />
+        ),
+      )}
     </View>
   );
 }
@@ -180,12 +194,14 @@ function TodoEditSection({
   newTodoText,
   onNewTodoTextChange,
   onAddTodo,
+  onAddSquatTodo,
   onRemoveTodo,
 }: {
   readonly target: WakeTarget | null;
   readonly newTodoText: string;
   readonly onNewTodoTextChange: (text: string) => void;
   readonly onAddTodo: () => void;
+  readonly onAddSquatTodo: () => void;
   readonly onRemoveTodo: (id: string) => void;
 }) {
   const { t } = useTranslation('dashboard');
@@ -197,8 +213,17 @@ function TodoEditSection({
           <Text style={styles.todoDescription}>{t('todos.description')}</Text>
           {target.todos.map((todo) => (
             <View key={todo.id} style={styles.todoRow}>
-              <View style={styles.todoBullet} />
-              <Text style={styles.todoText}>{todo.title}</Text>
+              <View
+                style={[
+                  styles.todoBullet,
+                  (todo.type ?? 'checkbox') === 'squat' && styles.todoBulletSquat,
+                ]}
+              />
+              <Text style={styles.todoText}>
+                {(todo.type ?? 'checkbox') === 'squat'
+                  ? `${todo.title} (${todo.requiredCount ?? 10})`
+                  : todo.title}
+              </Text>
               <Pressable style={styles.todoDeleteButton} onPress={() => onRemoveTodo(todo.id)}>
                 <Text style={styles.todoDeleteText}>{'x'}</Text>
               </Pressable>
@@ -222,6 +247,10 @@ function TodoEditSection({
           <Text style={styles.addTodoButtonText}>{'+'}</Text>
         </Pressable>
       </View>
+      <Pressable style={styles.addSquatButton} onPress={onAddSquatTodo}>
+        <Text style={styles.addSquatIcon}>{'🏋️'}</Text>
+        <Text style={styles.addSquatText}>{t('todos.addSquat')}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -293,6 +322,7 @@ export default function DashboardScreen() {
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
   const addTodo = useWakeTargetStore((s) => s.addTodo);
+  const addSquatTodo = useWakeTargetStore((s) => s.addSquatTodo);
   const removeTodo = useWakeTargetStore((s) => s.removeTodo);
 
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
@@ -301,6 +331,7 @@ export default function DashboardScreen() {
 
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
+  const incrementTodoCount = useMorningSessionStore((s) => s.incrementTodoCount);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
   const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
@@ -386,12 +417,30 @@ export default function DashboardScreen() {
     [toggleTodo],
   );
 
+  const handleIncrementTodo = useCallback(
+    async (todoId: string) => {
+      await incrementTodoCount(todoId);
+    },
+    [incrementTodoCount],
+  );
+
+  // スクワットタスク完了時も handleToggleTodo と同じ Live Activity 更新が走る。
+  // incrementTodoCount が completed を true にした後に呼ばれるため、
+  // ここでは追加のストア操作は不要（onAllTodosCompletedEffect が useEffect で発火する）。
+  const handleCompleteTodo = useCallback((_todoId: string) => {
+    // 完了エフェクトは useEffect 側で areAllCompleted() を監視して発火するため、ここでは何もしない。
+  }, []);
+
   const handleAddTodo = useCallback(async () => {
     const trimmed = newTodoText.trim();
     if (trimmed.length === 0) return;
     await addTodo(trimmed);
     setNewTodoText('');
   }, [newTodoText, addTodo]);
+
+  const handleAddSquatTodo = useCallback(async () => {
+    await addSquatTodo('Squat', 10);
+  }, [addSquatTodo]);
 
   const handleRemoveTodo = useCallback(
     async (id: string) => {
@@ -466,6 +515,8 @@ export default function DashboardScreen() {
           goalExceeded={goalExceeded}
           snoozeRemaining={snoozeRemaining}
           onToggleTodo={handleToggleTodo}
+          onIncrementTodo={handleIncrementTodo}
+          onCompleteTodo={handleCompleteTodo}
         />
       ) : (
         <TodoEditSection
@@ -473,6 +524,7 @@ export default function DashboardScreen() {
           newTodoText={newTodoText}
           onNewTodoTextChange={setNewTodoText}
           onAddTodo={handleAddTodo}
+          onAddSquatTodo={handleAddSquatTodo}
           onRemoveTodo={handleRemoveTodo}
         />
       )}
@@ -716,6 +768,30 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSize.xl,
     fontWeight: '300',
+  },
+
+  todoBulletSquat: {
+    backgroundColor: colors.warning,
+  },
+  addSquatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  addSquatIcon: {
+    fontSize: fontSize.lg,
+    marginRight: spacing.sm,
+  },
+  addSquatText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
   },
 
   // Weekly Calendar

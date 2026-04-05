@@ -7,6 +7,12 @@ export interface SessionTodo {
   readonly title: string;
   readonly completed: boolean;
   readonly completedAt: string | null;
+  /** タスク種別。未設定（レガシーデータ）は 'checkbox' として扱う。 */
+  readonly type?: import('./alarm').TodoType;
+  /** squat タスクの目標回数。 */
+  readonly requiredCount?: number;
+  /** squat タスクの現在の達成回数。セッション中にインクリメントされる。 */
+  readonly currentCount?: number;
 }
 
 /**

@@ -32,6 +32,11 @@ interface MorningSessionState {
    */
   setGoalDeadline: (deadline: string | null) => Promise<void>;
   toggleTodo: (todoId: string) => Promise<void>;
+  /**
+   * squat タスクのカウントを1つ進める。requiredCount に達したら自動で completed にする。
+   * checkbox タスクに対して呼ばれた場合は何もしない。
+   */
+  incrementTodoCount: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
   /**
    * snoozeAlarmIds と snoozeFiresAt をアトミックに更新し、session を AsyncStorage に永続化する。
@@ -149,6 +154,35 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     set({ session: updated });
     await persistSession(updated);
     // ウィジェットに TODO 進捗を反映（fire-and-forget）
+    runEffectFork(syncWidgetEffect);
+  },
+
+  incrementTodoCount: async (todoId: string) => {
+    const { session } = get();
+    if (session === null) return;
+
+    const todo = session.todos.find((t) => t.id === todoId);
+    if (todo === undefined || (todo.type ?? 'checkbox') === 'checkbox') return;
+    if (todo.completed) return;
+
+    const newCount = (todo.currentCount ?? 0) + 1;
+    const required = todo.requiredCount ?? 10;
+    const nowCompleted = newCount >= required;
+
+    const updated: MorningSession = {
+      ...session,
+      todos: session.todos.map((t) => {
+        if (t.id !== todoId) return t;
+        return {
+          ...t,
+          currentCount: newCount,
+          completed: nowCompleted,
+          completedAt: nowCompleted ? new Date().toISOString() : null,
+        };
+      }),
+    };
+    set({ session: updated });
+    await persistSession(updated);
     runEffectFork(syncWidgetEffect);
   },
 
