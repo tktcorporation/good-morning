@@ -16,10 +16,23 @@ export function getDayLabel(day: DayOfWeek, t: TranslateFn): string {
   return t(`dayLabelsShort.${DAY_KEYS[day]}`);
 }
 
+/**
+ * タスクの種類。
+ * - checkbox: タップで完了する通常のチェックリスト項目
+ * - squat: 加速度センサーでスクワットを検出し、規定回数こなすと完了になるチャレンジ
+ *
+ * 将来の拡張（歩数カウント、QRスキャン等）もここに追加する。
+ */
+export type TodoType = 'checkbox' | 'squat';
+
 export interface TodoItem {
   readonly id: string;
   readonly title: string;
   readonly completed: boolean;
+  /** タスク種別。未設定（レガシーデータ）は 'checkbox' として扱う。 */
+  readonly type?: TodoType;
+  /** squat タスクの目標回数。type === 'squat' の場合のみ使用。デフォルト10回。 */
+  readonly requiredCount?: number;
 }
 
 export interface AlarmTime {

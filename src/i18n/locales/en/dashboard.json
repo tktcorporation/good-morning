@@ -9,7 +9,8 @@
     "description": "These become a checklist after you dismiss your alarm",
     "addTask": "Add task",
     "placeholder": "New task",
-    "empty": "Add tasks to complete when your alarm rings"
+    "empty": "Add tasks to complete when your alarm rings",
+    "addSquat": "Add Squat Challenge"
   },
   "morningRoutine": {
     "title": "Morning Routine",
@@ -18,7 +19,12 @@
     "snoozeCountdown": "Next snooze in {{time}}",
     "goalCountdown": "Goal in {{time}}",
     "goalExceeded": "{{time}} over goal",
-    "allDone": "All tasks done!"
+    "allDone": "All tasks done!",
+    "squat": {
+      "detecting": "Detecting squats...",
+      "done": "Done!",
+      "waiting": "Waiting..."
+    }
   },
   "goalBuffer": {
     "title": "Wake-up Goal Buffer",

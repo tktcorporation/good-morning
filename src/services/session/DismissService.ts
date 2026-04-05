@@ -95,6 +95,9 @@ export const handleAlarmDismissEffect = (
         title: todo.title,
         completed: false,
         completedAt: null,
+        type: todo.type,
+        requiredCount: todo.requiredCount,
+        currentCount: 0,
       }));
       const windowEnd = new Date(
         dismissTime.getTime() + SESSION_WINDOW_AFTER_MINUTES * 60 * 1000,

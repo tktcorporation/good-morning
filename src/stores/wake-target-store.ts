@@ -32,6 +32,8 @@ interface WakeTargetState {
   setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>;
   removeDayOverride: (day: DayOfWeek) => Promise<void>;
   addTodo: (title: string) => Promise<void>;
+  /** スクワットチャレンジタスクを追加する。requiredCount はデフォルト10回。 */
+  addSquatTodo: (title: string, requiredCount?: number) => Promise<void>;
   removeTodo: (id: string) => Promise<void>;
   reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
   setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
@@ -171,6 +173,21 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const { target } = get();
     if (target === null) return;
     const newTodo: TodoItem = { id: createTodoId(), title, completed: false };
+    const updated: WakeTarget = { ...target, todos: [...target.todos, newTodo] };
+    set({ target: updated });
+    await persist(updated);
+  },
+
+  addSquatTodo: async (title: string, requiredCount = 10) => {
+    const { target } = get();
+    if (target === null) return;
+    const newTodo: TodoItem = {
+      id: createTodoId(),
+      title,
+      completed: false,
+      type: 'squat',
+      requiredCount,
+    };
     const updated: WakeTarget = { ...target, todos: [...target.todos, newTodo] };
     set({ target: updated });
     await persist(updated);
