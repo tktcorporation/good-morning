@@ -1,5 +1,35 @@
 # good-morning
 
+## 1.2.0
+
+### Minor Changes
+
+- [#51](https://github.com/tktcorporation/good-morning/pull/51) [`4ddc9e8`](https://github.com/tktcorporation/good-morning/commit/4ddc9e8c980499cd6bed61431e8c1cd49f2781ee) Thanks [@tktcorporation](https://github.com/tktcorporation)! - Effect TS 導入 + Knip による未使用コード削除
+
+  全サービス層を Effect (effect@3.20) で再構築し、副作用の依存関係とエラーを型レベルで追跡できるようにした。Knip で検出した未使用コード・エクスポートも削除。
+
+- [#55](https://github.com/tktcorporation/good-morning/pull/55) [`921a425`](https://github.com/tktcorporation/good-morning/commit/921a425057ed6971fae8899e998f2aa9e2980068) Thanks [@tktcorporation](https://github.com/tktcorporation)! - カスタムアラーム音選択と全画面独自アラーム画面を削除し、AlarmKit に一本化
+
+  - カスタムアラーム音選択 UI（設定画面）を削除
+  - SoundService / alarm-sounds.ts / カスタム音声アセット（chime, birds, bell）を削除
+  - WakeTarget から soundId フィールドを削除
+  - AlarmKit のスケジュール API から soundName パラメータを削除（OS デフォルト音を使用）
+  - 全画面アラーム画面（app/wakeup.tsx）を削除
+  - アラーム dismiss 時は AlarmEventRouter でインライン処理（wakeup 画面を経由しない）
+  - オンボーディングのデモステップからアラームデモ機能を削除
+
+- [#57](https://github.com/tktcorporation/good-morning/pull/57) [`1b32e0f`](https://github.com/tktcorporation/good-morning/commit/1b32e0fbb9bd5fd10cf122be1133b1a21be9ed32) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat: スクワットチャレンジタスクを追加 — 加速度センサーでスクワット動作を検出し、起床確認タスクとして使用可能に
+
+### Patch Changes
+
+- [#54](https://github.com/tktcorporation/good-morning/pull/54) [`4cbad15`](https://github.com/tktcorporation/good-morning/commit/4cbad151457e06ddd90e6b79cd6096d04650002b) Thanks [@tktcorporation](https://github.com/tktcorporation)! - refactor: Effect TS サービスを src/services/ 直下に昇格し、レガシーサービスを削除
+
+  - `src/services/effect/` ネストを解消し全 Effect サービスを `src/services/` 直下に配置
+  - レガシーサービス（alarm-kit.ts, alarm-scheduler.ts, alarm-sync.ts, session-lifecycle.ts, live-activity.ts, todo-reminder.ts）を削除
+  - compat.ts に initializeAlarmKit を追加し permissions.ts のレガシー依存を解消
+  - テストを Effect 版サービスに移行（runEffect 経由でテスト）
+  - jest.setup.js の expo-alarm-kit モックを全メソッド網羅に更新
+
 ## 1.1.1
 
 ### Patch Changes
