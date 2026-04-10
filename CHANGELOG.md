@@ -1,5 +1,11 @@
 # good-morning
 
+## 1.2.1
+
+### Patch Changes
+
+- [#58](https://github.com/tktcorporation/good-morning/pull/58) [`1d0e3da`](https://github.com/tktcorporation/good-morning/commit/1d0e3da4b9e98bff2a42974108274dcbce777fd5) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: Expo パッケージを最新互換バージョンに更新し Swift コンパイルエラーを解消
+
 ## 1.2.0
 
 ### Minor Changes
