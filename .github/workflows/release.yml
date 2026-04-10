@@ -55,6 +55,11 @@ jobs:
         uses: changesets/action@v1
         with:
           version: pnpm version-packages
+          # publish コマンドが未設定だと published output が常に false になり、
+          # eas-build ジョブが永久にスキップされる。
+          # npm パッケージではないため npm publish の代わりに changeset tag で
+          # git tag を作成し、action に publish 完了を通知する。
+          publish: pnpm changeset tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
