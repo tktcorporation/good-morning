@@ -1,5 +1,11 @@
 # good-morning
 
+## 1.2.2
+
+### Patch Changes
+
+- [#63](https://github.com/tktcorporation/good-morning/pull/63) [`9ae7b69`](https://github.com/tktcorporation/good-morning/commit/9ae7b6943dc67e359461b234aea4de85eba127c9) Thanks [@tktcorporation](https://github.com/tktcorporation)! - expo-dev-launcher@55.0.27 の appBridge リグレッションを回避するため 55.0.25 にピン留め
+
 ## 1.2.1
 
 ### Patch Changes
