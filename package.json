@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "doctor": "expo doctor",
+    "bundle:check": "expo export --platform ios --output-dir .expo-export-check --no-minify --source-maps && rm -rf .expo-export-check",
     "version-packages": "changeset version"
   },
   "dependencies": {

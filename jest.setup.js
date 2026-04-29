@@ -100,6 +100,58 @@ jest.mock('expo-alarm-kit', () => ({
   endLiveActivity: jest.fn().mockResolvedValue(true),
 }));
 
+// Mock @kingstinct/react-native-healthkit
+// 背景: HealthKit はネイティブ依存（NitroModules）を持つため、jest 環境では
+// import 時に TurboModuleRegistry.getEnforcing が失敗する。画面ファイル import の
+// スモークテストを通すため、グローバルにスタブを提供する。
+// 個別テスト（health-sleep-session.test.ts）はファイル先頭で再 mock して必要な値を上書きする。
+jest.mock('@kingstinct/react-native-healthkit', () => ({
+  isHealthDataAvailable: jest.fn(() => false),
+  requestAuthorization: jest.fn(async () => false),
+  queryCategorySamples: jest.fn(async () => []),
+  CategoryValueSleepAnalysis: { inBed: 0, asleep: 1, awake: 2, asleepUnspecified: 3 },
+}));
+
+// Mock expo-task-manager / expo-background-fetch
+// 背景: ネイティブ TaskManager に依存。import 時にネイティブモジュール解決で失敗するため。
+jest.mock('expo-task-manager', () => ({
+  defineTask: jest.fn(),
+  isTaskRegisteredAsync: jest.fn(async () => false),
+  unregisterTaskAsync: jest.fn(async () => undefined),
+}));
+jest.mock('expo-background-fetch', () => ({
+  registerTaskAsync: jest.fn(async () => undefined),
+  unregisterTaskAsync: jest.fn(async () => undefined),
+  BackgroundFetchResult: { NoData: 1, NewData: 2, Failed: 3 },
+  Status: { Available: 3, Denied: 2, Restricted: 1 },
+}));
+
+// Mock expo-sensors（useSquatDetector が DeviceMotion を使う）
+jest.mock('expo-sensors', () => ({
+  DeviceMotion: {
+    isAvailableAsync: jest.fn(async () => false),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    setUpdateInterval: jest.fn(),
+    requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+  },
+  Accelerometer: {
+    isAvailableAsync: jest.fn(async () => false),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    setUpdateInterval: jest.fn(),
+  },
+}));
+
+// Mock expo-constants（app/(tabs)/settings.tsx が Constants.expoConfig を読む）
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    expoConfig: { name: 'good-morning', version: '1.2.2' },
+    nativeAppVersion: '1.2.2',
+    nativeBuildVersion: '1',
+    expoVersion: '55.0.0',
+  },
+}));
+
 // Mock react-native-svg
 jest.mock('react-native-svg', () => {
   const React = require('react');

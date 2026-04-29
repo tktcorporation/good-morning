@@ -94,3 +94,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: npx expo install --check
       - run: npx -y expo-doctor
+
+  # Metro バンドルが通ることを CI で保証する。
+  # 起動直後にクラッシュする原因の多くは、未解決 import や循環参照など
+  # バンドル時に検出できる問題。`expo export` を回すと本番と同じ Metro パイプラインを
+  # 経由するため、ローカル `expo run` だけでは見落としがちな構成エラーを捕まえられる。
+  bundle:
+    name: Bundle Export
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm bundle:check
