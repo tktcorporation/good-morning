@@ -15,6 +15,16 @@
 #
 # 失敗時:
 #   - sim.log と DiagnosticReports/ を artifact として上げる
+#
+# Deployment target と CI の関係:
+#   - production の ios.deploymentTarget は最も高い値 (= 現状 26.0) を維持する。
+#     これは AlarmKit 等の iOS 26+ シンボルに依存しており、下げるとビルド不可。
+#   - GitHub Hosted Runner の image が Xcode 26 / iOS 26 SDK に追いついていない期間は、
+#     CI 側で graceful skip する。runner image が更新された瞬間に、設定変更なしで
+#     スモークが自動で動き出す。
+#   - skip した場合も job 自体は success にし、PR をブロックしない。
+#     ただし Job Summary に明示的に「skipped」を書き、緑だけど実は動いていないことを
+#     可視化する。
 
 name: iOS Launch Smoke
 
@@ -33,51 +43,77 @@ on:
 
 env:
   NODE_VERSION: '22'
+  # production の ios.deploymentTarget と一致させる。runner にこのメジャー版の
+  # iOS Simulator SDK が無い場合は、後段の step で graceful skip する。
+  REQUIRED_IOS_MAJOR: '26'
   SIMULATOR_DEVICE: 'iPhone 16 Pro'
   SIMULATOR_OS: '26.0'
 
 jobs:
   ios-launch:
     name: iOS Launch Smoke
-    # macos-latest を使うことで iOS 26 SDK を含む最新 Xcode が乗った image を引く。
-    # macos-15 を固定すると Xcode 16 系までしか入っておらず、ios.deploymentTarget=26.0
-    # を要求するこのアプリではビルドできない。
     runs-on: macos-latest
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inspect available Xcode and iOS SDKs
-        # Xcode をハードコード固定すると runner image の更新で壊れるため、
-        # 「iOS 26 SDK を含む Xcode が runner に存在するか」だけ検証する fail-fast に倒す。
-        # macos-latest の既定 Xcode が iOS 26 SDK を含む想定。含まなければここで止める。
+      - name: Detect required iOS SDK on runner
+        id: sdk
+        # production target は最も高い値 (iOS 26.0) を維持しているため、
+        # この CI が意味のある検査をするには runner にも同等の SDK が必要。
+        # 無ければ skip。step output `available` で後続を gate する。
         run: |
           set -euo pipefail
-          ls /Applications | grep -i Xcode || true
-          xcode-select -p
-          xcodebuild -version
+          xcode-select -p || true
+          xcodebuild -version || true
           echo "--- available SDKs ---"
-          xcodebuild -showsdks
-          if ! xcodebuild -showsdks | grep -qE "iphonesimulator26"; then
-            echo "::error::iOS 26 simulator SDK not found on this runner. Update runs-on or pin a newer Xcode."
-            exit 1
+          xcodebuild -showsdks || true
+
+          if xcodebuild -showsdks | grep -qE "iphonesimulator${REQUIRED_IOS_MAJOR}"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## iOS Launch Smoke"
+              echo ""
+              echo "✅ Runner has \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK. Running full smoke."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            MAX_IOS=$(xcodebuild -showsdks 2>/dev/null \
+              | grep -oE "iphonesimulator[0-9.]+" \
+              | sort -V | tail -1 || echo "(none)")
+            echo "::warning::iOS ${REQUIRED_IOS_MAJOR} simulator SDK not found on macos-latest (max available: ${MAX_IOS}). Skipping smoke until runner image catches up."
+            {
+              echo "## iOS Launch Smoke — Skipped"
+              echo ""
+              echo "⚠️ This runner does not yet provide \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK."
+              echo ""
+              echo "- Max iOS Simulator SDK on this runner: \`${MAX_IOS}\`"
+              echo "- Project's \`ios.deploymentTarget\`: \`${REQUIRED_IOS_MAJOR}.0\` (kept as high as possible to use AlarmKit)"
+              echo ""
+              echo "This step will start running automatically once GitHub provides macOS runners with Xcode ${REQUIRED_IOS_MAJOR}+. No PR action required."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - uses: pnpm/action-setup@v4
+        if: steps.sdk.outputs.available == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.sdk.outputs.available == 'true'
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install JS deps
+        if: steps.sdk.outputs.available == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Expo prebuild (generate ios/)
+        if: steps.sdk.outputs.available == 'true'
         run: npx expo prebuild --platform ios --no-install --clean
 
       - name: Cache CocoaPods
+        if: steps.sdk.outputs.available == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -88,10 +124,12 @@ jobs:
             ${{ runner.os }}-pods-
 
       - name: Pod install
+        if: steps.sdk.outputs.available == 'true'
         working-directory: ios
         run: pod install --repo-update
 
       - name: Build for Simulator
+        if: steps.sdk.outputs.available == 'true'
         # CODE_SIGNING_ALLOWED=NO で署名をスキップ（Simulator 用なので不要）
         # -derivedDataPath を固定して .app の在りかを script に渡しやすくする
         run: |
@@ -109,6 +147,7 @@ jobs:
             build | tee build.log
 
       - name: Launch smoke
+        if: steps.sdk.outputs.available == 'true'
         env:
           APP_PATH: ios-build/Build/Products/Debug-iphonesimulator/GoodMorning.app
           BUNDLE_ID: com.tktcorporation.goodmorning
@@ -118,7 +157,7 @@ jobs:
         run: bash scripts/ios-launch-smoke.sh
 
       - name: Upload diagnostics on failure
-        if: failure()
+        if: failure() && steps.sdk.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ios-launch-smoke-diagnostics
