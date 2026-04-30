@@ -160,21 +160,46 @@ detect_launch_outcome() {
   # 起動直後クラッシュ（dyld / Swift assertion / Module 登録失敗）はどちらか必ず引っ掛かる。
   sleep "$grace_sec"
 
-  if xcrun simctl spawn "$udid" launchctl list 2>/dev/null | grep -q "$bundle_id"; then
-    local reports_dir="$HOME/Library/Logs/DiagnosticReports"
-    local recent_crashes
+  # `launchctl list` は「ロード済みのジョブ」を出すため、label が出るだけでは
+  # 「プロセスが生きている」証拠にならない。出力の 1 列目 (PID) が数字かどうかで
+  # 実プロセスの存否を判定する。crash 後は PID が `-` になることが多く、
+  # その場合「ロードされてるだけ」を生存と誤判定するのを防ぐ (Codex P1 #5)。
+  #
+  # `launchctl list` の出力例:
+  #   PID    Status   Label
+  #   1234   0        UIKitApplication:com.tktcorporation.goodmorning[xxxx]
+  #   -      0        UIKitApplication:com.tktcorporation.goodmorning[xxxx]   ← crash 後
+  local launchctl_line
+  launchctl_line=$(xcrun simctl spawn "$udid" launchctl list 2>/dev/null \
+    | awk -v b="$bundle_id" '$0 ~ b {print; exit}' || true)
+  local current_pid=""
+  if [[ -n "$launchctl_line" ]]; then
+    current_pid=$(echo "$launchctl_line" | awk '{print $1}')
+  fi
+
+  local reports_dir="$HOME/Library/Logs/DiagnosticReports"
+  local recent_crashes=""
+  if [[ -d "$reports_dir" ]]; then
     recent_crashes=$(find "$reports_dir" -maxdepth 1 \
       -name "GoodMorning-*.ips" -newermt "-5 minutes" 2>/dev/null | head -1 || true)
-    if [[ -z "$recent_crashes" ]]; then
-      echo "PASS: app pid=$app_pid alive after ${grace_sec}s, no crash report found"
-      return 0
-    fi
+  fi
+
+  if [[ "$current_pid" =~ ^[0-9]+$ ]] && [[ -z "$recent_crashes" ]]; then
+    echo "PASS: app launchctl pid=$current_pid alive after ${grace_sec}s (initial pid=$app_pid), no crash report found"
+    return 0
+  fi
+
+  if [[ -n "$recent_crashes" ]]; then
     echo "FAIL: crash report detected: $recent_crashes" >&2
     return 1
   fi
 
-  echo "FAIL: app process for $bundle_id not found in launchctl after ${grace_sec}s" >&2
-  echo "      (likely crashed during startup — see $artifact_dir/sim.log and DiagnosticReports/)" >&2
+  if [[ -z "$launchctl_line" ]]; then
+    echo "FAIL: app for $bundle_id not registered in launchctl after ${grace_sec}s" >&2
+  else
+    echo "FAIL: app for $bundle_id registered in launchctl but not running (pid column='${current_pid:-empty}')" >&2
+  fi
+  echo "      likely crashed during startup — see $artifact_dir/sim.log and DiagnosticReports/" >&2
   return 1
 }
 
