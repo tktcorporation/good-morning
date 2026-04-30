@@ -37,15 +37,19 @@ mkdir -p "$ARTIFACT_DIR"
 echo "==> Locating simulator: $SIMULATOR_DEVICE (iOS $SIMULATOR_OS)"
 # 指定デバイスを優先するが、runner image のラインナップ変更（"iPhone 16 Pro" が
 # 落ちて "iPhone 17 Pro" だけ残る等）で死なないよう、見つからなければ
-# 同じ iOS バージョンの先頭デバイスにフォールバックする。
+# 同じ iOS メジャーバージョンの先頭デバイスにフォールバックする。
 # このスモークの目的はモデルの再現ではなく「起動できるか」なので、
 # 任意の iPhone Simulator で十分。
+#
+# OS バージョンも完全一致だと 26.0 → 26.1/26.2 への runner image rotate で
+# 死ぬため、メジャーバージョン (例 "iOS-26-") の prefix 匹配にする。
+SIMULATOR_OS_MAJOR="${SIMULATOR_OS%%.*}"
 list_devices_for_os() {
   xcrun simctl list devices available --json |
-    jq -r --arg os "iOS-${SIMULATOR_OS//./-}" '
+    jq -r --arg prefix "iOS-${SIMULATOR_OS_MAJOR}-" '
       .devices
       | to_entries[]
-      | select(.key | endswith($os))
+      | select(.key | test("\\." + $prefix + "[0-9]+$"))
       | .value[]
     '
 }
