@@ -70,6 +70,7 @@
     "jest-expo": "55.0.16",
     "knip": "^5.88.1",
     "playwright": "^1.59.1",
+    "react-test-renderer": "19.2.0",
     "typescript": "5.9.3"
   },
   "expo": {

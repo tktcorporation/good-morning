@@ -39,20 +39,30 @@ env:
 jobs:
   ios-launch:
     name: iOS Launch Smoke
-    runs-on: macos-15
+    # macos-latest を使うことで iOS 26 SDK を含む最新 Xcode が乗った image を引く。
+    # macos-15 を固定すると Xcode 16 系までしか入っておらず、ios.deploymentTarget=26.0
+    # を要求するこのアプリではビルドできない。
+    runs-on: macos-latest
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        # iOS 26 SDK が含まれる Xcode を明示的に選択する。
-        # macos-15 runner には複数の Xcode が同居しているため、固定しないと
-        # 既定の古い Xcode に当たって "iOS 26 SDK not found" で死ぬ。
+      - name: Inspect available Xcode and iOS SDKs
+        # Xcode をハードコード固定すると runner image の更新で壊れるため、
+        # 「iOS 26 SDK を含む Xcode が runner に存在するか」だけ検証する fail-fast に倒す。
+        # macos-latest の既定 Xcode が iOS 26 SDK を含む想定。含まなければここで止める。
         run: |
-          ls /Applications | grep -i Xcode
-          sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+          set -euo pipefail
+          ls /Applications | grep -i Xcode || true
+          xcode-select -p
           xcodebuild -version
+          echo "--- available SDKs ---"
+          xcodebuild -showsdks
+          if ! xcodebuild -showsdks | grep -qE "iphonesimulator26"; then
+            echo "::error::iOS 26 simulator SDK not found on this runner. Update runs-on or pin a newer Xcode."
+            exit 1
+          fi
 
       - uses: pnpm/action-setup@v4
 
