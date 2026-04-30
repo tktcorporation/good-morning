@@ -35,19 +35,32 @@ LAUNCH_GRACE_SEC="${LAUNCH_GRACE_SEC:-8}"
 mkdir -p "$ARTIFACT_DIR"
 
 echo "==> Locating simulator: $SIMULATOR_DEVICE (iOS $SIMULATOR_OS)"
-SIM_UDID=$(
+# 指定デバイスを優先するが、runner image のラインナップ変更（"iPhone 16 Pro" が
+# 落ちて "iPhone 17 Pro" だけ残る等）で死なないよう、見つからなければ
+# 同じ iOS バージョンの先頭デバイスにフォールバックする。
+# このスモークの目的はモデルの再現ではなく「起動できるか」なので、
+# 任意の iPhone Simulator で十分。
+list_devices_for_os() {
   xcrun simctl list devices available --json |
-    jq -r --arg dev "$SIMULATOR_DEVICE" --arg os "iOS-${SIMULATOR_OS//./-}" '
+    jq -r --arg os "iOS-${SIMULATOR_OS//./-}" '
       .devices
       | to_entries[]
       | select(.key | endswith($os))
       | .value[]
-      | select(.name == $dev)
-      | .udid
-    ' | head -n 1
+    '
+}
+SIM_UDID=$(
+  list_devices_for_os |
+    jq -r --slurp --arg dev "$SIMULATOR_DEVICE" '
+      map(select(.name == $dev)) | .[0].udid // empty
+    '
 )
 if [[ -z "$SIM_UDID" ]]; then
-  echo "Simulator not found. Available runtimes:"
+  echo "    requested device '$SIMULATOR_DEVICE' not found; falling back to first iOS $SIMULATOR_OS device"
+  SIM_UDID=$(list_devices_for_os | jq -r --slurp '.[0].udid // empty')
+fi
+if [[ -z "$SIM_UDID" ]]; then
+  echo "No iOS $SIMULATOR_OS simulator available. Runtimes installed:"
   xcrun simctl list runtimes
   exit 2
 fi

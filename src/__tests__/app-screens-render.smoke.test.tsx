@@ -40,6 +40,13 @@ const initialMetrics = {
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
 };
 
+// CI runner はローカルより著しく遅く、_layout 系の useEffect 内で
+// `Promise.all([loadSession, loadTarget, ...])` を待つため
+// jest のデフォルト 5s では timeout する。
+// このスモークの主目的は「同期的 throw を検知すること」であり、
+// 非同期の effect の完了時間まで縛りたいわけではないので余裕を持って 30s に。
+jest.setTimeout(30_000);
+
 describe('app/ screen modules — render smoke', () => {
   it.each(cases)('%s renders without throwing', async (_name, loader) => {
     const Component = loader().default;
