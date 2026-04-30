@@ -1,0 +1,119 @@
+# iOS 起動スモーク
+#
+# Swift コンパイル → Pod install → Simulator 起動まで通して
+# 「実機の起動直後クラッシュ」相当を CI で再現するワークフロー。
+# 既存の bundle:check (Metro バンドル検証) と app-screens-render.smoke.test
+# (JS レンダー検証) では拾えない、native 層のリグレッションを止めるのが目的。
+#
+# トリガー:
+#   - native に影響しうるパスの変更を含む PR のみ自動実行
+#   - workflow_dispatch で任意に手動起動
+#
+# コスト削減:
+#   - macos runner は ubuntu の約 10x なので、JS-only の変更では発火させない
+#   - Pods をキャッシュしてビルド時間を圧縮
+#
+# 失敗時:
+#   - sim.log と DiagnosticReports/ を artifact として上げる
+
+name: iOS Launch Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - 'app.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'patches/**'
+      - 'scripts/ios-launch-smoke.sh'
+      - '.github/workflows/ios-launch-smoke.yml'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
+  SIMULATOR_DEVICE: 'iPhone 16 Pro'
+  SIMULATOR_OS: '26.0'
+
+jobs:
+  ios-launch:
+    name: iOS Launch Smoke
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        # iOS 26 SDK が含まれる Xcode を明示的に選択する。
+        # macos-15 runner には複数の Xcode が同居しているため、固定しないと
+        # 既定の古い Xcode に当たって "iOS 26 SDK not found" で死ぬ。
+        run: |
+          ls /Applications | grep -i Xcode
+          sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+          xcodebuild -version
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Expo prebuild (generate ios/)
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Pod install
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Build for Simulator
+        # CODE_SIGNING_ALLOWED=NO で署名をスキップ（Simulator 用なので不要）
+        # -derivedDataPath を固定して .app の在りかを script に渡しやすくする
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/GoodMorning.xcworkspace \
+            -scheme GoodMorning \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios-build \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tee build.log
+
+      - name: Launch smoke
+        env:
+          APP_PATH: ios-build/Build/Products/Debug-iphonesimulator/GoodMorning.app
+          BUNDLE_ID: com.tktcorporation.goodmorning
+          SIMULATOR_DEVICE: ${{ env.SIMULATOR_DEVICE }}
+          SIMULATOR_OS: ${{ env.SIMULATOR_OS }}
+          ARTIFACT_DIR: launch-test
+        run: bash scripts/ios-launch-smoke.sh
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-launch-smoke-diagnostics
+          path: |
+            build.log
+            launch-test/**
+          if-no-files-found: ignore
+          retention-days: 14
