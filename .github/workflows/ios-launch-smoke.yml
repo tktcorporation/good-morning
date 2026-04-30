@@ -44,7 +44,7 @@ on:
 env:
   NODE_VERSION: '22'
   # production の ios.deploymentTarget と一致させる。runner にこのメジャー版の
-  # iOS Simulator SDK が無い場合は、後段の step で graceful skip する。
+  # iOS Simulator SDK + runtime の両方が無い場合は、後段の step で graceful skip する。
   REQUIRED_IOS_MAJOR: '26'
   SIMULATOR_DEVICE: 'iPhone 16 Pro'
   SIMULATOR_OS: '26.0'
@@ -58,40 +58,73 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect required iOS SDK on runner
+      - name: Detect required iOS SDK and runtime on runner
         id: sdk
         # production target は最も高い値 (iOS 26.0) を維持しているため、
-        # この CI が意味のある検査をするには runner にも同等の SDK が必要。
+        # この CI が意味のある検査をするには runner にも同等の SDK + runtime が必要。
         # 無ければ skip。step output `available` で後続を gate する。
+        #
+        # 重要: SDK の presence と Simulator runtime の presence は別物。
+        # GitHub Hosted Runner ではディスク容量の都合で Xcode が SDK を expose しつつ
+        # 対応する simulator runtime が削られているケースがあり、SDK だけで gate すると
+        # 後段の simctl で hard-fail する (graceful skip の意図に反する)。
+        # 両者を AND で確認する。
         run: |
           set -euo pipefail
           xcode-select -p || true
           xcodebuild -version || true
           echo "--- available SDKs ---"
           xcodebuild -showsdks || true
+          echo "--- available simulator runtimes ---"
+          xcrun simctl list runtimes available || true
 
-          if xcodebuild -showsdks | grep -qE "iphonesimulator${REQUIRED_IOS_MAJOR}"; then
+          HAS_SDK=false
+          HAS_RUNTIME=false
+          if xcodebuild -showsdks 2>/dev/null \
+            | grep -qE "iphonesimulator${REQUIRED_IOS_MAJOR}"; then
+            HAS_SDK=true
+          fi
+          # `iOS 26.x` の runtime が installed (= "available") かどうか。
+          # `simctl list runtimes available` は実利用可能なものに絞れる。
+          if xcrun simctl list runtimes available 2>/dev/null \
+            | grep -qE "iOS ${REQUIRED_IOS_MAJOR}\.[0-9]+"; then
+            HAS_RUNTIME=true
+          fi
+
+          MAX_IOS_SDK=$(xcodebuild -showsdks 2>/dev/null \
+            | grep -oE "iphonesimulator[0-9.]+" \
+            | sort -V | tail -1 || true)
+          MAX_IOS_SDK="${MAX_IOS_SDK:-(none)}"
+          MAX_IOS_RUNTIME=$(xcrun simctl list runtimes available 2>/dev/null \
+            | grep -oE "iOS [0-9]+\.[0-9]+" \
+            | sort -V | tail -1 || true)
+          MAX_IOS_RUNTIME="${MAX_IOS_RUNTIME:-(none)}"
+
+          if [ "$HAS_SDK" = "true" ] && [ "$HAS_RUNTIME" = "true" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
             {
               echo "## iOS Launch Smoke"
               echo ""
-              echo "✅ Runner has \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK. Running full smoke."
+              echo "✅ Runner has both \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK and an iOS ${REQUIRED_IOS_MAJOR}.x simulator runtime. Running full smoke."
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            MAX_IOS=$(xcodebuild -showsdks 2>/dev/null \
-              | grep -oE "iphonesimulator[0-9.]+" \
-              | sort -V | tail -1 || echo "(none)")
-            echo "::warning::iOS ${REQUIRED_IOS_MAJOR} simulator SDK not found on macos-latest (max available: ${MAX_IOS}). Skipping smoke until runner image catches up."
+            sdk_icon=$([ "$HAS_SDK" = "true" ] && echo "✅" || echo "❌")
+            rt_icon=$([ "$HAS_RUNTIME" = "true" ] && echo "✅" || echo "❌")
+            echo "::warning::iOS ${REQUIRED_IOS_MAJOR} not fully available on this runner (sdk=${HAS_SDK}, runtime=${HAS_RUNTIME}). Skipping smoke until runner image catches up."
             {
               echo "## iOS Launch Smoke — Skipped"
               echo ""
-              echo "⚠️ This runner does not yet provide \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK."
+              echo "⚠️ This runner does not yet provide the components required for the smoke."
               echo ""
-              echo "- Max iOS Simulator SDK on this runner: \`${MAX_IOS}\`"
-              echo "- Project's \`ios.deploymentTarget\`: \`${REQUIRED_IOS_MAJOR}.0\` (kept as high as possible to use AlarmKit)"
+              echo "| Required | Status | Max available on runner |"
+              echo "|---|---|---|"
+              echo "| \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK | ${sdk_icon} | \`${MAX_IOS_SDK}\` |"
+              echo "| iOS ${REQUIRED_IOS_MAJOR}.x simulator runtime | ${rt_icon} | \`${MAX_IOS_RUNTIME}\` |"
               echo ""
-              echo "This step will start running automatically once GitHub provides macOS runners with Xcode ${REQUIRED_IOS_MAJOR}+. No PR action required."
+              echo "Project's \`ios.deploymentTarget\`: \`${REQUIRED_IOS_MAJOR}.0\` (kept as high as possible to use AlarmKit)."
+              echo ""
+              echo "This step will start running automatically once GitHub provides macOS runners with both Xcode ${REQUIRED_IOS_MAJOR}+ and an iOS ${REQUIRED_IOS_MAJOR} simulator runtime. No PR action required."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
