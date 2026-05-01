@@ -1,3 +1,11 @@
+// 起動直後のクラッシュを CI で検知するための設定。
+// 本番では fire-and-forget の Promise が unhandled rejection になると
+// Expo の errorRecoveryQueue が拾って native まで突き抜け、SIGABRT に至る。
+// jest 側ではデフォルトでは黙殺されるため、明示的にエラーへ昇格させる。
+process.on('unhandledRejection', (reason) => {
+  throw reason instanceof Error ? reason : new Error(String(reason));
+});
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -61,21 +69,40 @@ jest.mock('react-i18next', () => ({
 }));
 
 // Mock expo-router
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    back: jest.fn(),
-  })),
-  useLocalSearchParams: jest.fn(() => ({})),
-  Link: 'Link',
-  Stack: {
-    Screen: 'Screen',
-  },
-  Tabs: {
-    Screen: 'Screen',
-  },
-}));
+// 背景: render スモークテストでは Stack/Tabs を実際の React コンポーネントとして
+// 呼び出すため、children を素通しする最小限の関数コンポーネントを返す。
+// Stack.Screen / Tabs.Screen はナビゲータ内部で評価されるため、null を返すだけで十分。
+jest.mock('expo-router', () => {
+  const React = require('react');
+  const passthrough =
+    () =>
+    ({ children }) =>
+      React.createElement(React.Fragment, null, children);
+  const screenStub = () => null;
+  const Stack = passthrough();
+  Stack.Screen = screenStub;
+  const Tabs = passthrough();
+  Tabs.Screen = screenStub;
+  return {
+    useRouter: jest.fn(() => ({
+      push: jest.fn(),
+      replace: jest.fn(),
+      back: jest.fn(),
+    })),
+    useLocalSearchParams: jest.fn(() => ({})),
+    useFocusEffect: jest.fn((cb) => {
+      const React = require('react');
+      React.useEffect(() => {
+        const cleanup = cb();
+        return typeof cleanup === 'function' ? cleanup : undefined;
+      }, []);
+    }),
+    Link: ({ children }) => React.createElement(React.Fragment, null, children),
+    Stack,
+    Tabs,
+    Redirect: () => null,
+  };
+});
 
 // Mock expo-alarm-kit（全メソッド網羅）
 // AlarmKitService.ts の AlarmKitLive Layer がこのモックを使用する。
