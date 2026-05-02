@@ -89,6 +89,14 @@ describe('stepDetector — 単発フェーズ遷移', () => {
     expect(r.state.lastCountedAt).toBe(1100);
   });
 
+  test('peaked: MIN_PEAK_MS 経過時に signal が PEAK_THRESHOLD を割っていたら idle へ戻す（単発スパイク誤検出抑止）', () => {
+    // sustained-peak チェック。phase 滞在時間を満たしただけでは count しない。
+    const s = makeState({ phase: 'peaked', phaseEnteredAt: 1000, lastCountedAt: 0 });
+    const r = stepDetector(s, 1.0, 1100);
+    expect(r.counted).toBe(false);
+    expect(r.state.phase).toBe('idle');
+  });
+
   test('peaked: debounce 中は cooldown には進むがカウントしない', () => {
     const s = makeState({
       phase: 'peaked',
@@ -174,6 +182,22 @@ describe('stepDetector — シナリオ', () => {
     ];
     const { counted } = runSamples(makeState(), samples);
     expect(counted).toBe(1);
+  });
+
+  test('dipped → 1 サンプルだけのスパイク → rest はカウントされない（sustained-peak 要件）', () => {
+    // 端末の jolt（瞬間的な大加速度）で peaked に入っても、
+    // すぐ rest に戻ったら count しないこと。
+    const samples: Array<[number, number]> = [
+      [1.0, 0],
+      [0.7, 100],
+      [0.7, 250], // dipped 確定（MIN_DIP_MS 経過）
+      [1.4, 350], // peak（peaked に遷移）
+      [1.0, 450], // ここで signal が rest 帯に戻る → MIN_PEAK_MS 経過時に
+      //         smoothed < PEAK_THRESHOLD なので idle へ戻され count されない
+    ];
+    const { counted, state } = runSamples(makeState(), samples);
+    expect(counted).toBe(0);
+    expect(state.phase).toBe('idle');
   });
 
   test('微小ノイズ（端末の小さな揺れ）ではカウントされない', () => {

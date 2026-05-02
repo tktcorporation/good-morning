@@ -80,6 +80,75 @@ const INITIAL_STATE: DetectorState = {
   lastCountedAt: Number.NEGATIVE_INFINITY,
 };
 
+interface StepContext {
+  readonly state: DetectorState;
+  readonly smoothed: number;
+  readonly now: number;
+  readonly phaseAge: number;
+  readonly enter: (phase: SquatPhase) => DetectorState;
+  readonly stay: DetectorState;
+}
+
+type StepResult = { state: DetectorState; counted: boolean };
+
+function stepIdle(ctx: StepContext): StepResult {
+  if (ctx.smoothed < DIP_THRESHOLD) {
+    return { state: ctx.enter('dipped'), counted: false };
+  }
+  return { state: ctx.stay, counted: false };
+}
+
+function stepDipped(ctx: StepContext): StepResult {
+  if (ctx.phaseAge > PHASE_TIMEOUT_MS) {
+    return { state: ctx.enter('idle'), counted: false };
+  }
+  if (ctx.smoothed > PEAK_THRESHOLD && ctx.phaseAge >= MIN_DIP_MS) {
+    return { state: ctx.enter('peaked'), counted: false };
+  }
+  return { state: ctx.stay, counted: false };
+}
+
+function stepPeaked(ctx: StepContext): StepResult {
+  if (ctx.phaseAge < MIN_PEAK_MS) {
+    return { state: ctx.stay, counted: false };
+  }
+  // sustained-peak 条件: MIN_PEAK_MS 経過時点で signal がまだピーク帯に
+  // 残っていることを要求する。経過時間だけで count してしまうと、
+  // 1 サンプル分のスパイクで peaked に入り、その直後に rest に戻っても
+  // count されてしまい、端末の jolt 系ノイズで誤検出が起きうる。
+  // 注意: EMA(α=0.4) の慣性で本物のスクワットなら次サンプル時点でも
+  // smoothed は PEAK_THRESHOLD 以上に残るため、quick squat も取りこぼさない。
+  if (ctx.smoothed < PEAK_THRESHOLD) {
+    return { state: ctx.enter('idle'), counted: false };
+  }
+  const cooldown = ctx.enter('cooldown');
+  if (ctx.now - ctx.state.lastCountedAt >= DEBOUNCE_MS) {
+    return {
+      state: { ...cooldown, lastCountedAt: ctx.now },
+      counted: true,
+    };
+  }
+  return { state: cooldown, counted: false };
+}
+
+function stepCooldown(ctx: StepContext): StepResult {
+  if (
+    ctx.smoothed >= REST_BAND_LOW &&
+    ctx.smoothed <= REST_BAND_HIGH &&
+    ctx.phaseAge >= MIN_REST_MS
+  ) {
+    return { state: ctx.enter('idle'), counted: false };
+  }
+  return { state: ctx.stay, counted: false };
+}
+
+const PHASE_HANDLERS: Record<SquatPhase, (ctx: StepContext) => StepResult> = {
+  idle: stepIdle,
+  dipped: stepDipped,
+  peaked: stepPeaked,
+  cooldown: stepCooldown,
+};
+
 /**
  * 1 サンプル分の状態遷移を計算する純粋関数。
  *
@@ -87,58 +156,21 @@ const INITIAL_STATE: DetectorState = {
  * テストしやすくするため。生の加速度ではなく EMA で平滑化した magnitude を
  * 渡す前提（呼び出し側でフィルタリングする）。
  *
+ * 各フェーズの遷移は step{Phase} 関数群に委譲して、本関数は dispatcher として
+ * 振る舞う。各 step 関数は純粋で、cognitive complexity を分散させる目的。
+ *
  * @returns 次の状態と、このサンプルでカウントすべきかのフラグ。
  */
-export function stepDetector(
-  state: DetectorState,
-  smoothed: number,
-  now: number,
-): { state: DetectorState; counted: boolean } {
-  const phaseAge = now - state.phaseEnteredAt;
-  const enter = (phase: SquatPhase): DetectorState => ({
-    ...state,
-    phase,
-    phaseEnteredAt: now,
+export function stepDetector(state: DetectorState, smoothed: number, now: number): StepResult {
+  const ctx: StepContext = {
+    state,
     smoothed,
-  });
-  const stay: DetectorState = { ...state, smoothed };
-
-  switch (state.phase) {
-    case 'idle': {
-      if (smoothed < DIP_THRESHOLD) {
-        return { state: enter('dipped'), counted: false };
-      }
-      return { state: stay, counted: false };
-    }
-    case 'dipped': {
-      if (phaseAge > PHASE_TIMEOUT_MS) {
-        return { state: enter('idle'), counted: false };
-      }
-      if (smoothed > PEAK_THRESHOLD && phaseAge >= MIN_DIP_MS) {
-        return { state: enter('peaked'), counted: false };
-      }
-      return { state: stay, counted: false };
-    }
-    case 'peaked': {
-      if (phaseAge < MIN_PEAK_MS) {
-        return { state: stay, counted: false };
-      }
-      const cooldown = enter('cooldown');
-      if (now - state.lastCountedAt >= DEBOUNCE_MS) {
-        return {
-          state: { ...cooldown, lastCountedAt: now },
-          counted: true,
-        };
-      }
-      return { state: cooldown, counted: false };
-    }
-    case 'cooldown': {
-      if (smoothed >= REST_BAND_LOW && smoothed <= REST_BAND_HIGH && phaseAge >= MIN_REST_MS) {
-        return { state: enter('idle'), counted: false };
-      }
-      return { state: stay, counted: false };
-    }
-  }
+    now,
+    phaseAge: now - state.phaseEnteredAt,
+    enter: (phase) => ({ ...state, phase, phaseEnteredAt: now, smoothed }),
+    stay: { ...state, smoothed },
+  };
+  return PHASE_HANDLERS[state.phase](ctx);
 }
 
 /**
