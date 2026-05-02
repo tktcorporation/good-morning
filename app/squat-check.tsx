@@ -33,6 +33,15 @@ function createInitialTodo(): SessionTodo {
 export default function SquatCheckScreen() {
   const { t } = useTranslation('common');
   const [todo, setTodo] = useState<SessionTodo>(createInitialTodo);
+  /**
+   * SquatChallengeItem を強制リマウントするためのキー。
+   *
+   * useSquatDetector は内部に検出回数の useState を持つため、todo を初期化するだけだと
+   * 「前回の累積カウント + 1」で targetCount に到達してしまい、1 回のスクワットで
+   * 完了扱いになる（Codex 指摘 PR #72）。key を変えて子ツリーを unmount → mount し、
+   * フック内部の state も含めて確実にリセットする。
+   */
+  const [resetId, setResetId] = useState(0);
 
   const handleIncrement = useCallback((_id: string) => {
     setTodo((prev) => ({ ...prev, currentCount: (prev.currentCount ?? 0) + 1 }));
@@ -48,6 +57,7 @@ export default function SquatCheckScreen() {
 
   const handleReset = useCallback(() => {
     setTodo(createInitialTodo());
+    setResetId((id) => id + 1);
   }, []);
 
   return (
@@ -57,7 +67,12 @@ export default function SquatCheckScreen() {
       </View>
 
       <View style={commonStyles.section}>
-        <SquatChallengeItem todo={todo} onIncrement={handleIncrement} onComplete={handleComplete} />
+        <SquatChallengeItem
+          key={resetId}
+          todo={todo}
+          onIncrement={handleIncrement}
+          onComplete={handleComplete}
+        />
       </View>
 
       <Pressable style={styles.resetButton} onPress={handleReset}>
