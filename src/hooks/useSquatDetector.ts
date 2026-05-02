@@ -2,40 +2,143 @@ import { Accelerometer } from 'expo-sensors';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * スクワット検出のステートマシン状態。
+ * スクワット検出の内部フェーズ。
  *
- * standing → descending（下降検出）→ rising（上昇検出）→ standing（1回カウント）
+ * idle → dipped（しゃがむディップを検出）→ peaked（立ち上がりピーク = 1 回カウント）
+ * → cooldown（静止に戻るまで待機）→ idle
  *
- * 端末の向きに依存しないよう、3軸の合成加速度（magnitude）を使用する。
- * 静止時は約 9.8 m/s²、しゃがむと一時的に減少し、立ち上がると増加する。
+ * 端末の向きに依存しないよう、3 軸合成加速度（magnitude）の 1g 静止基準からの
+ * 振幅変化で判定する。
+ *
+ * ⚠️ expo-sensors の Accelerometer は重力加速度を **g 単位**（静止時 |a| ≈ 1.0）で
+ *    返す。旧実装は m/s² 前提で 9.0/10.5 という閾値を使っていたため、
+ *    g 単位では決して到達せずカウントが一切増えないバグがあった。
  */
-type SquatPhase = 'standing' | 'descending' | 'rising';
-
-// 3軸合成加速度の閾値。
-// 静止時の magnitude ≈ 9.8。しゃがむと < 9.0、立ち上がると > 10.5 程度になる。
-const DESCEND_THRESHOLD = 9.0;
-const RISE_THRESHOLD = 10.5;
-const STANDING_THRESHOLD = 9.5;
-/** 連続検出を防ぐ最小間隔（ms）。人間のスクワット1回は最低でも1秒以上かかる。 */
-const DEBOUNCE_MS = 800;
+export type SquatPhase = 'idle' | 'dipped' | 'peaked' | 'cooldown';
 
 /**
- * 加速度の magnitude と現在のフェーズから次のフェーズを決定する純粋関数。
- * useEffect 内のコールバックから切り出すことで認知複雑度を下げている。
- *
- * @returns 新しいフェーズ。'counted' は1回のスクワット完了を意味する。
+ * しゃがむ動作の判定閾値（g）。1.0 から 0.15g 以上ディップしたら下降と判定。
+ * 軽い姿勢調整やセンサーノイズでは下回らず、しっかりしゃがめば確実に下回る値。
  */
-function nextPhase(phase: SquatPhase, magnitude: number): SquatPhase | 'counted' {
-  if (phase === 'standing' && magnitude < DESCEND_THRESHOLD) {
-    return 'descending';
+const DIP_THRESHOLD = 0.85;
+/**
+ * 立ち上がりの判定閾値（g）。1.0 から 0.20g 以上のピークで上昇と判定。
+ * 立ち上がりの押し出し加速で発生する典型的なピーク（1.2–1.6g）を捉える。
+ */
+const PEAK_THRESHOLD = 1.2;
+/** cooldown から idle に戻る判定の静止帯（g）。 */
+const REST_BAND_LOW = 0.9;
+const REST_BAND_HIGH = 1.1;
+
+/**
+ * 各フェーズの最小滞在時間（ms）。瞬間的なノイズで閾値を跨いだだけでは
+ * 次フェーズに進ませないための保険。スクワット動作は 1 秒オーダーなので
+ * 100ms 程度のフィルタはほぼ感度を損なわない。
+ */
+const MIN_DIP_MS = 120;
+const MIN_PEAK_MS = 80;
+const MIN_REST_MS = 150;
+
+/**
+ * 直前のカウントから次のカウントまでの最小間隔（ms）。
+ * 人間のスクワット 1 回は最速でも 0.7 秒程度。これより短い間隔で発火したら
+ * 振動・端末の取り回しによる連続誤検出と判断して捨てる。
+ */
+const DEBOUNCE_MS = 700;
+
+/**
+ * dip → peak がこの時間内に完了しなければ idle にリセット（ms）。
+ * しゃがんだまま止まる、途中で別動作を挟む、といった中断ケースの救済。
+ */
+const PHASE_TIMEOUT_MS = 4000;
+
+/**
+ * 低域通過フィルタ（指数移動平均）の係数。0..1 で値が小さいほど平滑化が強い。
+ * スクワット帯域（~1Hz）は通しつつ、サンプリング由来の高周波ノイズを抑える。
+ */
+const SMOOTHING_ALPHA = 0.4;
+
+/**
+ * 加速度センサーのサンプリング間隔（ms）。
+ * 100ms から 80ms に短縮して、素早いスクワットでもピーク・ディップを
+ * 取りこぼさないようにしている（バッテリー影響は無視できる範囲）。
+ */
+const SAMPLING_INTERVAL_MS = 80;
+
+export interface DetectorState {
+  phase: SquatPhase;
+  phaseEnteredAt: number;
+  smoothed: number;
+  lastCountedAt: number;
+}
+
+const INITIAL_STATE: DetectorState = {
+  phase: 'idle',
+  phaseEnteredAt: 0,
+  smoothed: 1.0,
+  // 初回カウントが debounce で弾かれないよう、十分に古い時刻として扱う。
+  lastCountedAt: Number.NEGATIVE_INFINITY,
+};
+
+/**
+ * 1 サンプル分の状態遷移を計算する純粋関数。
+ *
+ * 切り出している理由: useEffect 内のリスナーを薄く保ち、ロジックをユニット
+ * テストしやすくするため。生の加速度ではなく EMA で平滑化した magnitude を
+ * 渡す前提（呼び出し側でフィルタリングする）。
+ *
+ * @returns 次の状態と、このサンプルでカウントすべきかのフラグ。
+ */
+export function stepDetector(
+  state: DetectorState,
+  smoothed: number,
+  now: number,
+): { state: DetectorState; counted: boolean } {
+  const phaseAge = now - state.phaseEnteredAt;
+  const enter = (phase: SquatPhase): DetectorState => ({
+    ...state,
+    phase,
+    phaseEnteredAt: now,
+    smoothed,
+  });
+  const stay: DetectorState = { ...state, smoothed };
+
+  switch (state.phase) {
+    case 'idle': {
+      if (smoothed < DIP_THRESHOLD) {
+        return { state: enter('dipped'), counted: false };
+      }
+      return { state: stay, counted: false };
+    }
+    case 'dipped': {
+      if (phaseAge > PHASE_TIMEOUT_MS) {
+        return { state: enter('idle'), counted: false };
+      }
+      if (smoothed > PEAK_THRESHOLD && phaseAge >= MIN_DIP_MS) {
+        return { state: enter('peaked'), counted: false };
+      }
+      return { state: stay, counted: false };
+    }
+    case 'peaked': {
+      if (phaseAge < MIN_PEAK_MS) {
+        return { state: stay, counted: false };
+      }
+      const cooldown = enter('cooldown');
+      if (now - state.lastCountedAt >= DEBOUNCE_MS) {
+        return {
+          state: { ...cooldown, lastCountedAt: now },
+          counted: true,
+        };
+      }
+      return { state: cooldown, counted: false };
+    }
+    case 'cooldown': {
+      if (smoothed >= REST_BAND_LOW && smoothed <= REST_BAND_HIGH && phaseAge >= MIN_REST_MS) {
+        return { state: enter('idle'), counted: false };
+      }
+      return { state: stay, counted: false };
+    }
   }
-  if (phase === 'descending' && magnitude > RISE_THRESHOLD) {
-    return 'rising';
-  }
-  if (phase === 'rising' && magnitude < STANDING_THRESHOLD) {
-    return 'counted';
-  }
-  return phase;
 }
 
 /**
@@ -46,7 +149,7 @@ function nextPhase(phase: SquatPhase, magnitude: number): SquatPhase | 'counted'
  *
  * @param enabled - true でセンサー購読を開始。false で停止（バッテリー節約）。
  * @param targetCount - 目標スクワット回数。達したら onComplete を呼ぶ。
- * @param onSquat - スクワット1回検出時のコールバック。
+ * @param onSquat - スクワット 1 回検出時のコールバック。
  * @param onComplete - 目標回数達成時のコールバック。
  */
 export function useSquatDetector(
@@ -57,9 +160,8 @@ export function useSquatDetector(
 ) {
   const [count, setCount] = useState(0);
   const [isListening, setIsListening] = useState(false);
-  const phaseRef = useRef<SquatPhase>('standing');
-  const lastSquatTimeRef = useRef(0);
 
+  const stateRef = useRef<DetectorState>(INITIAL_STATE);
   const countRef = useRef(count);
   countRef.current = count;
 
@@ -72,27 +174,26 @@ export function useSquatDetector(
       return;
     }
 
-    // 100ms 間隔でサンプリング。精度とバッテリーのバランス。
-    Accelerometer.setUpdateInterval(100);
+    Accelerometer.setUpdateInterval(SAMPLING_INTERVAL_MS);
+    // センサー購読開始時はクリーンな初期状態に戻す。
+    // enable トグル直後に古い phase が残っていると、最初の数サンプルで
+    // 誤カウントが起きうる。
+    stateRef.current = { ...INITIAL_STATE, phaseEnteredAt: Date.now() };
 
     const subscription = Accelerometer.addListener(({ x, y, z }) => {
-      const magnitude = Math.sqrt(x * x + y * y + z * z);
-      const result = nextPhase(phaseRef.current, magnitude);
+      const raw = Math.sqrt(x * x + y * y + z * z);
+      const smoothed = SMOOTHING_ALPHA * raw + (1 - SMOOTHING_ALPHA) * stateRef.current.smoothed;
+      const now = Date.now();
+      const result = stepDetector(stateRef.current, smoothed, now);
+      stateRef.current = result.state;
 
-      if (result === 'counted') {
-        const now = Date.now();
-        if (now - lastSquatTimeRef.current > DEBOUNCE_MS) {
-          lastSquatTimeRef.current = now;
-          const newCount = countRef.current + 1;
-          setCount(newCount);
-          handleSquat();
-          if (newCount >= targetCount) {
-            handleComplete();
-          }
+      if (result.counted) {
+        const newCount = countRef.current + 1;
+        setCount(newCount);
+        handleSquat();
+        if (newCount >= targetCount) {
+          handleComplete();
         }
-        phaseRef.current = 'standing';
-      } else {
-        phaseRef.current = result;
       }
     });
 
@@ -106,8 +207,7 @@ export function useSquatDetector(
 
   const reset = useCallback(() => {
     setCount(0);
-    phaseRef.current = 'standing';
-    lastSquatTimeRef.current = 0;
+    stateRef.current = { ...INITIAL_STATE, phaseEnteredAt: Date.now() };
   }, []);
 
   return { count, isListening, reset };
