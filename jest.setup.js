@@ -61,21 +61,28 @@ jest.mock('react-i18next', () => ({
 }));
 
 // Mock expo-router
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    back: jest.fn(),
-  })),
-  useLocalSearchParams: jest.fn(() => ({})),
-  Link: 'Link',
-  Stack: {
-    Screen: 'Screen',
-  },
-  Tabs: {
-    Screen: 'Screen',
-  },
-}));
+// Stack / Tabs は実際には `<Stack>...<Stack.Screen/>...</Stack>` のように使われる関数コンポーネント。
+// 単なる文字列で返すと React.createElement が「Element type is invalid」で死ぬため、
+// children を pass-through する関数を返し、Screen は描画なし（null）に倒す。
+// これによりレンダースモークテストで _layout.tsx が落ちなくなる。
+jest.mock('expo-router', () => {
+  const React = require('react');
+  const Stack = ({ children }) => React.createElement(React.Fragment, null, children);
+  Stack.Screen = () => null;
+  const Tabs = ({ children }) => React.createElement(React.Fragment, null, children);
+  Tabs.Screen = () => null;
+  return {
+    useRouter: jest.fn(() => ({
+      push: jest.fn(),
+      replace: jest.fn(),
+      back: jest.fn(),
+    })),
+    useLocalSearchParams: jest.fn(() => ({})),
+    Link: 'Link',
+    Stack,
+    Tabs,
+  };
+});
 
 // Mock expo-alarm-kit（全メソッド網羅）
 // AlarmKitService.ts の AlarmKitLive Layer がこのモックを使用する。

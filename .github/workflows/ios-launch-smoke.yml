@@ -1,0 +1,201 @@
+# iOS 起動スモーク
+#
+# Swift コンパイル → Pod install → Simulator 起動まで通して
+# 「実機の起動直後クラッシュ」相当を CI で再現するワークフロー。
+# 既存の bundle:check (Metro バンドル検証) と app-screens-render.smoke.test
+# (JS レンダー検証) では拾えない、native 層のリグレッションを止めるのが目的。
+#
+# トリガー:
+#   - native に影響しうるパスの変更を含む PR のみ自動実行
+#   - workflow_dispatch で任意に手動起動
+#
+# コスト削減:
+#   - macos runner は ubuntu の約 10x なので、JS-only の変更では発火させない
+#   - Pods をキャッシュしてビルド時間を圧縮
+#
+# 失敗時:
+#   - sim.log と DiagnosticReports/ を artifact として上げる
+#
+# Deployment target と CI の関係:
+#   - production の ios.deploymentTarget は最も高い値 (= 現状 26.0) を維持する。
+#     これは AlarmKit 等の iOS 26+ シンボルに依存しており、下げるとビルド不可。
+#   - GitHub Hosted Runner の image が Xcode 26 / iOS 26 SDK に追いついていない期間は、
+#     CI 側で graceful skip する。runner image が更新された瞬間に、設定変更なしで
+#     スモークが自動で動き出す。
+#   - skip した場合も job 自体は success にし、PR をブロックしない。
+#     ただし Job Summary に明示的に「skipped」を書き、緑だけど実は動いていないことを
+#     可視化する。
+
+name: iOS Launch Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - 'app.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'patches/**'
+      - 'scripts/ios-launch-smoke.sh'
+      - '.github/workflows/ios-launch-smoke.yml'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
+  # production の ios.deploymentTarget と一致させる。runner にこのメジャー版の
+  # iOS Simulator SDK + runtime の両方が無い場合は、後段の step で graceful skip する。
+  REQUIRED_IOS_MAJOR: '26'
+  SIMULATOR_DEVICE: 'iPhone 16 Pro'
+  SIMULATOR_OS: '26.0'
+
+jobs:
+  ios-launch:
+    name: iOS Launch Smoke
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect required iOS SDK and runtime on runner
+        id: sdk
+        # production target は最も高い値 (iOS 26.0) を維持しているため、
+        # この CI が意味のある検査をするには runner にも同等の SDK + runtime が必要。
+        # 無ければ skip。step output `available` で後続を gate する。
+        #
+        # 重要: SDK の presence と Simulator runtime の presence は別物。
+        # GitHub Hosted Runner ではディスク容量の都合で Xcode が SDK を expose しつつ
+        # 対応する simulator runtime が削られているケースがあり、SDK だけで gate すると
+        # 後段の simctl で hard-fail する (graceful skip の意図に反する)。
+        # 両者を AND で確認する。
+        run: |
+          set -euo pipefail
+          xcode-select -p || true
+          xcodebuild -version || true
+          echo "--- available SDKs ---"
+          xcodebuild -showsdks || true
+          echo "--- available simulator runtimes ---"
+          xcrun simctl list runtimes available || true
+
+          HAS_SDK=false
+          HAS_RUNTIME=false
+          if xcodebuild -showsdks 2>/dev/null \
+            | grep -qE "iphonesimulator${REQUIRED_IOS_MAJOR}"; then
+            HAS_SDK=true
+          fi
+          # `iOS 26.x` の runtime が installed (= "available") かどうか。
+          # `simctl list runtimes available` は実利用可能なものに絞れる。
+          if xcrun simctl list runtimes available 2>/dev/null \
+            | grep -qE "iOS ${REQUIRED_IOS_MAJOR}\.[0-9]+"; then
+            HAS_RUNTIME=true
+          fi
+
+          MAX_IOS_SDK=$(xcodebuild -showsdks 2>/dev/null \
+            | grep -oE "iphonesimulator[0-9.]+" \
+            | sort -V | tail -1 || true)
+          MAX_IOS_SDK="${MAX_IOS_SDK:-(none)}"
+          MAX_IOS_RUNTIME=$(xcrun simctl list runtimes available 2>/dev/null \
+            | grep -oE "iOS [0-9]+\.[0-9]+" \
+            | sort -V | tail -1 || true)
+          MAX_IOS_RUNTIME="${MAX_IOS_RUNTIME:-(none)}"
+
+          if [ "$HAS_SDK" = "true" ] && [ "$HAS_RUNTIME" = "true" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## iOS Launch Smoke"
+              echo ""
+              echo "✅ Runner has both \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK and an iOS ${REQUIRED_IOS_MAJOR}.x simulator runtime. Running full smoke."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            sdk_icon=$([ "$HAS_SDK" = "true" ] && echo "✅" || echo "❌")
+            rt_icon=$([ "$HAS_RUNTIME" = "true" ] && echo "✅" || echo "❌")
+            echo "::warning::iOS ${REQUIRED_IOS_MAJOR} not fully available on this runner (sdk=${HAS_SDK}, runtime=${HAS_RUNTIME}). Skipping smoke until runner image catches up."
+            {
+              echo "## iOS Launch Smoke — Skipped"
+              echo ""
+              echo "⚠️ This runner does not yet provide the components required for the smoke."
+              echo ""
+              echo "| Required | Status | Max available on runner |"
+              echo "|---|---|---|"
+              echo "| \`iphonesimulator${REQUIRED_IOS_MAJOR}.x\` SDK | ${sdk_icon} | \`${MAX_IOS_SDK}\` |"
+              echo "| iOS ${REQUIRED_IOS_MAJOR}.x simulator runtime | ${rt_icon} | \`${MAX_IOS_RUNTIME}\` |"
+              echo ""
+              echo "Project's \`ios.deploymentTarget\`: \`${REQUIRED_IOS_MAJOR}.0\` (kept as high as possible to use AlarmKit)."
+              echo ""
+              echo "This step will start running automatically once GitHub provides macOS runners with both Xcode ${REQUIRED_IOS_MAJOR}+ and an iOS ${REQUIRED_IOS_MAJOR} simulator runtime. No PR action required."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.sdk.outputs.available == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.sdk.outputs.available == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install JS deps
+        if: steps.sdk.outputs.available == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Expo prebuild (generate ios/)
+        if: steps.sdk.outputs.available == 'true'
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Cache CocoaPods
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Pod install
+        if: steps.sdk.outputs.available == 'true'
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Build for Simulator
+        if: steps.sdk.outputs.available == 'true'
+        # CODE_SIGNING_ALLOWED=NO で署名をスキップ（Simulator 用なので不要）
+        # -derivedDataPath を固定して .app の在りかを script に渡しやすくする
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/GoodMorning.xcworkspace \
+            -scheme GoodMorning \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios-build \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tee build.log
+
+      - name: Launch smoke
+        if: steps.sdk.outputs.available == 'true'
+        env:
+          APP_PATH: ios-build/Build/Products/Debug-iphonesimulator/GoodMorning.app
+          BUNDLE_ID: com.tktcorporation.goodmorning
+          SIMULATOR_DEVICE: ${{ env.SIMULATOR_DEVICE }}
+          SIMULATOR_OS: ${{ env.SIMULATOR_OS }}
+          ARTIFACT_DIR: launch-test
+        run: bash scripts/ios-launch-smoke.sh
+
+      - name: Upload diagnostics on failure
+        if: failure() && steps.sdk.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-launch-smoke-diagnostics
+          path: |
+            build.log
+            launch-test/**
+          if-no-files-found: ignore
+          retention-days: 14
