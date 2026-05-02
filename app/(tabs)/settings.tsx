@@ -145,6 +145,17 @@ export default function SettingsScreen() {
         <DayBoundaryPicker value={dayBoundaryHour} onValueChange={handleDayBoundaryChange} />
       </View>
 
+      {/* Squat Check - 朝のスクワット検出を本番フロー外で確認するための動作確認モード */}
+      <View style={commonStyles.section}>
+        <Pressable style={styles.row} onPress={() => router.push('/squat-check')}>
+          <View>
+            <Text style={styles.rowTitle}>{t('settings.squatCheck')}</Text>
+            <Text style={styles.rowSubtitle}>{t('settings.squatCheckSubtitle')}</Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </Pressable>
+      </View>
+
       {/* Permissions - 通知やヘルスケアなど、アプリが必要とするOS権限を一覧表示 */}
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('settings.permissions')}</Text>

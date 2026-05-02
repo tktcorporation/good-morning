@@ -60,6 +60,13 @@
     },
     "dayBoundary": "日付変更ライン",
     "dayBoundaryDescription": "この時刻より前は前日として扱います",
-    "dayBoundaryHour": "{{hour}}:00"
+    "dayBoundaryHour": "{{hour}}:00",
+    "squatCheck": "スクワット動作確認",
+    "squatCheckSubtitle": "アラーム時と同じ検出を試す"
+  },
+  "squatCheck": {
+    "title": "スクワット動作確認",
+    "description": "アラーム解除時と同じ検出ロジックで動作を確認できます。端末を持って実際にスクワットしてみてください。",
+    "reset": "リセット"
   }
 }

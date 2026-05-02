@@ -151,6 +151,13 @@ export default function RootLayout() {
           title: '',
         }}
       />
+      <Stack.Screen
+        name="squat-check"
+        options={{
+          presentation: 'modal',
+          title: tCommon('squatCheck.title'),
+        }}
+      />
     </Stack>
   );
 }
