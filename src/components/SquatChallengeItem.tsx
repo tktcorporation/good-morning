@@ -87,7 +87,15 @@ export function SquatChallengeItem({ todo, onIncrement, onComplete }: SquatChall
       </View>
 
       <View style={styles.info}>
-        <Text style={[styles.title, todo.completed && styles.titleCompleted]}>{todo.title}</Text>
+        {/*
+         * タイトルはロケライズしたラベルを使う（todo.title は永続化時点で 'Squat' 固定の
+         * ため、ロケール変更後に英語が混在する問題があった）。
+         * SquatChallengeItem は type === 'squat' のときだけ呼ばれるので
+         * 種別判定は不要。
+         */}
+        <Text style={[styles.title, todo.completed && styles.titleCompleted]}>
+          {t('morningRoutine.squat.title')}
+        </Text>
         {todo.completed ? (
           <Text style={styles.doneLabel}>{t('morningRoutine.squat.done')}</Text>
         ) : isListening ? (

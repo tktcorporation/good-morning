@@ -29,6 +29,7 @@ import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { WakeTarget } from '../../src/types/wake-target';
 import { resolveTimeForDate } from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
+import { getLocalizedTodoTitle } from '../../src/utils/todo-display';
 
 function getTomorrowDate(): Date {
   const tomorrow = new Date();
@@ -351,7 +352,7 @@ export default function DashboardScreen() {
               activityId,
               currentSession.todos.map((t) => ({
                 id: t.id,
-                title: t.title,
+                title: getLocalizedTodoTitle(t),
                 completed: t.completed,
               })),
               snoozeEpoch,

@@ -1,4 +1,4 @@
-import type { AlarmTime } from './alarm';
+import type { AlarmTime, TodoType } from './alarm';
 
 export type WakeResult = 'great' | 'ok' | 'late' | 'missed';
 
@@ -7,6 +7,13 @@ export interface WakeTodoRecord {
   readonly title: string;
   readonly completedAt: string | null;
   readonly orderCompleted: number | null;
+  /**
+   * タスク種別。スクワット等の固定種別タスクは UI 側で type に応じてラベルを
+   * ロケライズしてレンダリングする（title はストア時点のロケールに依存しないため、
+   * 過去レコードでも現在のロケールで正しく表示できる）。
+   * 未設定（レガシーデータ）は title をそのまま表示する。
+   */
+  readonly type?: TodoType;
 }
 
 export interface WakeRecord {

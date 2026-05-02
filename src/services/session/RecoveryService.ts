@@ -18,6 +18,7 @@ import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import { resolveTimeForDate } from '../../types/wake-target';
 import { getLogicalDateString } from '../../utils/date';
+import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
 import { SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
@@ -147,7 +148,7 @@ export const handleSnoozeArrivalEffect: Effect.Effect<boolean, AlarmKitError, Al
           activityId,
           sessionState.session.todos.map((t) => ({
             id: t.id,
-            title: t.title,
+            title: getLocalizedTodoTitle(t),
             completed: t.completed,
           })),
           Math.floor(new Date(nextSnoozeFiresAt).getTime() / 1000),

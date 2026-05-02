@@ -17,6 +17,7 @@
     "goalExceeded": "{{time}} over goal",
     "allDone": "All tasks done!",
     "squat": {
+      "title": "Squat",
       "detecting": "Detecting squats...",
       "done": "Done!",
       "waiting": "Waiting..."

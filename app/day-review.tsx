@@ -102,7 +102,12 @@ export default function DayReviewScreen() {
                   <Text
                     style={[styles.todoText, todo.completedAt !== null && styles.todoCompleted]}
                   >
-                    {todo.title}
+                    {/*
+                     * type 既知のタスクは現在のロケールでラベルを引く（履歴データには
+                     * 永続化時点のロケールに依存しない type を保存している）。
+                     * 未設定のレガシーレコードは title をそのまま表示。
+                     */}
+                    {todo.type === 'squat' ? t('morningRoutine.squat.title') : todo.title}
                   </Text>
                 </View>
               ))}

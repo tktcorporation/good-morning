@@ -16,6 +16,7 @@ import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../../types/wake-record';
 import { getLogicalDateString } from '../../utils/date';
+import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit } from '../AlarmKitService';
 import { SNOOZE_DURATION_SECONDS, scheduleSnoozeAlarms } from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
@@ -48,6 +49,7 @@ export const handleAlarmDismissEffect = (
       title: todo.title,
       completedAt: null,
       orderCompleted: null,
+      type: todo.type,
     }));
 
     const goalDeadline = hasTodos
@@ -136,7 +138,7 @@ export const handleAlarmDismissEffect = (
       const { session: currentSession } = useMorningSessionStore.getState();
       const liveActivityTodos = target.todos.map((td) => ({
         id: td.id,
-        title: td.title,
+        title: getLocalizedTodoTitle(td),
         completed: false,
       }));
       const activityId = yield* kit.startLiveActivity(

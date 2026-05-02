@@ -17,6 +17,7 @@
     "goalExceeded": "{{time}} 超過",
     "allDone": "全タスク完了!",
     "squat": {
+      "title": "スクワット",
       "detecting": "スクワット検出中...",
       "done": "完了!",
       "waiting": "準備中..."
