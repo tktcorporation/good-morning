@@ -1,5 +1,41 @@
 # good-morning
 
+## 1.3.0
+
+### Minor Changes
+
+- [#70](https://github.com/tktcorporation/good-morning/pull/70) [`937ecd2`](https://github.com/tktcorporation/good-morning/commit/937ecd22ddec4870083769887a1f60613bb2486d) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 起床タスクを「スクワット 10 回」に固定。
+
+  ユーザーが起床時の TODO を自分で組み立てる UI （ダッシュボードの自由入力 / スクワット追加 / 削除、オンボーディングのプリセット選択）を廃止し、起床タスクを「スクワット 10 回」1 件に固定した。「自分でタスクを設計するのは認知負荷が高い」というフィードバックに対応し、選択肢ゼロで朝を始められるようにする。
+
+  - データモデル `WakeTarget.todos` の配列構造は維持（`MorningSession` / `SquatChallengeItem` / Live Activity 同期など配列前提のロジックを温存するため）
+  - 既存ユーザーが永続化していた自由入力 TODO は次回ロード時に固定スクワット 1 件に正規化される（`migrateStoredTarget`）
+  - store の編集 API (`addTodo` / `addSquatTodo` / `removeTodo` / `reorderTodos`) は削除
+  - ダッシュボードは「明日のタスク: スクワット 10 回」の表示のみに、オンボーディングは説明画面に置換
+
+- [#72](https://github.com/tktcorporation/good-morning/pull/72) [`2795ccf`](https://github.com/tktcorporation/good-morning/commit/2795ccf9d4140fd20aa7e37926655c075548be73) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 設定画面に「スクワット動作確認」モードを追加。
+
+  朝のアラーム解除フローと同じ `SquatChallengeItem`（および `useSquatDetector`）を使う動作確認画面を `app/squat-check.tsx` として追加し、設定画面からモーダル遷移で開けるようにした。端末・センサー・体格による検出感度の差を、本番フローを発火させずに事前に確認できる。
+
+  - 検出ロジックはアラーム本番と完全に共通（コンポーネント・フック・閾値・デバウンスを再利用）
+  - 動作確認用の `SessionTodo` はローカル state のみ。永続化・通知・グレード集計には影響しない
+  - リセットボタンで何度でも試せる
+
+### Patch Changes
+
+- [#70](https://github.com/tktcorporation/good-morning/pull/70) [`a38404d`](https://github.com/tktcorporation/good-morning/commit/a38404d1ba8a8fb8c60f136ffbe251beaf2bfc4d) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 固定スクワットタスクの title をレンダリング時にロケライズ。
+
+  固定 TODO の `title` は永続化時点で英語リテラル（`'Squat'`）固定だが、これを
+  そのまま render すると日本語ロケールでアクティブルーティンや day-review、
+  Live Activity、ホームウィジェットに英語が混在していた。
+
+  - `WakeTodoRecord` に `type?: TodoType` を追加し、履歴側でも種別判定可能に
+  - `getLocalizedTodoTitle()` ヘルパーを `src/utils/todo-display.ts` に追加し、
+    `type === 'squat'` の時に i18n の `morningRoutine.squat.title` を引く
+  - `SquatChallengeItem` / `day-review` / `widget-data` / Live Activity 連携
+    （`DismissService` / `RecoveryService` / dashboard の Live Activity 更新）
+    すべてで適用
+
 ## 1.2.3
 
 ### Patch Changes
