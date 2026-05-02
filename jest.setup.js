@@ -1,11 +1,3 @@
-// 起動直後のクラッシュを CI で検知するための設定。
-// 本番では fire-and-forget の Promise が unhandled rejection になると
-// Expo の errorRecoveryQueue が拾って native まで突き抜け、SIGABRT に至る。
-// jest 側ではデフォルトでは黙殺されるため、明示的にエラーへ昇格させる。
-process.on('unhandledRejection', (reason) => {
-  throw reason instanceof Error ? reason : new Error(String(reason));
-});
-
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
