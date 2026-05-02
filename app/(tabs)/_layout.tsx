@@ -26,8 +26,10 @@ export default function TabLayout() {
   const { t } = useTranslation('dashboard');
   const { t: tCommon } = useTranslation('common');
 
-  // Web では BottomTabBar が FrameSizeProvider を必要とするが、
-  // カスタム tabBar ではプロバイダが提供されないため、デフォルトの tabBar を使用する。
+  // BottomTabBar は祖先の FrameSizeProvider（SafeAreaProviderCompat 経由）を要求する。
+  // BottomTabView は custom tabBar 関数も同じ Provider 配下で呼び出すため、
+  // `@react-navigation/elements` が単一バージョンに揃っていればカスタム tabBar でも動作する。
+  // 重複は src/__tests__/no-duplicate-providers.test.ts で検知している。
   const tabBarProps =
     Platform.OS === 'web'
       ? {}
