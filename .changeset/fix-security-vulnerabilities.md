@@ -18,3 +18,11 @@
   - `smol-toml` 1.6.0 → 1.6.1 (DoS 修正)
 
 残存する脆弱性 3 件は親パッケージのバージョン範囲指定により範囲内アップグレード不可能 (`@tootallnate/once`, `uuid@7.x` from `xcode`, `postcss@8.4.x` from `@expo/metro-config`)。これらは override や親パッケージ自体のメジャー更新なしには修正できない。
+
+加えて以下の通常依存も最新パッチ/マイナーへ更新:
+
+- `@biomejs/biome` 2.4.4 → 2.4.14 (biome.json schema URL も追従)
+- `effect` 3.20.0 → 3.21.2
+- `zustand` 5.0.11 → 5.0.12
+
+`@react-navigation/bottom-tabs` は Expo SDK 55 が要求する `@react-navigation/native@^7.1.33` との互換性維持のため 7.15.5 のまま据え置き (7.15.6+ は `^7.1.34` 以降を要求)。
