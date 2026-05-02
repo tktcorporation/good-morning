@@ -16,6 +16,7 @@ import type { DayOfWeek } from '../types/alarm';
 import { formatTime } from '../types/alarm';
 import { resolveTimeForDate } from '../types/wake-target';
 import type { WidgetData } from '../types/widget-data';
+import { getLocalizedTodoTitle } from '../utils/todo-display';
 
 /** 曜日インデックス → 短縮ラベル。i18n は Widget Extension 側で不使用のため固定値。 */
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -58,7 +59,7 @@ export function buildWidgetData(): WidgetData {
     session = {
       todos: sessionState.session.todos.map((t) => ({
         id: t.id,
-        title: t.title,
+        title: getLocalizedTodoTitle(t),
         completed: t.completed,
       })),
       snoozeFiresAt: sessionState.session.snoozeFiresAt,

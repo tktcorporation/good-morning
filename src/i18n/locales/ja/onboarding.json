@@ -9,15 +9,10 @@
     "subtitle": "あとからいつでも変更できます"
   },
   "todos": {
-    "title": "朝のタスクを追加しましょう",
-    "subtitle": "全てのタスクを完了するとアラームを止められます",
-    "addTask": "タスクを追加",
-    "placeholder": "例: 水を飲む",
-    "presets": {
-      "drinkWater": "水を飲む",
-      "stretch": "ストレッチ",
-      "washFace": "顔を洗う"
-    }
+    "title": "起床タスクを設定しました",
+    "subtitle": "考えなくても始められるよう、朝のタスクは固定です",
+    "fixedTaskLabel": "スクワット 10 回",
+    "helpText": "アラームが鳴ったらスクワットを 10 回。\nしっかり目を覚ましましょう。"
   },
   "permission": {
     "title": "権限を許可してください",

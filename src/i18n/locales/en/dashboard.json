@@ -5,12 +5,8 @@
   "targetOff": "OFF",
   "override": "Tomorrow only",
   "todos": {
-    "title": "Morning Tasks",
-    "description": "These become a checklist after you dismiss your alarm",
-    "addTask": "Add task",
-    "placeholder": "New task",
-    "empty": "Add tasks to complete when your alarm rings",
-    "addSquat": "Add Squat Challenge"
+    "title": "Tomorrow's Task",
+    "fixedTaskLabel": "10 Squats"
   },
   "morningRoutine": {
     "title": "Morning Routine",
@@ -21,6 +17,7 @@
     "goalExceeded": "{{time}} over goal",
     "allDone": "All tasks done!",
     "squat": {
+      "title": "Squat",
       "detecting": "Detecting squats...",
       "done": "Done!",
       "waiting": "Waiting..."

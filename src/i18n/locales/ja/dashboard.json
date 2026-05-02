@@ -5,12 +5,8 @@
   "targetOff": "OFF",
   "override": "明日だけ",
   "todos": {
-    "title": "朝のタスク",
-    "description": "アラーム解除後にチェックリストとして表示されます",
-    "addTask": "タスクを追加",
-    "placeholder": "新しいタスク",
-    "empty": "アラームが鳴ったときに完了するタスクを追加しましょう",
-    "addSquat": "スクワットチャレンジを追加"
+    "title": "明日のタスク",
+    "fixedTaskLabel": "スクワット 10 回"
   },
   "morningRoutine": {
     "title": "今朝のルーティン",
@@ -21,6 +17,7 @@
     "goalExceeded": "{{time}} 超過",
     "allDone": "全タスク完了!",
     "squat": {
+      "title": "スクワット",
       "detecting": "スクワット検出中...",
       "done": "完了!",
       "waiting": "準備中..."

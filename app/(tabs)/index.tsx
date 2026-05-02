@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
 import { SleepDurationCard } from '../../src/components/SleepDurationCard';
@@ -29,6 +29,7 @@ import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { WakeTarget } from '../../src/types/wake-target';
 import { resolveTimeForDate } from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
+import { getLocalizedTodoTitle } from '../../src/utils/todo-display';
 
 function getTomorrowDate(): Date {
   const tomorrow = new Date();
@@ -186,71 +187,21 @@ function MorningRoutineSection({
 }
 
 /**
- * TODO リスト編集セクション（セッション非アクティブ時）。
- * DashboardScreen の認知複雑度を下げるため分離。
+ * 明日のタスク表示セクション（セッション非アクティブ時）。
+ *
+ * 起床タスクは「スクワット 10 回」固定（FIXED_SQUAT_TODO_ID 参照）。
+ * 編集・追加・削除 UI は意図的に持たない — ユーザーがタスクを自分で組み立てる
+ * 認知負荷を下げるため、選択肢ゼロにしている。
  */
-function TodoEditSection({
-  target,
-  newTodoText,
-  onNewTodoTextChange,
-  onAddTodo,
-  onAddSquatTodo,
-  onRemoveTodo,
-}: {
-  readonly target: WakeTarget | null;
-  readonly newTodoText: string;
-  readonly onNewTodoTextChange: (text: string) => void;
-  readonly onAddTodo: () => void;
-  readonly onAddSquatTodo: () => void;
-  readonly onRemoveTodo: (id: string) => void;
-}) {
+function TodoDisplaySection() {
   const { t } = useTranslation('dashboard');
   return (
     <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
-      {target !== null && target.todos.length > 0 ? (
-        <>
-          <Text style={styles.todoDescription}>{t('todos.description')}</Text>
-          {target.todos.map((todo) => (
-            <View key={todo.id} style={styles.todoRow}>
-              <View
-                style={[
-                  styles.todoBullet,
-                  (todo.type ?? 'checkbox') === 'squat' && styles.todoBulletSquat,
-                ]}
-              />
-              <Text style={styles.todoText}>
-                {(todo.type ?? 'checkbox') === 'squat'
-                  ? `${todo.title} (${todo.requiredCount ?? 10})`
-                  : todo.title}
-              </Text>
-              <Pressable style={styles.todoDeleteButton} onPress={() => onRemoveTodo(todo.id)}>
-                <Text style={styles.todoDeleteText}>{'x'}</Text>
-              </Pressable>
-            </View>
-          ))}
-        </>
-      ) : (
-        <Text style={styles.emptyText}>{t('todos.empty')}</Text>
-      )}
-      <View style={styles.addTodoRow}>
-        <TextInput
-          style={styles.addTodoInput}
-          value={newTodoText}
-          onChangeText={onNewTodoTextChange}
-          placeholder={t('todos.placeholder')}
-          placeholderTextColor={colors.textMuted}
-          onSubmitEditing={onAddTodo}
-          returnKeyType="done"
-        />
-        <Pressable style={styles.addTodoButton} onPress={onAddTodo}>
-          <Text style={styles.addTodoButtonText}>{'+'}</Text>
-        </Pressable>
+      <View style={styles.todoRow}>
+        <View style={[styles.todoBullet, styles.todoBulletSquat]} />
+        <Text style={styles.todoText}>{t('todos.fixedTaskLabel')}</Text>
       </View>
-      <Pressable style={styles.addSquatButton} onPress={onAddSquatTodo}>
-        <Text style={styles.addSquatIcon}>{'🏋️'}</Text>
-        <Text style={styles.addSquatText}>{t('todos.addSquat')}</Text>
-      </Pressable>
     </View>
   );
 }
@@ -321,9 +272,6 @@ export default function DashboardScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
-  const addTodo = useWakeTargetStore((s) => s.addTodo);
-  const addSquatTodo = useWakeTargetStore((s) => s.addSquatTodo);
-  const removeTodo = useWakeTargetStore((s) => s.removeTodo);
 
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
@@ -336,7 +284,6 @@ export default function DashboardScreen() {
   const getProgress = useMorningSessionStore((s) => s.getProgress);
   const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
 
-  const [newTodoText, setNewTodoText] = useState('');
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
 
   // カウントダウンタイマー: スヌーズ（超過後は非表示）と目標（超過後も経過時間を警告表示）
@@ -405,7 +352,7 @@ export default function DashboardScreen() {
               activityId,
               currentSession.todos.map((t) => ({
                 id: t.id,
-                title: t.title,
+                title: getLocalizedTodoTitle(t),
                 completed: t.completed,
               })),
               snoozeEpoch,
@@ -430,24 +377,6 @@ export default function DashboardScreen() {
   const handleCompleteTodo = useCallback((_todoId: string) => {
     // 完了エフェクトは useEffect 側で areAllCompleted() を監視して発火するため、ここでは何もしない。
   }, []);
-
-  const handleAddTodo = useCallback(async () => {
-    const trimmed = newTodoText.trim();
-    if (trimmed.length === 0) return;
-    await addTodo(trimmed);
-    setNewTodoText('');
-  }, [newTodoText, addTodo]);
-
-  const handleAddSquatTodo = useCallback(async () => {
-    await addSquatTodo('Squat', 10);
-  }, [addSquatTodo]);
-
-  const handleRemoveTodo = useCallback(
-    async (id: string) => {
-      await removeTodo(id);
-    },
-    [removeTodo],
-  );
 
   const handleTargetPress = useCallback(() => {
     router.push('/target-edit');
@@ -519,14 +448,7 @@ export default function DashboardScreen() {
           onCompleteTodo={handleCompleteTodo}
         />
       ) : (
-        <TodoEditSection
-          target={target}
-          newTodoText={newTodoText}
-          onNewTodoTextChange={setNewTodoText}
-          onAddTodo={handleAddTodo}
-          onAddSquatTodo={handleAddSquatTodo}
-          onRemoveTodo={handleRemoveTodo}
-        />
+        <TodoDisplaySection />
       )}
 
       {/* Streak Badge — グレードストアから取得したストリーク情報を表示 */}
@@ -699,12 +621,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
-  // Todos
-  todoDescription: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
-  },
+  // Todos (display-only — 起床タスクは固定スクワットのみ)
   todoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -720,77 +637,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     marginRight: spacing.md,
   },
-  todoText: {
-    flex: 1,
-    color: colors.text,
-    fontSize: fontSize.md,
-  },
-  todoDeleteButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  todoDeleteText: {
-    color: colors.textMuted,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    paddingVertical: spacing.lg,
-  },
-  addTodoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  addTodoInput: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    color: colors.text,
-    fontSize: fontSize.md,
-  },
-  addTodoButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addTodoButtonText: {
-    color: colors.text,
-    fontSize: fontSize.xl,
-    fontWeight: '300',
-  },
-
   todoBulletSquat: {
     backgroundColor: colors.warning,
   },
-  addSquatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-  },
-  addSquatIcon: {
-    fontSize: fontSize.lg,
-    marginRight: spacing.sm,
-  },
-  addSquatText: {
-    color: colors.textSecondary,
+  todoText: {
+    flex: 1,
+    color: colors.text,
     fontSize: fontSize.md,
   },
 

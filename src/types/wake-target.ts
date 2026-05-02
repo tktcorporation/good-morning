@@ -1,5 +1,51 @@
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
+/**
+ * 固定スクワットタスクの仕様。
+ *
+ * 背景: ユーザーが起床タスクを自分で組み立てるのは認知負荷が高いというフィードバックを受け、
+ * 「考えなくても始められる」ように起床タスクを「スクワット 10 回」1 件に固定した。
+ * このため自由入力 / 追加 / 削除 / 並べ替えの UI と store API は廃止済み。
+ *
+ * `WakeTarget.todos` 配列の構造自体は維持している（MorningSession / Live Activity /
+ * SquatChallengeItem など配列前提のロジックが多いため）。常に「この固定 TODO 1 件のみ」が
+ * 入る不変条件を `DEFAULT_WAKE_TARGET` と `migrateStoredTarget` で担保する。
+ */
+export const FIXED_SQUAT_TODO_TITLE = 'Squat';
+export const FIXED_SQUAT_REQUIRED_COUNT = 10;
+
+/**
+ * 固定 TODO の ID は決定論的な値にする。
+ * 毎ロード時に乱数 ID を再生成すると、進行中の MorningSession 側 SessionTodo と
+ * 同一視できなくなり、Live Activity 更新 / 完了処理が壊れる。
+ */
+export const FIXED_SQUAT_TODO_ID = 'fixed-squat-todo';
+
+export function buildFixedSquatTodo(): TodoItem {
+  return {
+    id: FIXED_SQUAT_TODO_ID,
+    title: FIXED_SQUAT_TODO_TITLE,
+    completed: false,
+    type: 'squat',
+    requiredCount: FIXED_SQUAT_REQUIRED_COUNT,
+  };
+}
+
+/**
+ * 永続化済みの todos が固定スクワット TODO 1 件のみで構成されているかを判定する。
+ * `migrateStoredTarget` で「正規化が必要か」のショートサーキット用。
+ */
+export function isFixedSquatTodoList(todos: readonly TodoItem[]): boolean {
+  if (todos.length !== 1) return false;
+  const only = todos[0];
+  return (
+    only !== undefined &&
+    only.id === FIXED_SQUAT_TODO_ID &&
+    only.type === 'squat' &&
+    only.requiredCount === FIXED_SQUAT_REQUIRED_COUNT
+  );
+}
+
 export type DayOverride =
   | { readonly type: 'custom'; readonly time: AlarmTime }
   | { readonly type: 'off' };
@@ -99,7 +145,8 @@ export const DEFAULT_WAKE_TARGET: WakeTarget = {
   defaultTime: { hour: 7, minute: 0 },
   dayOverrides: {},
   nextOverride: null,
-  todos: [],
+  // 起床タスクは「スクワット 10 回」固定。詳細は FIXED_SQUAT_TODO_ID のコメント参照。
+  todos: [buildFixedSquatTodo()],
   enabled: true,
   targetSleepMinutes: null,
   wakeUpGoalBufferMinutes: DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,

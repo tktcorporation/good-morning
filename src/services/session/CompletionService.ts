@@ -61,6 +61,7 @@ export const onAllTodosCompletedEffect = (
         title: todo.title,
         completedAt: todo.completedAt,
         orderCompleted: todo.completed ? index + 1 : null,
+        type: todo.type,
       }));
 
       const goalBasedResult =
@@ -127,6 +128,7 @@ export const expireSessionIfNeeded: Effect.Effect<boolean, SessionError, AlarmKi
         title: todo.title,
         completedAt: todo.completedAt,
         orderCompleted: todo.completed ? index + 1 : null,
+        type: todo.type,
       }));
       const allCompleted = session.todos.every((t) => t.completed);
 
