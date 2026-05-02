@@ -1,5 +1,13 @@
 # good-morning
 
+## 1.2.3
+
+### Patch Changes
+
+- [#68](https://github.com/tktcorporation/good-morning/pull/68) [`1c96a7a`](https://github.com/tktcorporation/good-morning/commit/1c96a7aded61d5d989385f499f52c887a7d9ba5a) Thanks [@tktcorporation](https://github.com/tktcorporation)! - iOS 起動時の `useFrameSize must be used within a FrameSizeProvider` クラッシュを修正。`@react-navigation/bottom-tabs` を expo-router が引き込むバージョン (7.15.5) に揃えることで、`@react-navigation/elements` の重複インストール（2.9.8 と 2.9.10 が共存）を解消し、`FrameSizeProvider` と `useFrameSize` が同じ React Context を参照するようにした。
+
+  合わせて、Provider 系ライブラリの重複を CI で検知するテスト (`src/__tests__/no-duplicate-providers.test.ts`) を追加。
+
 ## 1.2.2
 
 ### Patch Changes
