@@ -9,15 +9,10 @@
     "subtitle": "You can change this anytime"
   },
   "todos": {
-    "title": "Add your morning tasks",
-    "subtitle": "Complete all tasks to dismiss the alarm",
-    "addTask": "Add task",
-    "placeholder": "e.g. Drink water",
-    "presets": {
-      "drinkWater": "Drink water",
-      "stretch": "Stretch",
-      "washFace": "Wash face"
-    }
+    "title": "Your morning task is set",
+    "subtitle": "Your morning task is fixed so you can start without thinking",
+    "fixedTaskLabel": "10 Squats",
+    "helpText": "When your alarm rings, do 10 squats.\nWake up properly."
   },
   "permission": {
     "title": "Grant Permissions",

@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
-import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
+import {
+  buildFixedSquatTodo,
+  DEFAULT_WAKE_TARGET,
+  FIXED_SQUAT_REQUIRED_COUNT,
+  FIXED_SQUAT_TODO_ID,
+} from '../types/wake-target';
 
 const mockGetItem = AsyncStorage.getItem as jest.Mock;
 const mockSetItem = AsyncStorage.setItem as jest.Mock;
@@ -117,18 +122,6 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.dayOverrides[0]).toBeUndefined();
   });
 
-  test('addTodo and removeTodo', async () => {
-    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-    await useWakeTargetStore.getState().addTodo('Drink water');
-    const todos = useWakeTargetStore.getState().target?.todos ?? [];
-    expect(todos).toHaveLength(1);
-    expect(todos[0]?.title).toBe('Drink water');
-
-    const todoId = todos[0]?.id ?? '';
-    await useWakeTargetStore.getState().removeTodo(todoId);
-    expect(useWakeTargetStore.getState().target?.todos).toHaveLength(0);
-  });
-
   test('toggleEnabled flips the enabled flag', async () => {
     await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
     expect(useWakeTargetStore.getState().target?.enabled).toBe(true);
@@ -136,21 +129,52 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.enabled).toBe(false);
   });
 
-  test('reorderTodos persists new order', async () => {
-    const todos = [
-      { id: 'todo-1', title: 'A', completed: false },
-      { id: 'todo-2', title: 'B', completed: false },
-    ];
-    await useWakeTargetStore.getState().setTarget({
-      ...DEFAULT_WAKE_TARGET,
-      todos,
+  test('DEFAULT_WAKE_TARGET contains exactly the fixed squat todo', () => {
+    expect(DEFAULT_WAKE_TARGET.todos).toHaveLength(1);
+    const only = DEFAULT_WAKE_TARGET.todos[0];
+    expect(only?.id).toBe(FIXED_SQUAT_TODO_ID);
+    expect(only?.type).toBe('squat');
+    expect(only?.requiredCount).toBe(FIXED_SQUAT_REQUIRED_COUNT);
+  });
+
+  test('loadTarget injects fixed squat todo when stored data has empty todos', async () => {
+    const stored = { ...DEFAULT_WAKE_TARGET, todos: [] };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
     });
-    const reordered = [todos[1], todos[0]].filter(
-      (t): t is (typeof todos)[number] => t !== undefined,
-    );
-    await useWakeTargetStore.getState().reorderTodos(reordered);
-    expect(useWakeTargetStore.getState().target?.todos[0]?.id).toBe('todo-2');
-    expect(useWakeTargetStore.getState().target?.todos[1]?.id).toBe('todo-1');
+    await useWakeTargetStore.getState().loadTarget();
+    const todos = useWakeTargetStore.getState().target?.todos ?? [];
+    expect(todos).toHaveLength(1);
+    expect(todos[0]?.id).toBe(FIXED_SQUAT_TODO_ID);
+  });
+
+  test('loadTarget normalizes legacy free-form todos to fixed squat', async () => {
+    const stored = {
+      ...DEFAULT_WAKE_TARGET,
+      todos: [
+        { id: 'legacy-1', title: 'Drink water', completed: false },
+        { id: 'legacy-2', title: 'Stretch', completed: false },
+      ],
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const todos = useWakeTargetStore.getState().target?.todos ?? [];
+    expect(todos).toEqual([buildFixedSquatTodo()]);
+  });
+
+  test('loadTarget preserves stored todos when already the fixed squat', async () => {
+    const fixedTodo = buildFixedSquatTodo();
+    const stored = { ...DEFAULT_WAKE_TARGET, todos: [fixedTodo] };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.todos).toEqual([fixedTodo]);
   });
 
   test('setAlarmIds persists to AsyncStorage', async () => {

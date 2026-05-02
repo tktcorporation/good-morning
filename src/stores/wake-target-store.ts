@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services';
-import type { AlarmTime, DayOfWeek, TodoItem } from '../types/alarm';
-import { createTodoId } from '../types/alarm';
+import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';
 import {
+  buildFixedSquatTodo,
   computeOverrideTargetDate,
   DEFAULT_WAKE_TARGET,
   DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
+  isFixedSquatTodoList,
   isNextOverrideExpired,
 } from '../types/wake-target';
 import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
@@ -31,11 +32,6 @@ interface WakeTargetState {
   clearExpiredOverride: () => Promise<void>;
   setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>;
   removeDayOverride: (day: DayOfWeek) => Promise<void>;
-  addTodo: (title: string) => Promise<void>;
-  /** スクワットチャレンジタスクを追加する。requiredCount はデフォルト10回。 */
-  addSquatTodo: (title: string, requiredCount?: number) => Promise<void>;
-  removeTodo: (id: string) => Promise<void>;
-  reorderTodos: (todos: readonly TodoItem[]) => Promise<void>;
   setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
   setWakeUpGoalBufferMinutes: (minutes: number) => Promise<void>;
   toggleEnabled: () => Promise<void>;
@@ -75,10 +71,17 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
       ? (parsed.wakeUpGoalBufferMinutes as number)
       : DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES;
 
+  // 起床タスクは「スクワット 10 回」固定に統一する設計のため、
+  // 永続化済みデータのうち固定 TODO 1 件以外を含むものは次回ロード時に正規化する。
+  // 自由入力タスクの履歴は破棄される（仕様の単純化を優先）。
+  const storedTodos = (parsed as unknown as WakeTarget).todos ?? [];
+  const todos = isFixedSquatTodoList(storedTodos) ? storedTodos : [buildFixedSquatTodo()];
+
   return {
     ...(parsed as unknown as WakeTarget),
     targetSleepMinutes,
     wakeUpGoalBufferMinutes,
+    todos,
   };
 }
 
@@ -167,49 +170,6 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     set({ target: updated });
     await persist(updated);
     syncAfterTargetChange();
-  },
-
-  addTodo: async (title: string) => {
-    const { target } = get();
-    if (target === null) return;
-    const newTodo: TodoItem = { id: createTodoId(), title, completed: false };
-    const updated: WakeTarget = { ...target, todos: [...target.todos, newTodo] };
-    set({ target: updated });
-    await persist(updated);
-  },
-
-  addSquatTodo: async (title: string, requiredCount = 10) => {
-    const { target } = get();
-    if (target === null) return;
-    const newTodo: TodoItem = {
-      id: createTodoId(),
-      title,
-      completed: false,
-      type: 'squat',
-      requiredCount,
-    };
-    const updated: WakeTarget = { ...target, todos: [...target.todos, newTodo] };
-    set({ target: updated });
-    await persist(updated);
-  },
-
-  removeTodo: async (id: string) => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = {
-      ...target,
-      todos: target.todos.filter((t) => t.id !== id),
-    };
-    set({ target: updated });
-    await persist(updated);
-  },
-
-  reorderTodos: async (todos: readonly TodoItem[]) => {
-    const { target } = get();
-    if (target === null) return;
-    const updated: WakeTarget = { ...target, todos };
-    set({ target: updated });
-    await persist(updated);
   },
 
   setTargetSleepMinutes: async (minutes: number | null) => {

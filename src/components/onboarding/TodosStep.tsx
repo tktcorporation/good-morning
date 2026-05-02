@@ -1,94 +1,33 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, fontSize, spacing } from '../../constants/theme';
 import { StepButton } from './StepButton';
 import { StepHeader } from './StepHeader';
 
 interface TodosStepProps {
   readonly onNext: () => void;
   readonly onBack: () => void;
-  readonly todos: readonly string[];
-  readonly setTodos: (todos: readonly string[]) => void;
 }
 
-const PRESET_KEYS = ['drinkWater', 'stretch', 'washFace'] as const;
-
-export function TodosStep({ onNext, onBack, todos, setTodos }: TodosStepProps) {
+/**
+ * オンボーディングの起床タスク説明ステップ。
+ *
+ * 起床タスクは「スクワット 10 回」固定（FIXED_SQUAT_TODO_ID 参照）のため、
+ * 以前の自由入力 + プリセット chip による組み立て UI は廃止し、
+ * 「何が設定されたか」をユーザーに伝える単純な説明画面にしている。
+ */
+export function TodosStep({ onNext, onBack }: TodosStepProps) {
   const { t } = useTranslation('onboarding');
-  const [inputText, setInputText] = useState('');
-
-  const handleAddTodo = () => {
-    const trimmed = inputText.trim();
-    if (trimmed === '') return;
-    setTodos([...todos, trimmed]);
-    setInputText('');
-  };
-
-  const handleRemoveTodo = (index: number) => {
-    setTodos(todos.filter((_, i) => i !== index));
-  };
-
-  const handleAddPreset = (key: (typeof PRESET_KEYS)[number]) => {
-    const label = t(`todos.presets.${key}`);
-    if (!todos.includes(label)) {
-      setTodos([...todos, label]);
-    }
-  };
 
   return (
     <View style={styles.container}>
       <StepHeader title={t('todos.title')} subtitle={t('todos.subtitle')} />
 
-      <View style={styles.presets}>
-        {PRESET_KEYS.map((key) => {
-          const label = t(`todos.presets.${key}`);
-          const isAdded = todos.includes(label);
-          return (
-            <Pressable
-              key={key}
-              style={[styles.chip, isAdded && styles.chipAdded]}
-              onPress={() => handleAddPreset(key)}
-              disabled={isAdded}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.chipText, isAdded && styles.chipTextAdded]}>
-                {isAdded ? `+ ${label}` : `+ ${label}`}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View style={styles.body}>
+        <Text style={styles.icon}>{'🏋️'}</Text>
+        <Text style={styles.taskLabel}>{t('todos.fixedTaskLabel')}</Text>
+        <Text style={styles.helpText}>{t('todos.helpText')}</Text>
       </View>
-
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder={t('todos.placeholder')}
-          placeholderTextColor={colors.textMuted}
-          onSubmitEditing={handleAddTodo}
-          returnKeyType="done"
-        />
-        <Pressable style={styles.addButton} onPress={handleAddTodo} accessibilityRole="button">
-          <Text style={styles.addButtonText}>{'+'}</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView style={styles.todoList}>
-        {todos.map((todo) => (
-          <View key={todo} style={styles.todoItem}>
-            <Text style={styles.todoText}>{todo}</Text>
-            <Pressable
-              style={styles.removeButton}
-              onPress={() => handleRemoveTodo(todos.indexOf(todo))}
-              accessibilityRole="button"
-            >
-              <Text style={styles.removeText}>{'x'}</Text>
-            </Pressable>
-          </View>
-        ))}
-      </ScrollView>
 
       <View style={styles.buttons}>
         <StepButton label={t('back')} onPress={onBack} variant="secondary" flex={1} />
@@ -103,85 +42,27 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing.xl,
   },
-  presets: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  chip: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipAdded: {
-    backgroundColor: colors.surfaceLight,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-  },
-  chipTextAdded: {
-    color: colors.primary,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  input: {
+  body: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    color: colors.text,
-    fontSize: fontSize.md,
-  },
-  addButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.sm,
-    width: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    gap: spacing.lg,
   },
-  addButtonText: {
+  icon: {
+    fontSize: 72,
+  },
+  taskLabel: {
     color: colors.text,
     fontSize: fontSize.xl,
-    fontWeight: '600',
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  todoList: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
-  },
-  todoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  todoText: {
-    flex: 1,
-    color: colors.text,
+  helpText: {
+    color: colors.textSecondary,
     fontSize: fontSize.md,
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeText: {
-    color: colors.primary,
-    fontSize: fontSize.lg,
-    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 24,
   },
   buttons: {
     flexDirection: 'row',

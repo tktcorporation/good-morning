@@ -24,7 +24,6 @@ export default function OnboardingScreen() {
 
   const [step, setStep] = useState(0);
   const [defaultTime, setDefaultTime] = useState<AlarmTime>({ hour: 7, minute: 0 });
-  const [todos, setTodos] = useState<readonly string[]>([]);
   const [alarmEnabled, setAlarmEnabled] = useState(true);
 
   const handleNext = useCallback(() => {
@@ -48,21 +47,16 @@ export default function OnboardingScreen() {
   );
 
   const handleComplete = useCallback(async () => {
-    const todoItems = todos.map((title, index) => ({
-      id: `todo_onboarding_${index}_${Date.now()}`,
-      title,
-      completed: false,
-    }));
-
+    // todos は DEFAULT_WAKE_TARGET 経由で固定スクワット 1 件が継承される。
+    // FIXED_SQUAT_TODO_ID 参照: ユーザーが自分でタスクを組み立てる仕組みは廃止済み。
     await setTarget({
       ...DEFAULT_WAKE_TARGET,
       defaultTime,
-      todos: todoItems,
       enabled: alarmEnabled,
     });
     await AsyncStorage.setItem('onboarding-completed', 'true');
     router.replace('/');
-  }, [defaultTime, todos, setTarget, router, alarmEnabled]);
+  }, [defaultTime, setTarget, router, alarmEnabled]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
@@ -82,9 +76,7 @@ export default function OnboardingScreen() {
             setTime={setDefaultTime}
           />
         )}
-        {step === 2 && (
-          <TodosStep onNext={handleNext} onBack={handleBack} todos={todos} setTodos={setTodos} />
-        )}
+        {step === 2 && <TodosStep onNext={handleNext} onBack={handleBack} />}
         {step === 3 && <PermissionStep onNext={handleNext} onBack={handleBack} />}
         {step === 4 && <ConfirmStep onConfirm={handleConfirm} onBack={handleBack} />}
         {step === 5 && <DemoStep onNext={handleComplete} onBack={handleBack} />}
