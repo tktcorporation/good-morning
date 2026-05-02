@@ -164,6 +164,20 @@ export function useSquatDetector(
   const stateRef = useRef<DetectorState>(INITIAL_STATE);
   const countRef = useRef(count);
   countRef.current = count;
+  /**
+   * targetCount をミラーする ref。
+   *
+   * targetCount を useEffect の依存に入れると、呼び出し側が
+   * `targetCount = required - current` のように動的な値を渡している場合
+   * （例: SquatChallengeItem）、カウントが 1 回進むたびに effect が再実行され、
+   * stateRef がまっさらに初期化されて lastCountedAt（debounce 履歴）が消える。
+   * 結果、連続した動作が DEBOUNCE_MS を無視して二重カウントされうる。
+   *
+   * リスナー内では「現在の最新閾値」が分かれば良く、購読を作り直す必要は無い。
+   * ref で参照することで effect の再実行を防ぐ。
+   */
+  const targetCountRef = useRef(targetCount);
+  targetCountRef.current = targetCount;
 
   const handleComplete = useCallback(onComplete, [onComplete]);
   const handleSquat = useCallback(onSquat, [onSquat]);
@@ -191,7 +205,7 @@ export function useSquatDetector(
         const newCount = countRef.current + 1;
         setCount(newCount);
         handleSquat();
-        if (newCount >= targetCount) {
+        if (newCount >= targetCountRef.current) {
           handleComplete();
         }
       }
@@ -203,7 +217,9 @@ export function useSquatDetector(
       subscription.remove();
       setIsListening(false);
     };
-  }, [enabled, targetCount, handleSquat, handleComplete]);
+    // targetCount は意図的に依存から外している（targetCountRef 経由で参照）。
+    // 詳細は targetCountRef の定義コメント参照。
+  }, [enabled, handleSquat, handleComplete]);
 
   const reset = useCallback(() => {
     setCount(0);
