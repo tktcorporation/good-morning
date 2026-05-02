@@ -60,6 +60,13 @@
     },
     "dayBoundary": "Day Boundary",
     "dayBoundaryDescription": "Hours before midnight count as the previous day",
-    "dayBoundaryHour": "{{hour}}:00"
+    "dayBoundaryHour": "{{hour}}:00",
+    "squatCheck": "Squat Check",
+    "squatCheckSubtitle": "Try the same detection used at alarm time"
+  },
+  "squatCheck": {
+    "title": "Squat Check",
+    "description": "Verify the squat detection using the exact same logic that runs when dismissing your alarm. Hold your device and try a real squat.",
+    "reset": "Reset"
   }
 }
