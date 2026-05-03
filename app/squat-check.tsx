@@ -182,6 +182,7 @@ function DebugSection({ debug }: DebugSectionProps) {
       <DebugBlock
         title={t('squatCheck.debug.pedometer.title')}
         availability={debug.pedometer.availability}
+        errorMessage={debug.pedometer.error}
       >
         <DebugRow
           label={t('squatCheck.debug.pedometer.permission')}
@@ -202,7 +203,11 @@ function DebugSection({ debug }: DebugSectionProps) {
           label={t('squatCheck.debug.pedometer.stepsSinceWatchStart')}
           value={String(debug.pedometer.stepsSinceWatchStart)}
         />
-        {debug.pedometer.error !== null && (
+        {/*
+         * available でも fetchTodaySteps が個別に失敗したケース（HealthKit 認可拒否や
+         * 7-days 制限など）はここで表示する。unavailable 時は DebugBlock 側に出る。
+         */}
+        {debug.pedometer.error !== null && debug.pedometer.availability === 'available' && (
           <DebugRow label={t('squatCheck.debug.pedometer.error')} value={debug.pedometer.error} />
         )}
       </DebugBlock>
@@ -213,10 +218,16 @@ function DebugSection({ debug }: DebugSectionProps) {
 interface DebugBlockProps {
   readonly title: string;
   readonly availability?: 'unknown' | 'available' | 'unavailable';
+  /**
+   * unavailable 時に表示したいエラーメッセージ。例外で unavailable 化したケースを
+   * デバッグするために必須。空 children と組み合わせて「unavailable だが原因は分かる」
+   * 状態を表現する。
+   */
+  readonly errorMessage?: string | null;
   readonly children: React.ReactNode;
 }
 
-function DebugBlock({ title, availability, children }: DebugBlockProps) {
+function DebugBlock({ title, availability, errorMessage, children }: DebugBlockProps) {
   const { t } = useTranslation('common');
   const showUnavailable = availability === 'unavailable';
   return (
@@ -229,7 +240,18 @@ function DebugBlock({ title, availability, children }: DebugBlockProps) {
           </Text>
         ) : null}
       </View>
-      {!showUnavailable && children}
+      {/*
+       * unavailable でも errorMessage があれば原因を表示する。これがないと
+       * 例外で unavailable 化したケース（権限取得失敗・native link 不備など）の
+       * 原因が画面から消えてしまい、デバッグ画面の意義が損なわれる。
+       */}
+      {showUnavailable ? (
+        errorMessage !== null && errorMessage !== undefined && errorMessage !== '' ? (
+          <Text style={styles.debugErrorText}>{errorMessage}</Text>
+        ) : null
+      ) : (
+        children
+      )}
     </View>
   );
 }
@@ -329,6 +351,12 @@ const styles = StyleSheet.create({
   },
   debugBadgeUnavailable: {
     color: colors.textMuted,
+  },
+  // unavailable バッジの下に出すエラー詳細。warning 色で目立たせる
+  debugErrorText: {
+    fontSize: fontSize.sm,
+    color: colors.warning,
+    lineHeight: 18,
   },
   debugRow: {
     flexDirection: 'row',

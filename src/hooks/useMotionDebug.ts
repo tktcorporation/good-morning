@@ -2,6 +2,9 @@ import { Accelerometer, Barometer, Gyroscope, Magnetometer, Pedometer } from 'ex
 import { useEffect, useRef, useState } from 'react';
 import { nextSquatPhase, type SquatPhase } from './useSquatDetector';
 
+// biome-ignore lint/suspicious/noConsole: debug-screen hook needs visible failures for triage
+const logWarn = console.warn;
+
 /**
  * デバッグ画面（app/squat-check.tsx）でリアルタイムにモーション情報を可視化するためのフック。
  *
@@ -74,18 +77,27 @@ export interface MotionDebugState {
 const SAMPLE_INTERVAL_MS = 100;
 
 /**
- * Pedometer の今日の歩数を取得する。前回計算からの差分が大きい場合に再取得を呼ばれる。
- * シミュレータでは isAvailableAsync が true でも getStepCountAsync が失敗するため try/catch。
+ * Pedometer の今日の歩数を取得する。
+ *
+ * 失敗原因はシミュレータ・iOS の 7 days クエリ制限・ユーザー権限拒否・
+ * ネイティブブリッジの breaking change など多岐にわたる。デバッグ画面では
+ * 「— と表示されている理由」が分からないと切り分けが困難なため、エラー時は
+ * メッセージを返して呼び出し元で `pedometer.error` に反映する。
  */
-async function fetchTodaySteps(): Promise<number | null> {
+async function fetchTodaySteps(): Promise<{
+  readonly steps: number | null;
+  readonly error: string | null;
+}> {
   try {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date();
     const result = await Pedometer.getStepCountAsync(start, end);
-    return result.steps;
-  } catch {
-    return null;
+    return { steps: result.steps, error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    logWarn('[useMotionDebug] fetchTodaySteps failed:', message);
+    return { steps: null, error: message };
   }
 }
 
@@ -110,6 +122,9 @@ async function subscribeSimpleSensor<T>(
   setAvailability: (a: SensorAvailability) => void,
   onSample: (e: T) => void,
   isCancelled: () => boolean,
+  // 例外発生時のログ識別用。'available → unavailable' に潰されると native link 不備や
+  // expo-sensors の breaking change が見えなくなるため、最低限 console.warn は出す。
+  sensorLabel: string,
 ): Promise<{ remove(): void } | null> {
   try {
     const ok = await sensor.isAvailableAsync();
@@ -118,8 +133,9 @@ async function subscribeSimpleSensor<T>(
     if (!ok) return null;
     sensor.setUpdateInterval(intervalMs);
     return sensor.addListener(onSample);
-  } catch {
+  } catch (e) {
     if (!isCancelled()) setAvailability('unavailable');
+    logWarn(`[useMotionDebug] ${sensorLabel} subscription failed:`, e);
     return null;
   }
 }
@@ -128,7 +144,7 @@ async function subscribeSimpleSensor<T>(
  * Barometer サンプルを内部表現に変換する純粋関数。
  *
  * relativeAltitude は iOS のみで返ってくる optional プロパティ。
- * `'relativeAltitude' in data` でランタイム検出してから number 化する。
+ * undefined を null に正規化して、UI 側の表示判定をシンプルにする。
  */
 function buildBarometerSample(data: {
   readonly pressure: number;
@@ -195,6 +211,18 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
 
   useEffect(() => {
     if (!enabled) return;
+    // enabled が false→true に切り替わると effect が再実行されるが、ref は
+    // hook インスタンスをまたいで保持される。前回セッションの phase/min/max が
+    // 残ったまま新しいサンプルを処理すると、最初の入力で偽の遷移が起きる
+    // （例: 前回が rising のままだと最初のサンプルで即 counted）。
+    // フェーズ/min/max を初期値に戻して新セッションを始める。
+    phaseRef.current = 'standing';
+    minRef.current = null;
+    maxRef.current = null;
+    setSquatPhase('standing');
+    setMinMagnitude(null);
+    setMaxMagnitude(null);
+
     let cancelled = false;
 
     const subscriptions: Array<{ remove: () => void }> = [];
@@ -226,13 +254,14 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
     const isCancelled = () => cancelled;
 
     const setupAll = async () => {
-      const [accelSub, gyroSub, magSub, baroSub] = await Promise.all([
+      const subs = await Promise.all([
         subscribeSimpleSensor(
           Accelerometer,
           SAMPLE_INTERVAL_MS,
           setAccelerometerAvailable,
           handleAccelerometerSample,
           isCancelled,
+          'Accelerometer',
         ),
         subscribeSimpleSensor(
           Gyroscope,
@@ -240,6 +269,7 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
           setGyroscopeAvailable,
           setGyroscope,
           isCancelled,
+          'Gyroscope',
         ),
         subscribeSimpleSensor(
           Magnetometer,
@@ -247,6 +277,7 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
           setMagnetometerAvailable,
           setMagnetometer,
           isCancelled,
+          'Magnetometer',
         ),
         // 気圧変化は緩やかなので 500ms で十分
         subscribeSimpleSensor(
@@ -255,24 +286,43 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
           setBarometerAvailable,
           (data) => setBarometer(buildBarometerSample(data)),
           isCancelled,
+          'Barometer',
         ),
       ]);
-      for (const sub of [accelSub, gyroSub, magSub, baroSub]) {
+      // Promise.all を await している間に unmount されたケース（codex P2 指摘）。
+      // この時点では useEffect cleanup が既に走り終わっており、ここで push すると
+      // 永久にリスナーが残ってしまう。cancelled ならその場で remove して捨てる。
+      if (cancelled) {
+        for (const sub of subs) sub?.remove();
+        return;
+      }
+      for (const sub of subs) {
         if (sub !== null) subscriptions.push(sub);
       }
     };
 
     const startPedometerWatch = async () => {
-      // 今日の累計歩数（HealthKit 由来）。失敗しても致命的ではない
+      // 今日の累計歩数（HealthKit 由来）。失敗しても致命的ではないが、
+      // 失敗原因をデバッグ画面で見えるようにエラーは pedometer.error に反映する。
       const today = await fetchTodaySteps();
       if (cancelled) return;
-      setPedometer((p) => ({ ...p, stepsToday: today }));
+      setPedometer((p) => ({
+        ...p,
+        stepsToday: today.steps,
+        // 既存 error（例えば watch 中に出た）を today 取得失敗で上書きしない
+        error: today.error ?? p.error,
+      }));
 
-      subscriptions.push(
-        Pedometer.watchStepCount((result) => {
-          setPedometer((p) => ({ ...p, stepsSinceWatchStart: result.steps }));
-        }),
-      );
+      // watchStepCount はリスナー API。同じく Promise.all 後の race と同様、
+      // この行に来た時点で cancelled なら remove して捨てる。
+      const sub = Pedometer.watchStepCount((result) => {
+        setPedometer((p) => ({ ...p, stepsSinceWatchStart: result.steps }));
+      });
+      if (cancelled) {
+        sub.remove();
+        return;
+      }
+      subscriptions.push(sub);
     };
 
     /**
@@ -300,6 +350,7 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
         }
         await requestAndStartPedometer();
       } catch (e) {
+        logWarn('[useMotionDebug] setupPedometer failed:', e);
         if (cancelled) return;
         setPedometer((p) => ({
           ...p,
@@ -309,8 +360,11 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
       }
     };
 
-    void setupAll();
-    void setupPedometer();
+    // 各 setup 関数は内部で try/catch しているが、想定外の throw（型エラー・
+    // Promise.all の例外伝播・state setter の throw 等）が unhandled rejection に
+    // ならないよう .catch を付けて防衛する。
+    setupAll().catch((e) => logWarn('[useMotionDebug] setupAll unexpected:', e));
+    setupPedometer().catch((e) => logWarn('[useMotionDebug] setupPedometer unexpected:', e));
 
     return () => {
       cancelled = true;
