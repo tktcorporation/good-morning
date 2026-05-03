@@ -29,6 +29,7 @@ describe('app/ screen modules — import smoke', () => {
     ['app/schedule', () => require('../../app/schedule')],
     ['app/target-edit', () => require('../../app/target-edit')],
     ['app/day-review', () => require('../../app/day-review')],
+    ['app/squat-check', () => require('../../app/squat-check')],
   ];
 
   it.each(cases)('%s loads without throwing and default-exports a function', (_name, loader) => {

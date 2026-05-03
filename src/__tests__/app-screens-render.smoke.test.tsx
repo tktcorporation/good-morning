@@ -29,6 +29,7 @@ const cases: ReadonlyArray<readonly [string, () => { default: React.ComponentTyp
   ['app/schedule', () => require('../../app/schedule')],
   ['app/target-edit', () => require('../../app/target-edit')],
   ['app/day-review', () => require('../../app/day-review')],
+  ['app/squat-check', () => require('../../app/squat-check')],
 ];
 
 // 実アプリでは expo-router が NavigationContainer 経由で SafeAreaProvider を

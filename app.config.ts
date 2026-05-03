@@ -27,6 +27,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       UIBackgroundModes: ['audio', 'fetch'],
       ITSAppUsesNonExemptEncryption: false,
       NSAlarmKitUsageDescription: 'Good Morning uses alarms to wake you up at your scheduled time.',
+      // Pedometer / モーションセンサー（スクワット検出 + デバッグ画面の歩数表示）に必要。
+      // 設定 → スクワット動作確認画面で歩数や加速度をリアルタイム表示するために要求する。
+      NSMotionUsageDescription:
+        'Good Morning uses motion data to detect squats and to show real-time movement information in the squat debug screen.',
       NSSupportsLiveActivities: true,
     },
     entitlements: {

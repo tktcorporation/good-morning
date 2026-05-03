@@ -133,20 +133,31 @@ jest.mock('expo-background-fetch', () => ({
   Status: { Available: 3, Denied: 2, Restricted: 1 },
 }));
 
-// Mock expo-sensors（useSquatDetector が DeviceMotion を使う）
-jest.mock('expo-sensors', () => ({
-  DeviceMotion: {
+// Mock expo-sensors（useSquatDetector が Accelerometer を、
+// useMotionDebug が Gyroscope/Magnetometer/Barometer/Pedometer を使う）
+jest.mock('expo-sensors', () => {
+  const buildSimpleSensor = () => ({
     isAvailableAsync: jest.fn(async () => false),
     addListener: jest.fn(() => ({ remove: jest.fn() })),
     setUpdateInterval: jest.fn(),
-    requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
-  },
-  Accelerometer: {
-    isAvailableAsync: jest.fn(async () => false),
-    addListener: jest.fn(() => ({ remove: jest.fn() })),
-    setUpdateInterval: jest.fn(),
-  },
-}));
+  });
+  return {
+    DeviceMotion: {
+      ...buildSimpleSensor(),
+      requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+    },
+    Accelerometer: buildSimpleSensor(),
+    Gyroscope: buildSimpleSensor(),
+    Magnetometer: buildSimpleSensor(),
+    Barometer: buildSimpleSensor(),
+    Pedometer: {
+      isAvailableAsync: jest.fn(async () => false),
+      requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+      getStepCountAsync: jest.fn(async () => ({ steps: 0 })),
+      watchStepCount: jest.fn(() => ({ remove: jest.fn() })),
+    },
+  };
+});
 
 // Mock expo-constants（app/(tabs)/settings.tsx が Constants.expoConfig を読む）
 jest.mock('expo-constants', () => ({
@@ -179,5 +190,7 @@ jest.mock('react-native-svg', () => {
     G: createMockComponent('G'),
     Defs: createMockComponent('Defs'),
     ClipPath: createMockComponent('ClipPath'),
+    Circle: createMockComponent('Circle'),
+    Path: createMockComponent('Path'),
   };
 });

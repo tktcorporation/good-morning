@@ -67,6 +67,48 @@
   "squatCheck": {
     "title": "スクワット動作確認",
     "description": "アラーム解除時と同じ検出ロジックで動作を確認できます。端末を持って実際にスクワットしてみてください。",
-    "reset": "リセット"
+    "reset": "リセット",
+    "debug": {
+      "title": "リアルタイムモーション情報",
+      "subtitle": "動作検出に使われている、あるいは使える可能性のあるセンサー値。閾値の調整や新しいタスクの発想に使ってください。",
+      "unavailable": "利用不可",
+      "checking": "確認中…",
+      "squatState": {
+        "title": "スクワット判定の状態",
+        "phase": "フェーズ",
+        "minMagnitude": "最小magnitude (しゃがみ深さ)",
+        "maxMagnitude": "最大magnitude (立ち上がり)",
+        "thresholds": "閾値 (m/s²)",
+        "phases": {
+          "standing": "立位",
+          "descending": "下降中",
+          "rising": "上昇中"
+        }
+      },
+      "accelerometer": {
+        "title": "加速度センサー (m/s²)",
+        "magnitude": "合成加速度"
+      },
+      "gyroscope": {
+        "title": "ジャイロスコープ (rad/s)"
+      },
+      "magnetometer": {
+        "title": "磁気センサー (µT)"
+      },
+      "barometer": {
+        "title": "気圧計",
+        "pressure": "気圧",
+        "relativeAltitude": "相対高度"
+      },
+      "pedometer": {
+        "title": "歩数 (Pedometer / ヘルスケア)",
+        "permission": "モーション権限",
+        "permissionGranted": "許可済み",
+        "permissionDenied": "未許可",
+        "stepsToday": "今日の歩数",
+        "stepsSinceWatchStart": "画面を開いてからの歩数",
+        "error": "エラー"
+      }
+    }
   }
 }
