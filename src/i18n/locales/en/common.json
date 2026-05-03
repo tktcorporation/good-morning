@@ -67,6 +67,48 @@
   "squatCheck": {
     "title": "Squat Check",
     "description": "Verify the squat detection using the exact same logic that runs when dismissing your alarm. Hold your device and try a real squat.",
-    "reset": "Reset"
+    "reset": "Reset",
+    "debug": {
+      "title": "Live motion data",
+      "subtitle": "Real-time sensor values used (or potentially usable) for movement detection. Use this to tune thresholds or imagine new task types.",
+      "unavailable": "Unavailable",
+      "checking": "Checking…",
+      "squatState": {
+        "title": "Squat detector state",
+        "phase": "Phase",
+        "minMagnitude": "Min magnitude (descend)",
+        "maxMagnitude": "Max magnitude (rise)",
+        "thresholds": "Thresholds (m/s²)",
+        "phases": {
+          "standing": "standing",
+          "descending": "descending",
+          "rising": "rising"
+        }
+      },
+      "accelerometer": {
+        "title": "Accelerometer (m/s²)",
+        "magnitude": "magnitude"
+      },
+      "gyroscope": {
+        "title": "Gyroscope (rad/s)"
+      },
+      "magnetometer": {
+        "title": "Magnetometer (µT)"
+      },
+      "barometer": {
+        "title": "Barometer",
+        "pressure": "pressure",
+        "relativeAltitude": "relative altitude"
+      },
+      "pedometer": {
+        "title": "Pedometer / Steps",
+        "permission": "Motion permission",
+        "permissionGranted": "Granted",
+        "permissionDenied": "Denied",
+        "stepsToday": "Steps today",
+        "stepsSinceWatchStart": "Steps since opened",
+        "error": "Error"
+      }
+    }
   }
 }
