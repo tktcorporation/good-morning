@@ -1,16 +1,58 @@
 diff --git a/ios/ExpoAlarmKitModule.swift b/ios/ExpoAlarmKitModule.swift
-index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..07a1692f2d11f6566ddf055818f51aeae5ccd7ae 100644
+index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..155f9564dc9bbb4aeecaff89a44dca5fb73c9055 100644
 --- a/ios/ExpoAlarmKitModule.swift
 +++ b/ios/ExpoAlarmKitModule.swift
-@@ -3,6 +3,7 @@ import AlarmKit
+@@ -3,6 +3,49 @@ import AlarmKit
  import ActivityKit
  import AppIntents
  import SwiftUI
 +import WidgetKit
++
++// MARK: - Live Activity Attributes
++//
++// 起床フローの Live Activity（ロック画面 + Dynamic Island）の属性定義。
++// Widget Extension 側（targets/widget/Attributes.swift）と型名・プロパティを
++// 完全一致させること。ActivityKit は request 時の Attributes 型と
++// ActivityConfiguration(for:) の型を結び付けるため、片方だけ変更すると
++// Live Activity が描画されなくなる。本体と Widget Extension は別モジュールのため、
++// 同一ソースの共有ではなく同一定義の二重管理になっている。変更時は両方を同時に更新する。
++struct GoodMorningWakeAttributes: ActivityAttributes {
++    public struct ContentState: Codable, Hashable {
++        public var todos: [LiveTodo]
++        public var snoozeEpoch: Double?
++        public init(todos: [LiveTodo], snoozeEpoch: Double?) {
++            self.todos = todos
++            self.snoozeEpoch = snoozeEpoch
++        }
++    }
++    public init() {}
++}
++
++struct LiveTodo: Codable, Hashable, Identifiable {
++    public var id: String
++    public var title: String
++    public var completed: Bool
++    public init(id: String, title: String, completed: Bool) {
++        self.id = id
++        self.title = title
++        self.completed = completed
++    }
++}
++
++/// JS から渡されたオブジェクト配列（{ id, title, completed }）を LiveTodo に変換する。
++private func parseLiveTodos(_ raw: [[String: Any]]) -> [LiveTodo] {
++    raw.map { dict in
++        LiveTodo(
++            id: dict["id"] as? String ?? "",
++            title: dict["title"] as? String ?? "",
++            completed: dict["completed"] as? Bool ?? false
++        )
++    }
++}
  
  // MARK: - Storage Keys
  private let alarmKeyPrefix = "ExpoAlarmKit.alarm:"
-@@ -61,6 +62,140 @@ public class ExpoAlarmKitStorage {
+@@ -61,6 +104,140 @@ public class ExpoAlarmKitStorage {
      public static func removeLaunchAppOnDismiss(alarmId: String) {
          sharedDefaults?.removeObject(forKey: launchAppKeyPrefix + alarmId)
      }
@@ -151,7 +193,7 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..07a1692f2d11f6566ddf055818f51aea
  }
  
  // MARK: - Record Structs for Expo Module
-@@ -126,34 +261,55 @@ private func buildLaunchPayload(alarmId: String, payload: String?) -> [String: A
+@@ -126,34 +303,55 @@ private func buildLaunchPayload(alarmId: String, payload: String?) -> [String: A
      ]
  }
  
@@ -214,7 +256,7 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..07a1692f2d11f6566ddf055818f51aea
          return .result()
      }
  }
-@@ -164,28 +320,37 @@ public struct AlarmDismissIntentWithLaunch: LiveActivityIntent {
+@@ -164,28 +362,37 @@ public struct AlarmDismissIntentWithLaunch: LiveActivityIntent {
      public static var title: LocalizedStringResource = "Dismiss Alarm"
      public static var description = IntentDescription("Handles alarm dismissal and opens app")
      public static var openAppWhenRun: Bool = true
@@ -259,7 +301,7 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..07a1692f2d11f6566ddf055818f51aea
          return .result()
      }
  }
-@@ -576,5 +741,56 @@ public class ExpoAlarmKitModule: Module {
+@@ -576,5 +783,109 @@ public class ExpoAlarmKitModule: Module {
              ExpoAlarmKitModule.launchPayload = nil
              return payload
          }
@@ -313,6 +355,59 @@ index 1e731f8ed558fbfbcef30eba55ac01d6a7be51d9..07a1692f2d11f6566ddf055818f51aea
 +            if #available(iOS 14.0, *) {
 +                WidgetCenter.shared.reloadAllTimelines()
 +            }
++        }
++
++        // MARK: - Live Activity (起床ミッション)
++        // 起床フローの進捗とスヌーズカウントダウンを Live Activity で表示する。
++        // 表示 UI は Widget Extension (targets/widget/LiveActivity.swift) が
++        // GoodMorningWakeAttributes に対して ActivityConfiguration で定義する。
++        // start は activityId を返し、JS 側が session に保存して update/end に使う。
++
++        // MARK: Start Live Activity
++        AsyncFunction("startLiveActivity") { (todos: [[String: Any]], snoozeEpoch: Double?) -> String? in
++            guard #available(iOS 16.2, *) else { return nil }
++            // ユーザーが Live Activity を無効化している場合は何もしない（JS 側は null を許容）。
++            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }
++            let state = GoodMorningWakeAttributes.ContentState(
++                todos: parseLiveTodos(todos),
++                snoozeEpoch: snoozeEpoch
++            )
++            do {
++                let activity = try Activity.request(
++                    attributes: GoodMorningWakeAttributes(),
++                    content: ActivityContent(state: state, staleDate: nil)
++                )
++                return activity.id
++            } catch {
++                print("[ExpoAlarmKit] startLiveActivity failed: \(error)")
++                return nil
++            }
++        }
++
++        // MARK: Update Live Activity
++        AsyncFunction("updateLiveActivity") { (activityId: String, todos: [[String: Any]], snoozeEpoch: Double?) async -> Bool in
++            guard #available(iOS 16.2, *) else { return false }
++            let state = GoodMorningWakeAttributes.ContentState(
++                todos: parseLiveTodos(todos),
++                snoozeEpoch: snoozeEpoch
++            )
++            var updated = false
++            for activity in Activity<GoodMorningWakeAttributes>.activities where activity.id == activityId {
++                await activity.update(ActivityContent(state: state, staleDate: nil))
++                updated = true
++            }
++            return updated
++        }
++
++        // MARK: End Live Activity
++        AsyncFunction("endLiveActivity") { (activityId: String) async -> Bool in
++            guard #available(iOS 16.2, *) else { return false }
++            var ended = false
++            for activity in Activity<GoodMorningWakeAttributes>.activities where activity.id == activityId {
++                await activity.end(nil, dismissalPolicy: .immediate)
++                ended = true
++            }
++            return ended
 +        }
      }
  }

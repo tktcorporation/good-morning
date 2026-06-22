@@ -23,6 +23,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.tktcorporation.goodmorning',
+    // Widget Extension（@bacons/apple-targets）の署名に Apple Team ID が必要。
+    // メインアプリは EAS 管理の証明書で署名するため従来は不要だったが、
+    // Extension ターゲットを追加すると prebuild 時に要求される。
+    // 秘匿情報ではないが環境ごとに異なるため、ハードコードせず APPLE_TEAM_ID 環境変数で渡す。
+    // 未設定でも CI の Simulator ビルド（CODE_SIGNING_ALLOWED=NO）は通る。
+    appleTeamId: process.env.APPLE_TEAM_ID,
     infoPlist: {
       UIBackgroundModes: ['audio', 'fetch'],
       ITSAppUsesNonExemptEncryption: false,
@@ -56,6 +62,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-asset',
     'expo-audio',
     'expo-localization',
+    // Widget Extension（ホームウィジェット + Live Activity）を Xcode ターゲットとして生成する。
+    // 実体は targets/widget/ 配下の Swift。prebuild で ios/ にリンクされる。
+    // Live Activity の表示には Widget Extension が必須のため、このプラグインが無いと
+    // startLiveActivity / syncWidgetData が App Groups に書き込んでも表示先が存在しない。
+    '@bacons/apple-targets',
     [
       'expo-build-properties',
       {
