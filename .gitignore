@@ -38,6 +38,11 @@ Thumbs.db
 # Testing
 coverage/
 
+# Claude Code hooks のローカル状態ファイル
+# record-pr-review.sh / require-pr-self-review.sh が PR セルフレビュー回数を記録する。
+# worktree を汚さず、誤って commit されないよう ignore する。
+.claude/.pr-review-count
+
 # Misc
 *.tsbuildinfo
 *.log
