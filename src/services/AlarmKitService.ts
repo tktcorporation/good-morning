@@ -17,6 +17,13 @@ import { AlarmKitOperationError, AlarmKitUnavailableError } from './errors';
 /** AlarmKit の操作で発生しうるエラーの union 型 */
 export type AlarmKitError = AlarmKitUnavailableError | AlarmKitOperationError;
 
+/**
+ * expo-alarm-kit が出荷する型。型付きの公開 API（configure / requestAuthorization /
+ * scheduleAlarm 等）はこの型で参照する。ウィジェット同期・Live Activity 等の
+ * パッチで追加した関数は出荷型に含まれないため、別途 typeof ガード経由で呼ぶ。
+ */
+type AlarmKitModule = typeof import('expo-alarm-kit');
+
 // ─── サービスインターフェース ────────────────────────────────────
 
 export interface AlarmKitService {
@@ -106,9 +113,9 @@ const APP_GROUP_ID = 'group.com.tktcorporation.goodmorning';
 export const AlarmKitLive = Layer.effect(
   AlarmKit,
   Effect.gen(function* () {
-    let kit: ReturnType<typeof require> | null = null;
+    let kit: AlarmKitModule | null = null;
     try {
-      kit = require('expo-alarm-kit');
+      kit = require('expo-alarm-kit') as AlarmKitModule;
     } catch {
       // Layer 構築自体は成功させ、各操作で UnavailableError を返す
     }
@@ -123,8 +130,7 @@ export const AlarmKitLive = Layer.effect(
           new AlarmKitUnavailableError({ message: 'Native module not available' }),
         );
       }
-      // biome-ignore lint/suspicious/noExplicitAny: expo-alarm-kit has no exported type for the module
-      return kit as any;
+      return kit;
     });
 
     return AlarmKit.of({
@@ -134,19 +140,19 @@ export const AlarmKitLive = Layer.effect(
         if (!configured) {
           return yield* Effect.fail(new AlarmKitOperationError({ operation: 'configure' }));
         }
-        const status = (yield* Effect.promise(() => k.requestAuthorization())) as string;
+        const status = yield* Effect.promise(() => k.requestAuthorization());
         return status === 'authorized' ? ('authorized' as const) : ('denied' as const);
       }),
 
       checkLaunchPayload: Effect.sync(() => {
         if (kit === null) return null;
-        return kit.getLaunchPayload() as { alarmId: string; payload: string | null } | null;
+        return kit.getLaunchPayload();
       }),
 
       scheduleRepeatingAlarm: (params) =>
         Effect.gen(function* () {
           const k = yield* requireKit;
-          const result = (yield* Effect.tryPromise({
+          return yield* Effect.tryPromise({
             try: () =>
               k.scheduleRepeatingAlarm({
                 ...params,
@@ -154,22 +160,20 @@ export const AlarmKitLive = Layer.effect(
               }),
             catch: (cause) =>
               new AlarmKitOperationError({ operation: 'scheduleRepeatingAlarm', cause }),
-          })) as boolean;
-          return result;
+          });
         }),
 
       scheduleAlarm: (params) =>
         Effect.gen(function* () {
           const k = yield* requireKit;
-          const result = (yield* Effect.tryPromise({
+          return yield* Effect.tryPromise({
             try: () =>
               k.scheduleAlarm({
                 ...params,
                 launchAppOnDismiss: true,
               }),
             catch: (cause) => new AlarmKitOperationError({ operation: 'scheduleAlarm', cause }),
-          })) as boolean;
-          return result;
+          });
         }),
 
       cancelAlarm: (id) =>
@@ -183,12 +187,12 @@ export const AlarmKitLive = Layer.effect(
 
       getAllAlarms: Effect.sync(() => {
         if (kit === null) return [];
-        return kit.getAllAlarms() as string[];
+        return kit.getAllAlarms();
       }),
 
       generateUUID: Effect.sync(() => {
         if (kit === null) return `fallback-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        return kit.generateUUID() as string;
+        return kit.generateUUID();
       }),
 
       syncWidgetData: (json) =>

@@ -69,3 +69,46 @@ export interface MorningSession {
    */
   readonly snoozeFiresAt: string | null;
 }
+
+/**
+ * AsyncStorage に保存された MorningSession。後から追加されたフィールドは
+ * レガシーデータでは欠落しうるため optional とし、normalizeStoredSession で
+ * 既定値を補って MorningSession に変換する。
+ *
+ * MorningSession に新フィールドを足すと、ここ（Omit 対象でなければ必須のまま）と
+ * normalizeStoredSession の両方でコンパイルエラーになり、移行漏れを型で検知できる。
+ */
+export type StoredMorningSession = Omit<
+  MorningSession,
+  'recordId' | 'windowEnd' | 'liveActivityId' | 'goalDeadline' | 'snoozeAlarmIds' | 'snoozeFiresAt'
+> &
+  Partial<
+    Pick<
+      MorningSession,
+      | 'recordId'
+      | 'windowEnd'
+      | 'liveActivityId'
+      | 'goalDeadline'
+      | 'snoozeAlarmIds'
+      | 'snoozeFiresAt'
+    >
+  >;
+
+/**
+ * 保存済みセッションを現行の MorningSession に正規化する。
+ * windowEnd が無いレガシーデータは startedAt + 60 分をフォールバックにする
+ * （isExpired がこの値で駆動されるため、欠落させられない）。
+ */
+export function normalizeStoredSession(stored: StoredMorningSession): MorningSession {
+  return {
+    ...stored,
+    recordId: stored.recordId ?? null,
+    windowEnd:
+      stored.windowEnd ??
+      new Date(new Date(stored.startedAt).getTime() + 60 * 60 * 1000).toISOString(),
+    liveActivityId: stored.liveActivityId ?? null,
+    goalDeadline: stored.goalDeadline ?? null,
+    snoozeAlarmIds: stored.snoozeAlarmIds ?? [],
+    snoozeFiresAt: stored.snoozeFiresAt ?? null,
+  };
+}
