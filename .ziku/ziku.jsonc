@@ -21,6 +21,8 @@
     ".github/workflows/label.yml",
     ".github/labeler.yml",
     ".mcp.json",
-    ".mise.toml"
+    ".mise.toml",
+    ".claude/skills/pr-first-reader-check",
+    ".claude/skills/package-upgrade/SKILL.md"
   ]
 }
