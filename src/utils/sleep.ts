@@ -1,3 +1,4 @@
+import { MINUTES_PER_DAY } from '../constants/time';
 import type { AlarmTime } from '../types/alarm';
 
 export const MIN_SLEEP_MINUTES = 300;
@@ -18,7 +19,7 @@ export function calculateBedtime(
   if (targetSleepMinutes === null) return null;
   const alarmTotalMinutes = alarmTime.hour * 60 + alarmTime.minute;
   let bedtimeMinutes = alarmTotalMinutes - targetSleepMinutes;
-  if (bedtimeMinutes < 0) bedtimeMinutes += 1440;
+  if (bedtimeMinutes < 0) bedtimeMinutes += MINUTES_PER_DAY;
   const hour = Math.floor(bedtimeMinutes / 60) % 24;
   const minute = bedtimeMinutes % 60;
   return { hour, minute };
@@ -38,7 +39,7 @@ export function migrateBedtimeToSleepMinutes(
   const alarmMinutes = defaultTime.hour * 60 + defaultTime.minute;
   const bedtimeMinutes = bedtimeTarget.hour * 60 + bedtimeTarget.minute;
   let diff = alarmMinutes - bedtimeMinutes;
-  if (diff <= 0) diff += 1440;
+  if (diff <= 0) diff += MINUTES_PER_DAY;
   return Math.max(MIN_SLEEP_MINUTES, Math.min(MAX_SLEEP_MINUTES, diff));
 }
 
@@ -48,4 +49,23 @@ export function migrateBedtimeToSleepMinutes(
 export function formatSleepDuration(minutes: number): string {
   const hours = minutes / 60;
   return `${hours}h`;
+}
+
+/**
+ * 睡眠時間（分）を時・分に分解する。例: 445 → { h: 7, m: 25 }。
+ * i18n の「Xh Ym」表示テンプレートに渡す。
+ */
+export function splitDuration(totalMinutes: number): { h: number; m: number } {
+  return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
+}
+
+/**
+ * ISO datetime 文字列を端末ローカルの "HH:MM" 表示に整形する。
+ * 就寝・起床時刻の表示に使う。
+ */
+export function formatTimeFromIso(isoString: string): string {
+  const date = new Date(isoString);
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
 }

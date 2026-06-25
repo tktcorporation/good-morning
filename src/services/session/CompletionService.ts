@@ -13,13 +13,12 @@ import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { MorningSession } from '../../types/morning-session';
-import type { WakeTodoRecord } from '../../types/wake-record';
 import { AlarmKit } from '../AlarmKitService';
 import { cancelAlarmsByIds } from '../AlarmSchedulerService';
 import { syncAlarmsEffect } from '../AlarmSyncService';
 import type { Notification } from '../NotificationService';
 import { cancelReminderNotifications } from '../TodoReminderService';
-import type { SessionError } from './types';
+import { type SessionError, toWakeTodoRecords } from './types';
 
 /**
  * TODO 全完了時の処理 Effect。
@@ -56,13 +55,7 @@ export const onAllTodosCompletedEffect = (
       const todoCompletionSeconds = Math.round(
         (now.getTime() - new Date(session.startedAt).getTime()) / 1000,
       );
-      const todoRecords: readonly WakeTodoRecord[] = session.todos.map((todo, index) => ({
-        id: todo.id,
-        title: todo.title,
-        completedAt: todo.completedAt,
-        orderCompleted: todo.completed ? index + 1 : null,
-        type: todo.type,
-      }));
+      const todoRecords = toWakeTodoRecords(session.todos);
 
       const goalBasedResult =
         session.goalDeadline !== null
@@ -109,11 +102,11 @@ export const expireSessionIfNeeded: Effect.Effect<boolean, SessionError, AlarmKi
     }
 
     // 1.5. リマインド通知キャンセル
-    yield* Effect.catchAll(cancelReminderNotifications, () => Effect.void);
+    yield* cancelReminderNotifications.pipe(Effect.catchAll(() => Effect.void));
 
     // 2. Live Activity 終了
     if (session.liveActivityId !== null) {
-      yield* Effect.catchAll(kit.endLiveActivity(session.liveActivityId), () => Effect.void);
+      yield* kit.endLiveActivity(session.liveActivityId).pipe(Effect.catchAll(() => Effect.void));
     }
 
     // 3. WakeRecord 更新
@@ -123,13 +116,7 @@ export const expireSessionIfNeeded: Effect.Effect<boolean, SessionError, AlarmKi
       const todoCompletionSeconds = Math.round(
         (now.getTime() - new Date(session.startedAt).getTime()) / 1000,
       );
-      const todoRecords: readonly WakeTodoRecord[] = session.todos.map((todo, index) => ({
-        id: todo.id,
-        title: todo.title,
-        completedAt: todo.completedAt,
-        orderCompleted: todo.completed ? index + 1 : null,
-        type: todo.type,
-      }));
+      const todoRecords = toWakeTodoRecords(session.todos);
       const allCompleted = session.todos.every((t) => t.completed);
 
       yield* Effect.promise(() =>

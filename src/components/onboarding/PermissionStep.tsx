@@ -6,7 +6,7 @@ import {
   type PermissionItem,
   type PermissionStatus,
 } from '../../constants/permissions';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { borderRadius, colors, fontSize, semanticColors, spacing } from '../../constants/theme';
 import { StepButton } from './StepButton';
 import { StepHeader } from './StepHeader';
 
@@ -103,10 +103,8 @@ function PermissionRow({ permission, status, onRequest }: PermissionRowProps) {
 
   const buttonTextStyle = status === 'granted' ? styles.btnTextGranted : styles.btnTextDefault;
 
-  // i18nKey は permissions.ts で定義された固定文字列だが、型上は string なので
-  // テンプレートリテラルでは i18next の型推論が効かない。as never でバイパスする。
-  const nameKey = `permission.items.${permission.i18nKey}.name` as never;
-  const descKey = `permission.items.${permission.i18nKey}.description` as never;
+  const nameKey = `permission.items.${permission.i18nKey}.name` as const;
+  const descKey = `permission.items.${permission.i18nKey}.description` as const;
 
   return (
     <View style={styles.row}>
@@ -208,10 +206,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   btnGranted: {
-    backgroundColor: 'rgba(46, 213, 115, 0.15)',
+    backgroundColor: semanticColors.successLight,
   },
   btnDenied: {
-    backgroundColor: 'rgba(255, 165, 2, 0.15)',
+    backgroundColor: semanticColors.warningLight,
   },
   btnText: {
     fontSize: fontSize.sm,

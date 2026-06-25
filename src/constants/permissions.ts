@@ -16,8 +16,14 @@ export interface PermissionItem {
   readonly id: string;
   /** UI表示用の絵文字アイコン */
   readonly icon: string;
-  /** i18n キー (common namespace の settings.permissions 下) */
-  readonly i18nKey: string;
+  /**
+   * i18n キーの末尾セグメント。リテラル union にすることで
+   * `permission.items.${i18nKey}.name`（onboarding）/
+   * `settings.permissionItems.${i18nKey}.name`（common）が型付きキーとして解決でき、
+   * t() 呼び出しの型アサーションを不要にする。権限を追加するときは両 namespace の
+   * リソースにも対応キーを追加する（無ければコンパイルエラーで検知される）。
+   */
+  readonly i18nKey: 'alarmKit' | 'healthKit';
   /** true = オンボーディングで必須、false = オプション */
   readonly required: boolean;
   /** 権限をリクエストする関数。成功時 true を返す */

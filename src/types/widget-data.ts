@@ -9,6 +9,8 @@
  * → Widget Extension の TimelineProvider が読み取り → WidgetKit で表示
  */
 
+import type { DailyGrade } from './daily-grade';
+
 export interface WidgetTodo {
   readonly id: string;
   readonly title: string;
@@ -28,7 +30,7 @@ export interface WidgetData {
   } | null;
   readonly streak: {
     readonly currentStreak: number;
-    readonly lastGrade: string; // DailyGrade
+    readonly lastGrade: DailyGrade;
   };
   readonly updatedAt: string;
 }

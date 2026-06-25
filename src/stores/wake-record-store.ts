@@ -1,9 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage-keys';
+import { MS_PER_DAY } from '../constants/time';
 import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
-import { createWakeRecordId, formatDateString } from '../types/wake-record';
+import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
+import { formatLocalDate } from '../utils/date';
 
-const STORAGE_KEY = 'wake-records';
+const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
 
 interface WakeRecordState {
   readonly records: readonly WakeRecord[];
@@ -28,19 +31,17 @@ interface WakeRecordState {
   /**
    * 指定された開始・終了日文字列の範囲内のレコードを返す。
    *
-   * 背景: WakeRecord.date は getLogicalDateString (dayBoundaryHour 考慮) で保存されるため、
-   * 呼び出し元も同じく論理日付文字列を渡す必要がある。
-   * 以前は Date を受け取り formatDateString で変換していたが、dayBoundaryHour を無視するため
-   * 深夜帯にレコードが見つからない不具合があった。
+   * WakeRecord.date は getLogicalDateString (dayBoundaryHour 考慮) で保存されるため、
+   * 呼び出し元も同じく論理日付文字列を渡すこと。ローカル暦日でそのまま変換すると
+   * dayBoundaryHour を無視し、深夜帯にレコードが見つからない。
    */
   getRecordsForPeriod: (startStr: string, endStr: string) => readonly WakeRecord[];
   /**
    * 指定された開始日文字列から7日間の統計を返す。
    *
-   * 背景: WakeRecord.date は getLogicalDateString (dayBoundaryHour 考慮) で保存されるため、
-   * 呼び出し元も同じく論理日付文字列を渡す必要がある。
-   * 以前は Date を受け取り formatDateString で変換していたが、dayBoundaryHour を無視するため
-   * 深夜帯にレコードが見つからない不具合があった。
+   * WakeRecord.date は getLogicalDateString (dayBoundaryHour 考慮) で保存されるため、
+   * 呼び出し元も同じく論理日付文字列を渡すこと。ローカル暦日でそのまま変換すると
+   * dayBoundaryHour を無視し、深夜帯にレコードが見つからない。
    */
   getWeekStats: (weekStartStr: string) => WakeStats;
   getCurrentStreak: () => number;
@@ -48,10 +49,6 @@ interface WakeRecordState {
 
 async function persistRecords(records: readonly WakeRecord[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-}
-
-function isSuccessResult(result: WakeResult): boolean {
-  return result === 'great' || result === 'ok';
 }
 
 export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
@@ -116,7 +113,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   getWeekStats: (weekStartStr: string): WakeStats => {
     const weekEnd = new Date(`${weekStartStr}T00:00:00`);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    const endStr = formatDateString(weekEnd);
+    const endStr = formatLocalDate(weekEnd);
     const periodRecords = get().records.filter((r) => r.date >= weekStartStr && r.date <= endStr);
 
     const totalRecords = periodRecords.length;
@@ -151,7 +148,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     let streak = 0;
 
     for (const record of sorted) {
-      if (isSuccessResult(record.result)) {
+      if (isSuccessWakeResult(record.result)) {
         streak += 1;
         if (streak > longestStreak) {
           longestStreak = streak;
@@ -186,13 +183,13 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
       // Check for date gap: if more than 1 day between consecutive records, break streak
       if (previousDate !== null) {
         const diffMs = previousDate.getTime() - currentDate.getTime();
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        const diffDays = diffMs / MS_PER_DAY;
         if (diffDays > 1) {
           break;
         }
       }
 
-      if (isSuccessResult(record.result)) {
+      if (isSuccessWakeResult(record.result)) {
         streak += 1;
         previousDate = currentDate;
       } else {

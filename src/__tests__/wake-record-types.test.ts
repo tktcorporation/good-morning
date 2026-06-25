@@ -2,6 +2,7 @@ import {
   calculateDiffMinutes,
   calculateWakeResult,
   createWakeRecordId,
+  isSuccessWakeResult,
 } from '../types/wake-record';
 
 describe('createWakeRecordId', () => {
@@ -10,6 +11,17 @@ describe('createWakeRecordId', () => {
     const id2 = createWakeRecordId();
     expect(id1.startsWith('wake_')).toBe(true);
     expect(id1).not.toBe(id2);
+  });
+});
+
+describe('isSuccessWakeResult', () => {
+  it('great と ok は成功とみなす', () => {
+    expect(isSuccessWakeResult('great')).toBe(true);
+    expect(isSuccessWakeResult('ok')).toBe(true);
+  });
+  it('late と missed は成功とみなさない', () => {
+    expect(isSuccessWakeResult('late')).toBe(false);
+    expect(isSuccessWakeResult('missed')).toBe(false);
   });
 });
 

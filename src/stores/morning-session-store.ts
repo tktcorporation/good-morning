@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage-keys';
 import { runEffectFork, syncWidgetEffect } from '../services';
 import type { MorningSession, SessionTodo } from '../types/morning-session';
 
-const STORAGE_KEY = 'morning-session';
+const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
 interface MorningSessionState {
   readonly session: MorningSession | null;

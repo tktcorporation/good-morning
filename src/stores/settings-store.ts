@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage-keys';
 
-const STORAGE_KEY = 'app-settings';
+const STORAGE_KEY = STORAGE_KEYS.appSettings;
 const DEFAULT_DAY_BOUNDARY_HOUR = 3;
 
 interface AppSettings {

@@ -1,4 +1,9 @@
-import { calculateBedtime, migrateBedtimeToSleepMinutes } from '../utils/sleep';
+import {
+  calculateBedtime,
+  formatTimeFromIso,
+  migrateBedtimeToSleepMinutes,
+  splitDuration,
+} from '../utils/sleep';
 
 describe('calculateBedtime', () => {
   test('基本: alarm 6:00 - 7h = 23:00', () => {
@@ -35,6 +40,25 @@ describe('migrateBedtimeToSleepMinutes', () => {
   });
   test('clamp max: long diff → 600', () => {
     expect(migrateBedtimeToSleepMinutes({ hour: 18, minute: 0 }, { hour: 6, minute: 0 })).toBe(600);
+  });
+});
+
+describe('splitDuration', () => {
+  test('分を時・分に分解する: 445 → 7h25m', () => {
+    expect(splitDuration(445)).toEqual({ h: 7, m: 25 });
+  });
+  test('ちょうど割り切れる: 420 → 7h0m', () => {
+    expect(splitDuration(420)).toEqual({ h: 7, m: 0 });
+  });
+  test('1時間未満: 30 → 0h30m', () => {
+    expect(splitDuration(30)).toEqual({ h: 0, m: 30 });
+  });
+});
+
+describe('formatTimeFromIso', () => {
+  test('ISO 文字列をローカル HH:MM に整形しゼロ埋めする', () => {
+    const iso = new Date(2026, 1, 22, 6, 5).toISOString();
+    expect(formatTimeFromIso(iso)).toBe('06:05');
   });
 });
 

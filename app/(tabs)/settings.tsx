@@ -101,9 +101,7 @@ export default function SettingsScreen() {
       } else {
         setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'denied' }));
         Alert.alert(
-          t(
-            `settings.permissionItems.${perm.i18nKey}.name` as 'settings.permissionItems.alarmKit.name',
-          ),
+          t(`settings.permissionItems.${perm.i18nKey}.name`),
           t('settings.permissionRequestFailed'),
         );
       }
@@ -172,9 +170,7 @@ export default function SettingsScreen() {
               <View style={styles.permissionInfo}>
                 <Text style={styles.permissionIcon}>{perm.icon}</Text>
                 <Text style={styles.permissionName}>
-                  {t(
-                    `settings.permissionItems.${perm.i18nKey}.name` as 'settings.permissionItems.alarmKit.name',
-                  )}
+                  {t(`settings.permissionItems.${perm.i18nKey}.name`)}
                 </Text>
               </View>
               <Text

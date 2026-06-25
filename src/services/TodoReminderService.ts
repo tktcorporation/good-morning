@@ -9,17 +9,16 @@
  */
 
 import { Effect } from 'effect';
+import { SNOOZE_DURATION_SECONDS, SNOOZE_MAX_COUNT } from '../constants/alarm-timing';
 import type { NotificationError } from './errors';
 import { Notification } from './NotificationService';
 
 const REMINDER_ID_PREFIX = 'todo-reminder-';
 
-/**
- * リマインド通知の間隔（秒）。スヌーズと同じ 9 分間隔。
- */
-const REMINDER_INTERVAL_SECONDS = 540;
-
-const REMINDER_MAX_COUNT = 20;
+// リマインド通知はスヌーズアラームと同じケイデンス（9 分間隔・3 時間分）で発火し、
+// 両者がズレないよう constants/alarm-timing の値を共有する。
+const REMINDER_INTERVAL_SECONDS = SNOOZE_DURATION_SECONDS;
+const REMINDER_MAX_COUNT = SNOOZE_MAX_COUNT;
 
 /**
  * TODO 未完了リマインド通知を先行スケジュールする Effect。

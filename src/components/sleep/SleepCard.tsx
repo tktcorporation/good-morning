@@ -13,15 +13,11 @@ import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
 import type { DailySummary } from '../../hooks/useDailySummary';
 import { initHealthKit } from '../../services/health';
 import { useSettingsStore } from '../../stores/settings-store';
+import { formatTimeFromIso, splitDuration } from '../../utils/sleep';
 import { SleepTimelineBar } from './SleepTimelineBar';
 
 interface SleepCardProps {
   readonly summary: DailySummary;
-}
-
-function formatTimeFromIso(isoString: string): string {
-  const date = new Date(isoString);
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
 export function SleepCard({ summary }: SleepCardProps) {
@@ -100,10 +96,7 @@ export function SleepCard({ summary }: SleepCardProps) {
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <Text style={styles.durationText}>
-          {t('healthKit.sleep.hours', {
-            h: Math.floor(sleep.totalMinutes / 60),
-            m: sleep.totalMinutes % 60,
-          })}
+          {t('healthKit.sleep.hours', splitDuration(sleep.totalMinutes))}
         </Text>
       </View>
 

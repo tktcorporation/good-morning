@@ -14,8 +14,10 @@
  * - WidgetSyncService : App Groups ウィジェットデータ同期
  * - session/         : セッションライフサイクル（dismiss → completion → recovery）
  * - compat.ts        : React コンポーネント用の async/sync ラッパー
- * - health.ts        : HealthKit 睡眠データ取得（Effect 非依存の純粋ラッパー）
- * - background-sync.ts : バックグラウンドウィジェット同期タスク
+ *
+ * health.ts（HealthKit 睡眠データ）と background-sync.ts（バックグラウンド同期）は
+ * プラットフォーム別解決と循環依存回避のためこのバレルからは再エクスポートせず、
+ * 各モジュールを直接 import する。
  */
 
 export type { AlarmKitError, AlarmKitService } from './AlarmKitService';

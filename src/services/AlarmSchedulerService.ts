@@ -11,16 +11,16 @@
  */
 
 import { Effect } from 'effect';
+import { SNOOZE_DURATION_SECONDS, SNOOZE_MAX_COUNT } from '../constants/alarm-timing';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { isNextOverrideExpired } from '../types/wake-target';
 import { AlarmKit, type AlarmKitError } from './AlarmKitService';
 
-/** iOSの標準アラームと同じ9分間隔 */
-export const SNOOZE_DURATION_SECONDS = 540;
-
-/** 先行スケジュールするスヌーズの最大本数。9分 × 20 = 3時間分。 */
-export const SNOOZE_MAX_COUNT = 20;
+// スヌーズ間隔・本数は TODO リマインドと同じケイデンスを共有するため
+// constants/alarm-timing に集約。既存の import 元（services/index.ts・テスト）を
+// 保つため、ここから再エクスポートする。
+export { SNOOZE_DURATION_SECONDS, SNOOZE_MAX_COUNT };
 
 /**
  * DayOfWeek (0=Sunday) → iOS Calendar weekday (1=Sunday)

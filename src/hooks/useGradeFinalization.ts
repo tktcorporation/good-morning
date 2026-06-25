@@ -141,9 +141,9 @@ export function useGradeFinalization(): void {
       try {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        // WakeRecord.date は getLogicalDateString で保存されるため、
-        // グレード確定の日付走査でも同じ関数で変換する。
-        // formatDateString は dayBoundaryHour を無視するため深夜帯に不整合が起きていた。
+        // WakeRecord.date は getLogicalDateString で保存されるため、グレード確定の
+        // 日付走査でも同じ関数で揃える。ローカル暦日でそのまま変換すると
+        // dayBoundaryHour を無視し、深夜帯に不整合が起きる。
         const yesterdayStr = getLogicalDateString(yesterday, dayBoundaryHour);
         const startDate = resolveStartDate(streak.lastGradedDate, yesterday);
         // targetSleepMinutes から bedtimeTarget を算出。
