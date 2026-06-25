@@ -16,17 +16,11 @@ import { useDailySummary } from '../src/hooks/useDailySummary';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { formatTime } from '../src/types/alarm';
-import type { WakeResult } from '../src/types/wake-record';
-
-const RESULT_LABELS: Readonly<Record<WakeResult, string>> = {
-  great: 'Great',
-  ok: 'OK',
-  late: 'Late',
-  missed: 'Missed',
-};
 
 export default function DayReviewScreen() {
   const { t } = useTranslation('dashboard');
+  // 起床結果ラベルと分差は stats namespace の翻訳を再利用する（ja/en とも翻訳済み）。
+  const { t: tStats } = useTranslation('stats');
   const { date } = useLocalSearchParams<{ readonly date: string }>();
   const records = useWakeRecordStore((s) => s.records);
 
@@ -63,7 +57,7 @@ export default function DayReviewScreen() {
         <>
           {/* Result Badge */}
           <View style={[styles.resultBadge, { backgroundColor: RESULT_COLORS[record.result] }]}>
-            <Text style={styles.resultBadgeText}>{RESULT_LABELS[record.result]}</Text>
+            <Text style={styles.resultBadgeText}>{tStats(record.result)}</Text>
           </View>
 
           {/* Time Info */}
@@ -86,8 +80,10 @@ export default function DayReviewScreen() {
               <Text style={styles.infoLabel}>{t('review.result')}</Text>
               <Text style={[styles.infoValue, { color: RESULT_COLORS[record.result] }]}>
                 {record.diffMinutes > 0
-                  ? `+${Math.round(record.diffMinutes)} min`
-                  : `${Math.round(record.diffMinutes)} min`}
+                  ? tStats('minutesLate', { count: Math.round(record.diffMinutes) })
+                  : record.diffMinutes < 0
+                    ? tStats('minutesEarly', { count: Math.abs(Math.round(record.diffMinutes)) })
+                    : tStats('onTime')}
               </Text>
             </View>
           </View>

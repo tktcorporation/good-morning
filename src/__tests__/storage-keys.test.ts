@@ -12,6 +12,7 @@ describe('STORAGE_KEYS', () => {
       wakeRecords: 'wake-records',
       dailyGrades: 'daily-grades',
       streakState: 'streak-state',
+      onboardingCompleted: 'onboarding-completed',
     });
   });
 

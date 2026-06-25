@@ -9,6 +9,7 @@ import { PermissionStep } from '../src/components/onboarding/PermissionStep';
 import { TimeStep } from '../src/components/onboarding/TimeStep';
 import { TodosStep } from '../src/components/onboarding/TodosStep';
 import { WelcomeStep } from '../src/components/onboarding/WelcomeStep';
+import { STORAGE_KEYS } from '../src/constants/storage-keys';
 import { colors, spacing } from '../src/constants/theme';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
@@ -54,7 +55,7 @@ export default function OnboardingScreen() {
       defaultTime,
       enabled: alarmEnabled,
     });
-    await AsyncStorage.setItem('onboarding-completed', 'true');
+    await AsyncStorage.setItem(STORAGE_KEYS.onboardingCompleted, 'true');
     router.replace('/');
   }, [defaultTime, setTarget, router, alarmEnabled]);
 
