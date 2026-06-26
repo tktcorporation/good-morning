@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage-keys';
 import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { DayOverride, WakeTarget } from '../types/wake-target';
@@ -13,8 +14,8 @@ import {
 } from '../types/wake-target';
 import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
 
-const STORAGE_KEY = 'wake-target';
-const ALARM_IDS_KEY = 'alarm-ids';
+const STORAGE_KEY = STORAGE_KEYS.wakeTarget;
+const ALARM_IDS_KEY = STORAGE_KEYS.alarmIds;
 
 interface WakeTargetState {
   readonly target: WakeTarget | null;

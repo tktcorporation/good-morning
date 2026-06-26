@@ -66,7 +66,7 @@ export const NotificationLive = Layer.succeed(
 
     getAllScheduled: Effect.tryPromise({
       try: () => Notifications.getAllScheduledNotificationsAsync(),
-      catch: (cause) => new NotificationError({ operation: 'cancel', cause }),
+      catch: (cause) => new NotificationError({ operation: 'list', cause }),
     }),
   }),
 );

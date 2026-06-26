@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
+import { STORAGE_KEYS } from '../src/constants/storage-keys';
 import { colors } from '../src/constants/theme';
 import {
   AlarmKit,
@@ -16,11 +17,23 @@ import {
   syncWidgetEffect,
 } from '../src/services';
 import { registerBackgroundSync } from '../src/services/background-sync';
+import { isSnoozePayload } from '../src/services/session/types';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
+
+/**
+ * 起動時の fire-and-forget 初期化の失敗をログに出して可視化する。
+ * 握り潰すと初回同期・認可確認の失敗が無言で消え、原因調査が困難になる。
+ */
+function logInitError(context: string): (error: unknown) => void {
+  return (error) => {
+    // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
+    console.error(`[RootLayout] ${context} failed`, error);
+  };
+}
 
 export default function RootLayout() {
   const { t } = useTranslation('dashboard');
@@ -42,12 +55,12 @@ export default function RootLayout() {
     const gradesLoaded = useDailyGradeStore.getState().loadGrades();
 
     // バックグラウンドフェッチ登録（fire-and-forget）
-    registerBackgroundSync().catch(() => {});
+    registerBackgroundSync().catch(logInitError('registerBackgroundSync'));
 
     // 全ストアロード完了後に Effect ランタイムで初回ウィジェット同期
     Promise.all([sessionLoaded, targetLoaded, recordsLoaded, settingsLoaded, gradesLoaded])
       .then(() => runEffect(syncWidgetEffect))
-      .catch(() => {});
+      .catch(logInitError('initial widget sync'));
 
     // AlarmKit の認可状態を Effect ランタイムで確認し、store に永続化
     runEffect(
@@ -61,37 +74,38 @@ export default function RootLayout() {
           setAlarmKitGranted(true);
         }
       })
-      .catch(() => {});
+      .catch(logInitError('AlarmKit initialize'));
 
     const coreLoaded = Promise.all([sessionLoaded, settingsLoaded]);
 
-    // handleAlarmEvent を Effect 版に切り替え。
-    // 従来の handleAlarmEvent と同じロジックだが、全副作用が Effect として型追跡される。
+    // スヌーズ経由の cold-start のみ session ロードを待てば足りる。
+    // それ以外は core（session + settings）を待ってからアラームイベントを処理する。
     const firstPayload = checkLaunchPayload();
     const waitFor = (() => {
       if (firstPayload === null) return Promise.all([coreLoaded, targetLoaded, recordsLoaded]);
-      try {
-        const parsed = JSON.parse(firstPayload.payload ?? '') as { isSnooze?: boolean };
-        if (parsed.isSnooze === true) return sessionLoaded;
-      } catch {}
+      if (isSnoozePayload(firstPayload)) return sessionLoaded;
       return coreLoaded;
     })();
 
-    waitFor.then(async () => {
-      await runEffect(
-        handleAlarmEventEffect('cold-start', {
-          routerPush: (path) => router.push(path),
-          dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
-          clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
-        }),
-      );
-      // アラーム状態を現在の target に同期する
-      await runEffect(syncAlarmsEffect);
-    });
+    waitFor
+      .then(async () => {
+        await runEffect(
+          handleAlarmEventEffect('cold-start', {
+            routerPush: (path) => router.push(path),
+            dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
+            clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
+          }),
+        );
+        // アラーム状態を現在の target に同期する
+        await runEffect(syncAlarmsEffect);
+      })
+      .catch(logInitError('cold-start alarm handling'));
 
-    AsyncStorage.getItem('onboarding-completed').then((val) => {
-      setOnboardingDone(val === 'true');
-    });
+    AsyncStorage.getItem(STORAGE_KEYS.onboardingCompleted)
+      .then((val) => {
+        setOnboardingDone(val === 'true');
+      })
+      .catch(logInitError('load onboarding flag'));
   }, [loadTarget, loadRecords, loadSession, loadSettings]);
 
   useEffect(() => {

@@ -13,6 +13,7 @@ import type { BedtimeResult, DailyGrade } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
 import { MAX_FREEZES } from '../types/streak';
 import type { WakeResult } from '../types/wake-record';
+import { normalizeMinuteDiff } from '../utils/date';
 
 /**
  * 朝の起床が「合格」かどうかを判定する。
@@ -82,19 +83,9 @@ export function evaluateBedtime(
   const actualMinutesFromMidnight = actualBedtime.getHours() * 60 + actualBedtime.getMinutes();
   const targetMinutesFromMidnight = targetHour * 60 + targetMinute;
 
-  let diffMinutes = actualMinutesFromMidnight - targetMinutesFromMidnight;
-
   // 日付をまたぐ場合の補正。
-  // 例: 目標 23:00 (1380分), 実際 0:30 (30分) → diff = -1350
-  // 24時間 (1440分) を足して diff = 90 → 「90分遅い」と正しく判定。
-  // 逆に: 目標 0:30 (30分), 実際 23:00 (1380分) → diff = 1350
-  // 24時間を引いて diff = -90 → 「90分早い」と正しく判定。
-  const HALF_DAY_MINUTES = 720;
-  if (diffMinutes > HALF_DAY_MINUTES) {
-    diffMinutes -= 1440;
-  } else if (diffMinutes < -HALF_DAY_MINUTES) {
-    diffMinutes += 1440;
-  }
+  // 例: 目標 23:00 (1380分), 実際 0:30 (30分) は素朴な diff=-1350 を +90 に畳む。
+  const diffMinutes = normalizeMinuteDiff(actualMinutesFromMidnight - targetMinutesFromMidnight);
 
   return Math.abs(diffMinutes) <= BEDTIME_TOLERANCE_MINUTES ? 'onTime' : 'late';
 }

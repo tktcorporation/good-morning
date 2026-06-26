@@ -30,8 +30,8 @@ export function useDailySummary(date: Date): DailySummary {
   const [loading, setLoading] = useState(true);
 
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
-  // WakeRecord.date は getLogicalDateString で保存されるため、同じ関数で変換して検索する。
-  // formatDateString は dayBoundaryHour を無視するため、深夜帯にレコードが見つからない不具合があった。
+  // WakeRecord.date は getLogicalDateString で保存されるため、検索も同じ関数で揃える。
+  // ローカル暦日でそのまま変換すると dayBoundaryHour を無視し、深夜帯にレコードが見つからない。
   const dateStr = getLogicalDateString(date, dayBoundaryHour);
   const records = useWakeRecordStore((s) => s.records);
   const updateRecord = useWakeRecordStore((s) => s.updateRecord);

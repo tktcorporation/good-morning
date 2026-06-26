@@ -1,6 +1,12 @@
 import { StyleSheet } from 'react-native';
-import type { DailyGrade } from '../types/daily-grade';
 import type { WakeResult } from '../types/wake-record';
+
+// グレード色は react-native 非依存の grade-symbols を SSOT とし、UI 側の慣用名で
+// 再エクスポートする（消費者は theme から import 済みのため名前を維持）。
+export {
+  GRADE_COLORS_MAP as GRADE_COLORS,
+  GRADE_UNDETERMINED_COLOR_VALUE as GRADE_UNDETERMINED_COLOR,
+} from './grade-symbols';
 
 export const colors = {
   background: '#1a1a2e',
@@ -49,21 +55,6 @@ export const RESULT_COLORS: Readonly<Record<WakeResult, string>> = {
   late: colors.warning,
   missed: colors.primary,
 };
-
-/**
- * DailyGrade ごとの表示色。
- * グレードアイコンやカレンダードットなど、グレードの視覚表現に使用する。
- * excellent は primary（アプリのアクセントカラー）で「最高」を強調。
- */
-export const GRADE_COLORS: Readonly<Record<DailyGrade, string>> = {
-  excellent: colors.primary,
-  good: '#4CAF50',
-  fair: '#FF9800',
-  poor: '#F44336',
-};
-
-/** グレード未確定時（データ不足・翌朝待ち）の表示色 */
-export const GRADE_UNDETERMINED_COLOR = '#9E9E9E';
 
 export const semanticColors = {
   successLight: 'rgba(46, 213, 115, 0.15)',

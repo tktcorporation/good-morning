@@ -31,7 +31,7 @@ export class StorageError extends Data.TaggedError('StorageError')<{
 
 /** expo-notifications の操作失敗 */
 export class NotificationError extends Data.TaggedError('NotificationError')<{
-  readonly operation: 'schedule' | 'cancel';
+  readonly operation: 'schedule' | 'cancel' | 'list';
   readonly cause?: unknown;
 }> {}
 

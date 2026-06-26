@@ -10,6 +10,7 @@
  */
 
 import type { AlarmTime } from '../types/alarm';
+import { formatTime } from '../types/alarm';
 import type { BedtimeResult, DailyGradeRecord } from '../types/daily-grade';
 import type { WakeRecord } from '../types/wake-record';
 
@@ -57,11 +58,8 @@ export function buildGradeRecord(
 
   const grade = calculateDailyGrade(morningPass, bedtimeResult);
 
-  // bedtimeTarget を HH:mm 文字列に変換（DailyGradeRecord の形式）
-  const bedtimeTargetStr =
-    bedtimeTarget !== null
-      ? `${String(bedtimeTarget.hour).padStart(2, '0')}:${String(bedtimeTarget.minute).padStart(2, '0')}`
-      : null;
+  // DailyGradeRecord は就寝目標を HH:mm 文字列で保持する。
+  const bedtimeTargetStr = bedtimeTarget !== null ? formatTime(bedtimeTarget) : null;
 
   return {
     date: dateStr,

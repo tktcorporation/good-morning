@@ -8,6 +8,8 @@
  */
 
 import type { AlarmTime } from '../../types/alarm';
+import type { SessionTodo } from '../../types/morning-session';
+import type { WakeTodoRecord } from '../../types/wake-record';
 import type { WakeTarget } from '../../types/wake-target';
 import { resolveTimeForDate } from '../../types/wake-target';
 import { getLogicalDateString } from '../../utils/date';
@@ -114,4 +116,21 @@ export function isSnoozeEvent(event: { payload: string }): boolean {
   } catch {
     return false;
   }
+}
+
+// ─── セッション TODO の永続化変換（純粋関数） ────────────────────
+
+/**
+ * セッションの TODO 群を永続化用の WakeTodoRecord に変換する。
+ * 完了済みタスクには配列順（1 始まり）を orderCompleted として付け、
+ * 未完了は null にする。完了/期限切れの両方の確定処理で共有する。
+ */
+export function toWakeTodoRecords(todos: readonly SessionTodo[]): readonly WakeTodoRecord[] {
+  return todos.map((todo, index) => ({
+    id: todo.id,
+    title: todo.title,
+    completedAt: todo.completedAt,
+    orderCompleted: todo.completed ? index + 1 : null,
+    type: todo.type,
+  }));
 }

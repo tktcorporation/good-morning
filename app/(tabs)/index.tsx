@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
+import { ProgressBar } from '../../src/components/ProgressBar';
 import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
@@ -134,16 +135,10 @@ function MorningRoutineSection({
     <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('morningRoutine.title')}</Text>
       <View style={styles.routineProgressContainer}>
-        <View style={styles.routineProgressBar}>
-          <View
-            style={[
-              styles.routineProgressFill,
-              {
-                width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%`,
-              },
-            ]}
-          />
-        </View>
+        <ProgressBar
+          ratio={progress.total > 0 ? progress.completed / progress.total : 0}
+          height={8}
+        />
         <Text style={styles.routineProgressText}>
           {t('morningRoutine.progress', {
             completed: progress.completed,
@@ -543,17 +538,6 @@ const styles = StyleSheet.create({
   // Morning Routine
   routineProgressContainer: {
     marginBottom: spacing.md,
-  },
-  routineProgressBar: {
-    height: 8,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-  },
-  routineProgressFill: {
-    height: '100%',
-    backgroundColor: colors.success,
-    borderRadius: borderRadius.full,
   },
   routineProgressText: {
     fontSize: fontSize.sm,

@@ -3,19 +3,11 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../constants/theme';
 import type { DailySummary } from '../../hooks/useDailySummary';
 import { useSettingsStore } from '../../stores/settings-store';
+import { formatTimeFromIso, splitDuration } from '../../utils/sleep';
 import { SleepTimelineBar } from './SleepTimelineBar';
 
 interface SleepDetailSectionProps {
   readonly summary: DailySummary;
-}
-
-function splitDuration(totalMinutes: number): { h: number; m: number } {
-  return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
-}
-
-function formatTimeFromIso(isoString: string): string {
-  const date = new Date(isoString);
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
 /**

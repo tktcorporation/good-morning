@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage-keys';
 import { runEffectFork, syncWidgetEffect } from '../services';
-import type { MorningSession, SessionTodo } from '../types/morning-session';
+import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
+import { normalizeStoredSession } from '../types/morning-session';
 
-const STORAGE_KEY = 'morning-session';
+const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
 interface MorningSessionState {
   readonly session: MorningSession | null;
@@ -72,25 +74,9 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   loadSession: async () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
-      const parsed = JSON.parse(raw) as MorningSession;
-      // マイグレーション: 後から追加されたフィールドが undefined になるレガシーデータに対応。
-      // undefined のまま使うとクラッシュするため、デフォルト値にフォールバックする。
-      // windowEnd が未設定のレガシーデータは startedAt + 60分 をフォールバックとする。
-      const legacyWindowEnd =
-        parsed.windowEnd ??
-        new Date(new Date(parsed.startedAt).getTime() + 60 * 60 * 1000).toISOString();
-      set({
-        session: {
-          ...parsed,
-          recordId: parsed.recordId ?? null,
-          windowEnd: legacyWindowEnd,
-          liveActivityId: parsed.liveActivityId ?? null,
-          goalDeadline: parsed.goalDeadline ?? null,
-          snoozeAlarmIds: parsed.snoozeAlarmIds ?? [],
-          snoozeFiresAt: parsed.snoozeFiresAt ?? null,
-        },
-        loaded: true,
-      });
+      // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
+      const parsed = JSON.parse(raw) as StoredMorningSession;
+      set({ session: normalizeStoredSession(parsed), loaded: true });
     } else {
       set({ loaded: true });
     }

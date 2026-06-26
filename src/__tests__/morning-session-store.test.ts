@@ -200,6 +200,20 @@ describe('morning-session-store', () => {
       expect(session?.snoozeAlarmIds).toEqual([]);
       expect(session?.snoozeFiresAt).toBeNull();
     });
+
+    it('falls back windowEnd to startedAt + 60min when missing in legacy data', async () => {
+      // windowEnd は isExpired を駆動するため、欠落時は startedAt + 60 分を補う。
+      const legacyData = {
+        recordId: 'wake_legacy',
+        date: '2026-02-22',
+        startedAt: '2026-02-22T07:00:00.000Z',
+        todos: [{ id: 'todo_1', title: 'Test', completed: false, completedAt: null }],
+      };
+      await AsyncStorage.setItem('morning-session', JSON.stringify(legacyData));
+
+      await useMorningSessionStore.getState().loadSession();
+      expect(useMorningSessionStore.getState().session?.windowEnd).toBe('2026-02-22T08:00:00.000Z');
+    });
   });
 
   describe('live activity state', () => {

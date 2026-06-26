@@ -27,13 +27,13 @@ export const GRADE_SYMBOLS: Readonly<Record<DailyGrade, string>> = {
 export const UNDETERMINED_SYMBOL = '\u30FB';
 
 /**
- * DailyGrade ごとの表示色。
+ * DailyGrade ごとの表示色（グレード色の SSOT）。
  * グレードアイコンやカレンダードットなど、グレードの視覚表現に使用する。
- * excellent は primary（アプリのアクセントカラー）で「最高」を強調。
+ * theme.ts はこれを GRADE_COLORS として再エクスポートする（react-native 非依存を
+ * 保つため色定義はこちらに置き、テストからも直接 import できる）。
  *
- * 値は theme.ts の colors.primary と同期する必要がある。
- * theme.ts 側にも GRADE_COLORS を定義しているが、こちらは react-native 非依存で
- * テストから参照しやすいようにしている。
+ * excellent はアプリのアクセントカラー（theme.ts の colors.primary = #e94560）と
+ * 同色にして「最高」を強調する意図。primary を変えるときはここも合わせる。
  */
 export const GRADE_COLORS_MAP: Readonly<Record<DailyGrade, string>> = {
   excellent: '#e94560',

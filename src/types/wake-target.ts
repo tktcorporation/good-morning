@@ -1,3 +1,4 @@
+import { formatLocalDate } from '../utils/date';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 /**
@@ -132,10 +133,7 @@ export function computeOverrideTargetDate(time: AlarmTime, now: Date = new Date(
   if (alarmDate.getTime() <= now.getTime()) {
     alarmDate.setDate(alarmDate.getDate() + 1);
   }
-  const y = alarmDate.getFullYear();
-  const m = String(alarmDate.getMonth() + 1).padStart(2, '0');
-  const d = String(alarmDate.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return formatLocalDate(alarmDate);
 }
 
 /** デフォルトの起床目標バッファ（分）。アラーム後30分以内にTODO完了で成功。 */

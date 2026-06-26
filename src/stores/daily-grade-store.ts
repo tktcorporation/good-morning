@@ -11,13 +11,14 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage-keys';
 import { applyGradeToStreak } from '../domain/grade-calculator';
 import { runEffectFork, syncWidgetEffect } from '../services';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
 
-const GRADES_STORAGE_KEY = 'daily-grades';
-const STREAK_STORAGE_KEY = 'streak-state';
+const GRADES_STORAGE_KEY = STORAGE_KEYS.dailyGrades;
+const STREAK_STORAGE_KEY = STORAGE_KEYS.streakState;
 
 /**
  * ストリークの初期状態。

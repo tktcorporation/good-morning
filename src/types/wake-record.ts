@@ -1,3 +1,4 @@
+import { normalizeMinuteDiff } from '../utils/date';
 import type { AlarmTime, TodoType } from './alarm';
 
 export type WakeResult = 'great' | 'ok' | 'late' | 'missed';
@@ -62,20 +63,17 @@ export function calculateWakeResult(diffMinutes: number): WakeResult {
   return 'late';
 }
 
+/**
+ * 起床結果が「成功」とみなせるか（great または ok）。
+ * ストリーク継続や成功率の集計で「起きられた日」を数える判定に使う。
+ */
+export function isSuccessWakeResult(result: WakeResult): boolean {
+  return result === 'great' || result === 'ok';
+}
+
 export function calculateDiffMinutes(targetTime: AlarmTime, actualTime: Date): number {
   const targetMinutes = targetTime.hour * 60 + targetTime.minute;
   const actualMinutes = actualTime.getHours() * 60 + actualTime.getMinutes();
-  let diff = actualMinutes - targetMinutes;
-  // 深夜跨ぎ補正: 23:50 target → 0:10 actual で diff=-1420 になるのを +20 に修正。
-  // ±720分（12時間）を閾値にする。evaluateBedtime と同じパターン。
-  if (diff < -720) diff += 1440;
-  if (diff > 720) diff -= 1440;
-  return diff;
-}
-
-export function formatDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // 深夜跨ぎ補正: 23:50 target → 0:10 actual の素朴な diff=-1420 を +20 に畳む。
+  return normalizeMinuteDiff(actualMinutes - targetMinutes);
 }
