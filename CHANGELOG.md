@@ -1,5 +1,22 @@
 # good-morning
 
+## 1.4.1
+
+### Patch Changes
+
+- [#84](https://github.com/tktcorporation/good-morning/pull/84) [`18e65fe`](https://github.com/tktcorporation/good-morning/commit/18e65fe785b43035e8607aa165c822336cd6db53) Thanks [@tktcorporation](https://github.com/tktcorporation)! - refactor: SSOT 化・重複ロジックの集約・型の厳密化（挙動は不変）
+
+  - 永続化キー / 時刻定数（分・日・ミリ秒）/ スヌーズ・リマインドのケイデンス / グレード色を単一定義に集約（`constants/storage-keys`・`constants/time`・`constants/alarm-timing`、grade 色は `grade-symbols` を SSOT に統一）
+  - YYYY-MM-DD 整形・深夜跨ぎの分差補正・起床成功判定・セッション TODO 変換・睡眠表示フォーマッタの重複実装を共通化
+  - `WidgetData.lastGrade` / 通知エラー operation / 権限 i18n キーの型を厳密化し、`as never` と偽リテラルキャストを除去
+  - 抽出した純粋関数の単体テストを追加（既存テストは全て緑のまま）
+
+- [#82](https://github.com/tktcorporation/good-morning/pull/82) [`554a8a3`](https://github.com/tktcorporation/good-morning/commit/554a8a3bcdbc09f0d4a371f82d766f58f239e25f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - chore: ziku pull でテンプレート(tktcorporation/.github)を最新へ同期し、Expo 依存を SDK 55 推奨バージョンへ更新。
+
+  - 共有開発環境設定（hooks/rules/skills/settings/devcontainer/mise）をテンプレート最新へ同期
+  - `npx expo install --fix` で Expo 関連 13 パッケージをパッチ更新し、`expo install --check`（CI: Expo Doctor）を解消
+  - PR セルフレビュー hook が書き込む `.claude/.pr-review-count` を `.gitignore` に追加
+
 ## 1.4.0
 
 ### Minor Changes
