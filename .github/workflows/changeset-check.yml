@@ -14,6 +14,9 @@ jobs:
   check:
     name: Check for changeset
     runs-on: ubuntu-latest
+    # changesets/action が作る Version PR は既存 changeset を消費するのが目的で、
+    # 新規 changeset が無いのが正常な状態のため対象から除外する。
+    if: github.head_ref != 'changeset-release/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
