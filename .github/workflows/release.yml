@@ -6,6 +6,9 @@
 #
 # 背景: eas-build.yml (全 push でビルド) を廃止し、
 # リリースタイミングでのみ EAS ビルドを実行してコストを最小化する。
+#
+# リリースの仕組み・ネイティブターゲット追加時の必須手順・失敗時の回収手順は
+# docs/release.md を参照。
 
 name: Release
 
@@ -14,45 +17,44 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      force_eas_build:
+        description: 'changesets の publish 判定を経由せず EAS ビルドを直接実行する（タグ済みだがビルドが存在しないリリースの回収用。対象のタグを ref に選んで実行すること）'
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-  pull-requests: write
-
-env:
-  NODE_VERSION: '22'
+  # cancel-in-progress にすると、publish 済み run が後続 push にキャンセルされたとき
+  # 「changeset は消費済み・タグは存在するがビルドが無い」状態が残るため無効化する。
+  # なお pending の run は GitHub の仕様上、より新しい run に置き換えられ得る。
+  # その場合の回収経路は docs/release.md の force_eas_build を使う。
+  cancel-in-progress: false
 
 jobs:
   changesets:
     name: Changesets
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    # force_eas_build 時は publish 判定をスキップして eas-build へ直行する
+    if: ${{ !inputs.force_eas_build }}
     outputs:
       published: ${{ steps.changesets.outputs.published }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup pnpm and install
+        uses: ./.github/actions/setup-pnpm
 
       - name: Create Release PR or Publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: pnpm version-packages
           # publish コマンドが未設定だと published output が常に false になり、
@@ -66,41 +68,63 @@ jobs:
   eas-build:
     name: EAS Build
     needs: changesets
-    if: needs.changesets.outputs.published == 'true'
+    # !cancelled(): force_eas_build 時は changesets ジョブが skip されるため、
+    # デフォルトの success() 条件のままだとこのジョブも道連れで skip される。
+    # force_eas_build は main かタグに限定し、レビューされていないブランチの
+    # コードが preview チャンネルへ配信される経路を塞ぐ。
+    if: >-
+      !cancelled() && (
+        needs.changesets.outputs.published == 'true' ||
+        (
+          inputs.force_eas_build &&
+          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        )
+      )
     runs-on: ubuntu-latest
+    # EAS クラウドビルドの完了待ち（キュー時間込み）を含むため長め
+    timeout-minutes: 90
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup pnpm and install
+        uses: ./.github/actions/setup-pnpm
 
       - name: Setup EAS CLI
-        uses: expo/expo-github-action@v8
+        uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Check fingerprint for existing build
+      # runtimeVersion policy が fingerprint のため、同じ runtimeVersion の完了済み
+      # ビルドが preview チャンネルに存在すれば OTA update だけで配信できる。
+      # 存在しなければフルビルド。
+      #
+      # runtimeVersion の計算は expo-updates 自身の解決コマンドに任せる。
+      # 独自に fingerprint を計算すると、platform の対象範囲や
+      # ライブラリのバージョン差で EAS が実際に付与する値とずれ、
+      # 「誰にも届かない update を publish する」事故につながる。
+      - name: Check runtime version for existing build
         id: fingerprint
         run: |
-          HASH=$(npx @expo/fingerprint . | jq -r '.hash')
-          echo "Fingerprint hash: $HASH"
+          set -euo pipefail
+          HASH=$(pnpm exec expo-updates runtimeversion:resolve --platform ios | jq -r '.runtimeVersion')
+          if [ -z "$HASH" ] || [ "$HASH" = "null" ]; then
+            echo "::error::runtimeVersion の解決に失敗した"
+            exit 1
+          fi
+          echo "Runtime version (fingerprint): $HASH"
 
-          # 同じ fingerprint を持つ完了済みビルドが存在するか確認
-          BUILD_ID=$(eas build:list --platform ios --status finished \
-            --json --non-interactive --limit 1 \
-            --runtimeVersion="$HASH" 2>/dev/null \
-            | jq -r '.[0].id // empty') || true
+          # eas build:list の失敗（認証切れ・ネットワーク断）と「互換ビルドなし」を
+          # 混同しない。前者はここで job を fail させ、原因をログに残す。
+          # --channel preview: 他プロファイル（development 等）のビルドを
+          # 「互換あり」と誤判定しないため、OTA の配信先チャンネルで絞る。
+          BUILDS_JSON=$(eas build:list --platform ios --status finished \
+            --channel preview --json --non-interactive --limit 1 \
+            --runtimeVersion="$HASH")
+          BUILD_ID=$(echo "$BUILDS_JSON" | jq -r '.[0].id // empty')
 
           if [ -n "$BUILD_ID" ]; then
             echo "native-changed=false" >> "$GITHUB_OUTPUT"
@@ -112,17 +136,24 @@ jobs:
 
       - name: Decode Apple ASC API Key
         if: steps.fingerprint.outputs.native-changed == 'true'
-        run: echo "$EXPO_ASC_API_KEY_P8_BASE64" | base64 -d > ./AuthKey.p8
+        # ワークスペース外 (RUNNER_TEMP) に置き、checkout や artifact 収集の経路から
+        # 構造的に隔離する。base64 が壊れていた場合は test -s で即失敗させる。
+        run: |
+          set -euo pipefail
+          printf '%s' "$EXPO_ASC_API_KEY_P8_BASE64" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
+          test -s "$RUNNER_TEMP/AuthKey.p8"
         env:
           EXPO_ASC_API_KEY_P8_BASE64: ${{ secrets.EXPO_ASC_API_KEY_P8_BASE64 }}
 
+      # 非対話ビルドは EAS サーバー上の登録済み credentials しか使えない。
+      # 新しいネイティブターゲットを追加した場合の事前登録手順は docs/release.md を参照。
       - name: Build iOS (internal distribution)
         if: steps.fingerprint.outputs.native-changed == 'true'
         run: eas build --platform ios --profile preview --non-interactive
         env:
           EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
           EXPO_ASC_ISSUER_ID: ${{ secrets.EXPO_ASC_ISSUER_ID }}
-          EXPO_ASC_API_KEY_PATH: ./AuthKey.p8
+          EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
           EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
 

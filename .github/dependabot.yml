@@ -1,0 +1,24 @@
+# GitHub Actions で使うアクションのバージョン更新を自動化する。
+#
+# ランナーの Node ランタイム廃止 (Node16 → Node20 → Node24 …) のたびに
+# actions/checkout 等のメジャー更新が必要になるため、放置すると
+# deprecation 警告 → 動作停止の順で壊れる。週次でまとめて PR 化する。
+#
+# npm (pnpm) の version updates は意図的に入れていない:
+# transitive 依存のセキュリティ更新は Dependabot の pnpm サポート制限で
+# 失敗するため、lockfile の手動更新 (`pnpm update <pkg> --lockfile-only`) か
+# pnpm.overrides で対応する。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # "/" は .github/workflows/ のみが対象で、composite action 内で参照する
+    # アクションは見てくれないため、そのディレクトリも明示する
+    directories:
+      - /
+      - /.github/actions/setup-pnpm
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - '*'
