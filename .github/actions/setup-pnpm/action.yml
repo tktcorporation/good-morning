@@ -1,0 +1,19 @@
+# 全ワークフロー共通の pnpm + Node.js セットアップと依存インストール。
+# ツールチェーン設定（Node バージョン・キャッシュ・install フラグ）の SSOT。
+# ジョブごとにコピーすると更新漏れでジョブ間のツールチェーンが食い違うため、
+# 必ずこの composite action を経由すること。
+name: Setup pnpm
+description: pnpm / Node.js のセットアップと pnpm install --frozen-lockfile
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+    - uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        cache: pnpm
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash

@@ -41,8 +41,16 @@ on:
       - '.github/workflows/ios-launch-smoke.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# macos runner は ubuntu の約 10x 課金のため、同一 PR への連続 push では
+# 旧 run を必ずキャンセルする。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
-  NODE_VERSION: '22'
   # production の ios.deploymentTarget と一致させる。runner にこのメジャー版の
   # iOS Simulator SDK + runtime の両方が無い場合は、後段の step で graceful skip する。
   REQUIRED_IOS_MAJOR: '26'
@@ -54,9 +62,12 @@ jobs:
     name: iOS Launch Smoke
     runs-on: macos-latest
     timeout-minutes: 60
+    # Dependabot の actions bump PR は native 層に影響しないため、
+    # 高コストな macos runner を回さない
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Detect required iOS SDK and runtime on runner
         id: sdk
@@ -128,18 +139,9 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm and install
         if: steps.sdk.outputs.available == 'true'
-
-      - uses: actions/setup-node@v4
-        if: steps.sdk.outputs.available == 'true'
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install JS deps
-        if: steps.sdk.outputs.available == 'true'
-        run: pnpm install --frozen-lockfile
+        uses: ./.github/actions/setup-pnpm
 
       - name: Expo prebuild (generate ios/)
         if: steps.sdk.outputs.available == 'true'
@@ -152,14 +154,25 @@ jobs:
           path: |
             ios/Pods
             ~/Library/Caches/CocoaPods
-          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'pnpm-lock.yaml') }}
+          # ios/Podfile.lock は直前の prebuild --clean で ios/ ごと再生成された直後で
+          # まだ存在しないため、キーに含めても常に空になる。pod の解決内容を左右する
+          # 入力ファイル (JS 依存・native 設定・パッチ) でキー化する。
+          key: ${{ runner.os }}-pods-${{ hashFiles('pnpm-lock.yaml', 'app.config.ts', 'patches/**') }}
           restore-keys: |
             ${{ runner.os }}-pods-
 
       - name: Pod install
         if: steps.sdk.outputs.available == 'true'
         working-directory: ios
-        run: pod install --repo-update
+        # まず repo-update なしで試す（キャッシュ済み specs で足りるのが通常系）。
+        # 失敗時のみ --repo-update に切り替える。CDN アクセスを伴う repo-update は
+        # 遅くネットワーク起因で落ちやすいため、無条件では実行しない。
+        run: |
+          set -euo pipefail
+          pod install || {
+            echo "pod install failed, retrying with --repo-update..."
+            pod install --repo-update
+          }
 
       - name: Build for Simulator
         if: steps.sdk.outputs.available == 'true'

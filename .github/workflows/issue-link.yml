@@ -1,4 +1,5 @@
 name: "Issue Links"
+
 on:
   pull_request:
     types: [opened]
@@ -6,12 +7,15 @@ on:
 jobs:
   issue-link:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
       issues: write
     steps:
-      - uses: tkt-actions/add-issue-links@v1.4.0
+      # write 権限のトークンを渡す第三者アクションのため、mutable tag ではなく
+      # commit SHA で固定する（タグ差し替え型のサプライチェーン攻撃対策）
+      - uses: tkt-actions/add-issue-links@06e8f81918c07d9afd59ff3c2149f9009b16bd48 # v1.4.0
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           branch-prefix: "/"

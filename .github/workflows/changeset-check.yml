@@ -10,30 +10,40 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Check for changeset
     runs-on: ubuntu-latest
-    # changesets/action が作る Version PR は既存 changeset を消費するのが目的で、
-    # 新規 changeset が無いのが正常な状態のため対象から除外する。
-    if: github.head_ref != 'changeset-release/main'
+    timeout-minutes: 10
+    # 除外対象:
+    # - Version PR (changeset-release/*): 既存 changeset を消費するのが目的で、
+    #   新規 changeset が無いのが正常な状態。bot 作成・手動リカバリ作成の両方を
+    #   許容しつつ、fork 上の同名ブランチによるバイパスを防ぐため
+    #   「base リポジトリ自身のブランチであること」を条件にする。
+    # - Dependabot PR: bot は changeset を追加できないため、恒久的に赤いチェックが
+    #   付いてセキュリティ更新がブロックされる。リリースノートに載せたい bump は
+    #   マージ前に人間が changeset を追加する運用とする。
+    if: >-
+      !(
+        startsWith(github.head_ref, 'changeset-release/') &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      ) &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup pnpm and install
+        uses: ./.github/actions/setup-pnpm
 
       - name: Check for changeset
         run: pnpm changeset status --since=origin/main

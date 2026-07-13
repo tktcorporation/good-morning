@@ -3,7 +3,7 @@
 タスクベースの起床フローを持つiOSアラームアプリ。
 
 ## Tech Stack
-- Expo SDK 54 / React Native 0.81 / React 19
+- Expo / React Native / React（バージョンは package.json を参照）
 - TypeScript (strict mode)
 - Expo Router (file-based routing)
 - Zustand (state management)
@@ -48,6 +48,14 @@ pnpm ios:install ./build-*.ipa
 pnpm start   # Metro dev server 起動
 pnpm ios     # Debug ビルドで実機/シミュレータに接続
 ```
+
+## リリース
+
+- リリースは changesets ベース（Version PR マージ → git tag → EAS ビルド / OTA update）。
+  仕組み・失敗時の回収手順は `docs/release.md` を参照
+- **`targets/` 配下にネイティブターゲットを追加する PR は、マージ前にローカルで
+  `eas credentials --platform ios` を対話実行して Provisioning Profile を登録すること**。
+  登録しないと CI の非対話 EAS ビルドが必ず失敗する（詳細は `docs/release.md`）
 
 ## Project Structure
 - `app/` - Expo Router スクリーン (file-based routing)

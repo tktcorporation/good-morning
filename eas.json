@@ -13,10 +13,12 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "node": "22.22.2"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "22.22.2"
     }
   },
   "submit": {
