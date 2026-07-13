@@ -41,17 +41,17 @@ jobs:
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'eas-credentials-registered') }}
         run: |
           set -euo pipefail
-          NEW_TARGETS=$(git diff --diff-filter=A --name-only \
+          CHANGED_TARGETS=$(git diff --diff-filter=AM --name-only \
             "origin/${BASE_REF}...HEAD" -- 'targets/*/expo-target.config.*')
-          if [ -z "$NEW_TARGETS" ]; then
-            echo "新規ネイティブターゲットの追加なし"
+          if [ -z "$CHANGED_TARGETS" ]; then
+            echo "ネイティブターゲット設定の追加・変更なし"
             exit 0
           fi
-          echo "新規ターゲットを検出:"
-          echo "$NEW_TARGETS"
+          echo "追加・変更されたターゲット設定を検出:"
+          echo "$CHANGED_TARGETS"
           if [ "$HAS_LABEL" = "true" ]; then
             echo "eas-credentials-registered ラベルを確認。登録済みとして通過。"
             exit 0
           fi
-          echo "::error::新しいネイティブターゲットが追加されていますが、EAS credentials の登録が確認できません。docs/release.md の手順で 'eas credentials --platform ios' を実行し、完了後にこの PR へ 'eas-credentials-registered' ラベルを付けてください。"
+          echo "::error::ネイティブターゲット設定が追加・変更されていますが、EAS credentials の登録が確認できません。docs/release.md の手順で 'eas credentials --platform ios' を実行し、完了後にこの PR へ 'eas-credentials-registered' ラベルを付けてください。"
           exit 1

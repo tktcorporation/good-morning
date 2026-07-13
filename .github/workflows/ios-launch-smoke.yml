@@ -157,7 +157,7 @@ jobs:
           # ios/Podfile.lock は直前の prebuild --clean で ios/ ごと再生成された直後で
           # まだ存在しないため、キーに含めても常に空になる。pod の解決内容を左右する
           # 入力ファイル (JS 依存・native 設定・パッチ) でキー化する。
-          key: ${{ runner.os }}-pods-${{ hashFiles('pnpm-lock.yaml', 'app.config.ts', 'patches/**') }}
+          key: ${{ runner.os }}-pods-${{ hashFiles('pnpm-lock.yaml', 'app.config.ts', 'patches/**', 'targets/**') }}
           restore-keys: |
             ${{ runner.os }}-pods-
 

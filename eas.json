@@ -4,30 +4,28 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "node": "22.22.2",
+      "env": {
+        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
         "simulator": false
-      },
-      "env": {
-        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
       }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
-      "channel": "preview",
-      "node": "22.22.2",
-      "env": {
-        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
-      }
+      "channel": "preview"
     },
     "production": {
-      "autoIncrement": true,
-      "node": "22.22.2",
-      "env": {
-        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
-      }
+      "extends": "base",
+      "autoIncrement": true
     }
   },
   "submit": {
