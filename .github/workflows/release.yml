@@ -156,10 +156,6 @@ jobs:
           EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
           EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
-          # app.config.ts の ios.appleTeamId（@bacons/apple-targets の署名に使用）は
-          # APPLE_TEAM_ID（EXPO_ プレフィックスなし）を読む。EXPO_APPLE_TEAM_ID は
-          # eas-cli 自体の非対話認証用で別物のため、両方を設定する。
-          APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
 
       - name: Publish OTA update
         if: steps.fingerprint.outputs.native-changed == 'false'
