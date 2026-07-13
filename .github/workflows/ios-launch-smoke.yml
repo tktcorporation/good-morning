@@ -67,7 +67,7 @@ jobs:
     if: github.event.pull_request.user.login != 'dependabot[bot]'
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Detect required iOS SDK and runtime on runner
         id: sdk
@@ -149,7 +149,7 @@ jobs:
 
       - name: Cache CocoaPods
         if: steps.sdk.outputs.available == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ios/Pods
@@ -204,7 +204,7 @@ jobs:
 
       - name: Upload diagnostics on failure
         if: failure() && steps.sdk.outputs.available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-launch-smoke-diagnostics
           path: |
