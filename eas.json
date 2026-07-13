@@ -9,16 +9,25 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
       }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "node": "22.22.2"
+      "node": "22.22.2",
+      "env": {
+        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "node": "22.22.2"
+      "node": "22.22.2",
+      "env": {
+        "APPLE_TEAM_ID": "BD5KL5ZA6Y"
+      }
     }
   },
   "submit": {
