@@ -15,7 +15,7 @@ jobs:
     steps:
       # write 権限のトークンを渡す第三者アクションのため、mutable tag ではなく
       # commit SHA で固定する（タグ差し替え型のサプライチェーン攻撃対策）
-      - uses: tkt-actions/add-issue-links@06e8f81918c07d9afd59ff3c2149f9009b16bd48 # v1.4.0
+      - uses: tkt-actions/add-issue-links@841937371056b3af09cdbdf8c45d8bd48c58fcec # v1.9.1
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           branch-prefix: "/"
