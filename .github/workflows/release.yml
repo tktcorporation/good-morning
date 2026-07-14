@@ -107,15 +107,15 @@ jobs:
       # ライブラリのバージョン差で EAS が実際に付与する値とずれ、
       # 「誰にも届かない update を publish する」事故につながる。
       - name: Check runtime version for existing build
-        id: fingerprint
+        id: runtime-version
         run: |
           set -euo pipefail
-          HASH=$(pnpm exec expo-updates runtimeversion:resolve --platform ios | jq -r '.runtimeVersion')
-          if [ -z "$HASH" ] || [ "$HASH" = "null" ]; then
+          RUNTIME_VERSION=$(pnpm exec expo-updates runtimeversion:resolve --platform ios | jq -r '.runtimeVersion')
+          if [ -z "$RUNTIME_VERSION" ] || [ "$RUNTIME_VERSION" = "null" ]; then
             echo "::error::runtimeVersion の解決に失敗した"
             exit 1
           fi
-          echo "Runtime version (fingerprint): $HASH"
+          echo "Runtime version: $RUNTIME_VERSION"
 
           # eas build:list の失敗（認証切れ・ネットワーク断）と「互換ビルドなし」を
           # 混同しない。前者はここで job を fail させ、原因をログに残す。
@@ -123,7 +123,7 @@ jobs:
           # 「互換あり」と誤判定しないため、OTA の配信先チャンネルで絞る。
           BUILDS_JSON=$(eas build:list --platform ios --status finished \
             --channel preview --json --non-interactive --limit 1 \
-            --runtimeVersion="$HASH")
+            --runtimeVersion="$RUNTIME_VERSION")
           BUILD_ID=$(echo "$BUILDS_JSON" | jq -r '.[0].id // empty')
 
           if [ -n "$BUILD_ID" ]; then
@@ -135,7 +135,7 @@ jobs:
           fi
 
       - name: Decode Apple ASC API Key
-        if: steps.fingerprint.outputs.native-changed == 'true'
+        if: steps.runtime-version.outputs.native-changed == 'true'
         # ワークスペース外 (RUNNER_TEMP) に置き、checkout や artifact 収集の経路から
         # 構造的に隔離する。base64 が壊れていた場合は test -s で即失敗させる。
         run: |
@@ -148,7 +148,7 @@ jobs:
       # 非対話ビルドは EAS サーバー上の登録済み credentials しか使えない。
       # 新しいネイティブターゲットを追加した場合の事前登録手順は docs/release.md を参照。
       - name: Build iOS (internal distribution)
-        if: steps.fingerprint.outputs.native-changed == 'true'
+        if: steps.runtime-version.outputs.native-changed == 'true'
         run: eas build --platform ios --profile preview --non-interactive
         env:
           EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
@@ -158,7 +158,7 @@ jobs:
           EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
 
       - name: Publish OTA update
-        if: steps.fingerprint.outputs.native-changed == 'false'
+        if: steps.runtime-version.outputs.native-changed == 'false'
         env:
           COMMIT_SHA: ${{ github.sha }}
         run: |
