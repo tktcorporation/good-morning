@@ -24,6 +24,7 @@ import type { WakeTarget } from '../types/wake-target';
 const mockKit = jest.requireMock<Record<string, any>>('expo-alarm-kit');
 const mockCancelAlarm = mockKit.cancelAlarm as jest.Mock;
 const mockScheduleAlarm = mockKit.scheduleAlarm as jest.Mock;
+const mockGetAllAlarms = mockKit.getAllAlarms as jest.Mock;
 const mockGenerateUUID = mockKit.generateUUID as jest.Mock;
 const mockGetSnoozeAlarmIds = mockKit.getSnoozeAlarmIds as jest.Mock;
 const mockClearSnoozeAlarmIds = mockKit.clearSnoozeAlarmIds as jest.Mock;
@@ -82,11 +83,14 @@ function createTargetWithoutTodos(): WakeTarget {
 }
 
 function createStartParams(overrides?: Partial<AlarmDismissParams>): AlarmDismissParams {
+  // dismissTime を固定の過去日時にすると、scheduleSnoozeAlarms の
+  // 「過去時刻のスヌーズは登録しない」ガードで全スヌーズがスキップされるため、
+  // 現在時刻基準の直近の時刻を使う
   return {
     target: createTargetWithTodos(),
     resolvedTime: { hour: 7, minute: 0 },
-    dismissTime: new Date('2026-02-28T07:01:00.000Z'),
-    mountedAt: new Date('2026-02-28T07:00:00.000Z'),
+    dismissTime: new Date(Date.now() - 60 * 1000),
+    mountedAt: new Date(Date.now() - 2 * 60 * 1000),
     dayBoundaryHour: 4,
     ...overrides,
   };
@@ -97,9 +101,15 @@ beforeEach(() => {
   // Reset AlarmKit mocks to defaults
   mockScheduleAlarm.mockResolvedValue(true);
   mockCancelAlarm.mockResolvedValue(true);
+  mockGetAllAlarms.mockReturnValue([]);
   mockGenerateUUID.mockReturnValue('test-uuid-1');
+  // mockReturnValueOnce のキューは jest.clearAllMocks() では消えない。
+  // ガード追加で Once が消費されないまま次テストに漏れると空配列を返して
+  // 誤動作するため、キューごとリセットしてから既定値を積み直す
+  mockGetSnoozeAlarmIds.mockReset();
   mockGetSnoozeAlarmIds.mockReturnValue([]);
   mockClearSnoozeAlarmIds.mockReturnValue(undefined);
+  mockGetDismissEvents.mockReset();
   mockGetDismissEvents.mockReturnValue([]);
   mockClearDismissEvents.mockReturnValue(undefined);
   mockStartLiveActivity.mockResolvedValue('activity-1');
@@ -160,6 +170,8 @@ describe('handleAlarmDismissEffect', () => {
       'native-snooze-2',
       'native-snooze-3',
     ]);
+    // ネイティブ台帳にも実在する（生存突合を通る）
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1', 'native-snooze-2', 'native-snooze-3']);
     const params = createStartParams();
 
     await runEffect(handleAlarmDismissEffect(params));
@@ -175,6 +187,35 @@ describe('handleAlarmDismissEffect', () => {
       'native-snooze-3',
     ]);
     expect(session?.snoozeFiresAt).not.toBeNull();
+  });
+
+  test('ネイティブスヌーズ ID が台帳に実在しない場合は JS フォールバックで再スケジュールする', async () => {
+    // 取り込み前に別経路の syncAlarms が孤立キャンセルで消しているケース。
+    // 死んだ ID を採用すると「Live Activity はカウントダウンするが 9 分後に何も鳴らない」
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `js-snooze-${++uuidCounter}`);
+    mockGetSnoozeAlarmIds.mockReturnValueOnce(['dead-1', 'dead-2']);
+    mockGetAllAlarms.mockReturnValue([]);
+    const params = createStartParams();
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    expect(mockClearSnoozeAlarmIds).toHaveBeenCalled();
+    expect(mockScheduleAlarm).toHaveBeenCalled();
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.snoozeAlarmIds.length).toBeGreaterThan(0);
+    expect(session?.snoozeAlarmIds).not.toContain('dead-1');
+  });
+
+  test('ネイティブスヌーズ ID の一部だけ生存している場合は生存分のみ採用する', async () => {
+    mockGetSnoozeAlarmIds.mockReturnValueOnce(['ns-1', 'dead-1', 'ns-2']);
+    mockGetAllAlarms.mockReturnValue(['ns-1', 'ns-2', 'unrelated']);
+    const params = createStartParams();
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+    expect(useMorningSessionStore.getState().session?.snoozeAlarmIds).toEqual(['ns-1', 'ns-2']);
   });
 
   test('falls back to JS snooze scheduling when native IDs empty', async () => {
@@ -515,5 +556,125 @@ describe('recoverMissedDismiss', () => {
 
     const result = await runEffect(recoverMissedDismiss(4));
     expect(result).toBe(false);
+  });
+
+  test('target 未ロード時は dismiss イベントを破棄せず false を返す（ロード後の再試行に委ねる）', async () => {
+    // dismiss イベントは復元手段のない一度きりの記録。target ロード前に消すと
+    // その朝の WakeRecord・セッション・スヌーズ取り込みが永久に失われる
+    useWakeTargetStore.setState({ target: null, loaded: false, alarmIds: [] });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: new Date().toISOString(), payload: '' },
+    ]);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(false);
+    expect(mockClearDismissEvents).not.toHaveBeenCalled();
+  });
+
+  test('records 未ロード時は重複ガードを素通りせず、イベントも破棄しない', async () => {
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    useWakeRecordStore.setState({ records: [], loaded: false });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: new Date().toISOString(), payload: '' },
+    ]);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(false);
+    expect(useWakeRecordStore.getState().records).toHaveLength(0);
+    expect(mockClearDismissEvents).not.toHaveBeenCalled();
+  });
+
+  test('recordId 確定済みセッションがアクティブなら重複 dismiss としてイベントを破棄する', async () => {
+    setActiveSession({ recordId: 'rec-1' });
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: new Date().toISOString(), payload: '' },
+    ]);
+    // 二重 dismiss でネイティブが積み直した管理外スヌーズ
+    mockGetSnoozeAlarmIds.mockReturnValue(['extra-1']);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(false);
+    expect(useWakeRecordStore.getState().records).toHaveLength(0);
+    expect(mockClearDismissEvents).toHaveBeenCalled();
+    // 管理外スヌーズはイベントと一緒に回収される
+    expect(mockCancelAlarm).toHaveBeenCalledWith('extra-1');
+    expect(mockClearSnoozeAlarmIds).toHaveBeenCalled();
+  });
+
+  test('自動開始セッション（recordId=null）がアクティブでも dismiss を処理して record とスヌーズを取り込む', async () => {
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+    setActiveSession({ recordId: null, snoozeAlarmIds: [] });
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    mockGetDismissEvents.mockReturnValue([
+      {
+        alarmId: 'alarm-1',
+        dismissedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+        payload: '',
+      },
+    ]);
+    mockGetSnoozeAlarmIds.mockReturnValue(['ns-1']);
+    mockGetAllAlarms.mockReturnValue(['ns-1']);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(true);
+    expect(useWakeRecordStore.getState().records).toHaveLength(1);
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.recordId).not.toBeNull();
+    expect(session?.snoozeAlarmIds).toEqual(['ns-1']);
+    expect(mockClearDismissEvents).toHaveBeenCalled();
+  });
+
+  test('当日レコード既存で離脱する場合、管理外のネイティブスヌーズを回収してからイベントを破棄する', async () => {
+    // 回収しないと 20 本のスヌーズが 3 時間鳴り続けるか、
+    // 逆に orphan cancel で ID だけ App Groups に残り続ける
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    const dismissTime = new Date(Date.now() - 60 * 1000);
+    const { addRecord } = useWakeRecordStore.getState();
+    await addRecord({
+      alarmId: 'wake-target',
+      date: (() => {
+        // recoverMissedDismiss と同じ論理日付（dayBoundaryHour=4）で当日レコードを作る
+        const d = new Date(dismissTime);
+        if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+        const y = d.getFullYear();
+        const m = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dd = d.getDate().toString().padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+      })(),
+      targetTime: { hour: 7, minute: 0 },
+      alarmTriggeredAt: dismissTime.toISOString(),
+      dismissedAt: dismissTime.toISOString(),
+      healthKitWakeTime: null,
+      result: 'great',
+      diffMinutes: 0,
+      todos: [],
+      todoCompletionSeconds: 0,
+      alarmLabel: '',
+      todosCompleted: true,
+      todosCompletedAt: dismissTime.toISOString(),
+      goalDeadline: null,
+    });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-2', dismissedAt: dismissTime.toISOString(), payload: '' },
+    ]);
+    mockGetSnoozeAlarmIds.mockReturnValue(['ns-1', 'ns-2']);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(false);
+    expect(mockCancelAlarm).toHaveBeenCalledWith('ns-1');
+    expect(mockCancelAlarm).toHaveBeenCalledWith('ns-2');
+    expect(mockClearSnoozeAlarmIds).toHaveBeenCalled();
+    expect(mockClearDismissEvents).toHaveBeenCalled();
   });
 });

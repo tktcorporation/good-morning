@@ -16,11 +16,11 @@ import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
-import { resolveTimeForDate } from '../../types/wake-target';
+import { resolveTimeForDate, type WakeTarget } from '../../types/wake-target';
 import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
-import { SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerService';
+import { cancelAlarmsByIds, SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
 import { handleAlarmDismissEffect } from './DismissService';
@@ -64,8 +64,29 @@ export const restoreSessionOnLaunch = (
   });
 
 /**
+ * session に取り込まれなかったネイティブ先行スヌーズを回収（キャンセル + ID クリア）する。
+ *
+ * dismiss を起床フローとして処理しない離脱パスで呼ぶ。放置すると管理外の
+ * スヌーズが最大 3 時間鳴り続けるか、逆に orphan cancel で実体だけ消えて
+ * App Groups に死んだ ID が残り続ける。
+ */
+const reclaimUnmanagedNativeSnoozes: Effect.Effect<void, never, AlarmKit> = Effect.gen(
+  function* () {
+    const kit = yield* AlarmKit;
+    const nativeIds = yield* kit.getSnoozeAlarmIds;
+    if (nativeIds.length === 0) return;
+    yield* cancelAlarmsByIds(nativeIds).pipe(Effect.catchAll(() => Effect.void));
+    yield* kit.clearSnoozeAlarmIds;
+  },
+);
+
+/**
  * ネイティブ dismiss イベントを確認し、未処理のものから
  * WakeRecord + セッション情報を復元する Effect。
+ *
+ * dismiss イベントは復元手段のない一度きりの記録のため、処理できない状況
+ * （ストア未ロード）ではイベントを破棄せず false を返し、ロード完了後の
+ * 呼び出し（cold-start チェーンや foreground-resume）での再試行に委ねる。
  *
  * @returns true if a session was recovered, false otherwise
  */
@@ -75,7 +96,22 @@ export const recoverMissedDismiss = (
   Effect.gen(function* () {
     const kit = yield* AlarmKit;
 
-    if (useMorningSessionStore.getState().isActive()) {
+    const targetState = useWakeTargetStore.getState();
+    const recordState = useWakeRecordStore.getState();
+    if (!targetState.loaded || targetState.target === null || !recordState.loaded) {
+      return false;
+    }
+    const target = targetState.target;
+
+    // セッションが「アクティブ」でも、tryAutoStartSession による自動開始
+    // （recordId 未確定）は dismiss 未処理なので回収へ進む。
+    // recordId 確定済みなら dismiss 処理済みで、イベントは重複分として破棄する。
+    // このとき App Groups に残る ID はセッション取り込み済み分ではなく
+    // （取り込み時に clearSnoozeAlarmIds 済み）、二重 dismiss で新たに積まれた
+    // 管理外スヌーズなので、イベントと一緒に回収する
+    const sessionState = useMorningSessionStore.getState();
+    if (sessionState.isActive() && sessionState.session?.recordId != null) {
+      yield* reclaimUnmanagedNativeSnoozes;
       yield* kit.clearDismissEvents;
       return false;
     }
@@ -91,24 +127,44 @@ export const recoverMissedDismiss = (
 
     // primaryEvents.length > 0 は上のガードで保証済み
     const event = primaryEvents[primaryEvents.length - 1] as (typeof primaryEvents)[number];
-    const dismissTime = new Date(event.dismissedAt);
+    const recovered = yield* processPrimaryDismissEvent(
+      target,
+      event,
+      dayBoundaryHour,
+      recordState.records,
+    );
+
+    yield* kit.clearDismissEvents;
+    return recovered;
+  });
+
+/**
+ * primary dismiss イベント 1 件を起床フローとして処理する。
+ * 当日レコード既存・当日 OFF で処理しない場合も、管理外のネイティブ
+ * 先行スヌーズは回収してから離脱する。
+ *
+ * @returns true if the dismiss was processed into a session
+ */
+const processPrimaryDismissEvent = (
+  target: WakeTarget,
+  event: { readonly dismissedAt: string },
+  dayBoundaryHour: number,
+  records: readonly { readonly date: string }[],
+): Effect.Effect<boolean, SessionError, AlarmKit | Notification> =>
+  Effect.gen(function* () {
+    const parsedDismissTime = new Date(event.dismissedAt);
+    // dismissedAt が壊れていても回収自体は続行する（時刻は現在で代替）
+    const dismissTime = Number.isNaN(parsedDismissTime.getTime()) ? new Date() : parsedDismissTime;
     const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
 
-    const { records } = useWakeRecordStore.getState();
     if (records.some((r) => r.date === dateStr)) {
-      yield* kit.clearDismissEvents;
-      return false;
-    }
-
-    const { target } = useWakeTargetStore.getState();
-    if (target === null) {
-      yield* kit.clearDismissEvents;
+      yield* reclaimUnmanagedNativeSnoozes;
       return false;
     }
 
     const resolvedTime = resolveTimeForDate(target, dismissTime);
     if (resolvedTime === null) {
-      yield* kit.clearDismissEvents;
+      yield* reclaimUnmanagedNativeSnoozes;
       return false;
     }
 
@@ -120,7 +176,6 @@ export const recoverMissedDismiss = (
       dayBoundaryHour,
     });
 
-    yield* kit.clearDismissEvents;
     return true;
   });
 

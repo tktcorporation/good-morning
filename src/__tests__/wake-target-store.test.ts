@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSettingsStore } from '../stores/settings-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 import {
@@ -63,6 +64,31 @@ describe('useWakeTargetStore', () => {
     expect(override?.targetDate).toBeDefined();
     await useWakeTargetStore.getState().clearNextOverride();
     expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
+  });
+
+  test('setNextOverride は「明日だけ」— 朝に設定しても対象日は翌日になる', async () => {
+    jest.useFakeTimers({ now: new Date('2026-02-25T07:30:00') });
+    try {
+      useSettingsStore.setState({ dayBoundaryHour: 4 });
+      await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+      // 8:00 は今日まだ来ていないが、「明日だけ 8:00」なので対象は翌日
+      await useWakeTargetStore.getState().setNextOverride({ hour: 8, minute: 0 });
+      expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-26');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('setNextOverride は日付変更ライン前の深夜なら当日（今夜の起床）を対象日にする', async () => {
+    jest.useFakeTimers({ now: new Date('2026-02-25T00:30:00') });
+    try {
+      useSettingsStore.setState({ dayBoundaryHour: 4 });
+      await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+      await useWakeTargetStore.getState().setNextOverride({ hour: 7, minute: 0 });
+      expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-25');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('loadTarget preserves expired nextOverride (cleared by clearExpiredOverride instead)', async () => {
@@ -247,5 +273,115 @@ describe('useWakeTargetStore', () => {
     });
     await useWakeTargetStore.getState().loadTarget();
     expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBeNull();
+  });
+
+  // ─── マイグレーション正規化（欠落・破損フィールドでスケジューリングを例外死させない） ───
+
+  function stubStoredTarget(value: string): void {
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(value);
+      return Promise.resolve(null);
+    });
+  }
+
+  test('loadTarget は dayOverrides / nextOverride 欠落のレガシーデータを {} / null に正規化する', async () => {
+    // dayOverrides が undefined のままだと groupDaysByTime が TypeError で死に、
+    // 旧アラーム全キャンセル後にスケジュール 0 本で終わる（アラームが鳴らなくなる）
+    stubStoredTarget(JSON.stringify({ defaultTime: { hour: 7, minute: 0 }, enabled: true }));
+    await useWakeTargetStore.getState().loadTarget();
+    const target = useWakeTargetStore.getState().target;
+    expect(target?.dayOverrides).toEqual({});
+    expect(target?.nextOverride).toBeNull();
+  });
+
+  test('loadTarget は enabled 欠落を true に正規化する（保存済みデータの持ち主は利用継続中のため）', async () => {
+    stubStoredTarget(JSON.stringify({ defaultTime: { hour: 7, minute: 0 } }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.enabled).toBe(true);
+  });
+
+  test('loadTarget は defaultTime 欠落・不正値をデフォルト時刻に正規化する', async () => {
+    stubStoredTarget(JSON.stringify({ enabled: true }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.defaultTime).toEqual(
+      DEFAULT_WAKE_TARGET.defaultTime,
+    );
+
+    stubStoredTarget(JSON.stringify({ defaultTime: { hour: 99, minute: -5 }, enabled: true }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.defaultTime).toEqual(
+      DEFAULT_WAKE_TARGET.defaultTime,
+    );
+  });
+
+  test('loadTarget は time 欠損の破損 nextOverride を null に正規化する', async () => {
+    stubStoredTarget(
+      JSON.stringify({
+        ...DEFAULT_WAKE_TARGET,
+        nextOverride: { targetDate: '2026-03-01' },
+      }),
+    );
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
+  });
+
+  test('loadTarget は不正な dayOverrides エントリを捨てて有効なものだけ残す', async () => {
+    stubStoredTarget(
+      JSON.stringify({
+        ...DEFAULT_WAKE_TARGET,
+        dayOverrides: {
+          0: { type: 'off' },
+          1: { type: 'custom', time: { hour: 6, minute: 30 } },
+          2: { type: 'custom' },
+          3: { type: 'unknown' },
+        },
+      }),
+    );
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.dayOverrides).toEqual({
+      0: { type: 'off' },
+      1: { type: 'custom', time: { hour: 6, minute: 30 } },
+    });
+  });
+
+  test('loadTarget は破損 JSON でも reject せず loaded=true になり、enabled は維持される', async () => {
+    // raw が存在する（何か保存されていた）のに破損している場合は
+    // 「未設定」ではなく「利用中ユーザーの一時的な読み取り失敗」の可能性が高い。
+    // enabled: false に倒すと、次の syncAlarmsEffect が登録済みの
+    // ネイティブアラームを本人の意図なく全キャンセルしてしまう
+    stubStoredTarget('not-json{{{');
+    await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.target).toEqual(DEFAULT_WAKE_TARGET);
+    expect(state.target?.enabled).toBe(true);
+  });
+
+  test('loadTarget は文字列 "null" が保存されていても enabled を維持してフォールバックする', async () => {
+    stubStoredTarget('null');
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.target).toEqual(DEFAULT_WAKE_TARGET);
+  });
+
+  test('loadTarget は未設定（初回起動）のみ enabled: false にフォールバックする', async () => {
+    mockGetItem.mockResolvedValue(null);
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.target).toEqual({ ...DEFAULT_WAKE_TARGET, enabled: false });
+  });
+
+  test('loadTarget は alarm-ids が破損していても target のロードに成功し alarmIds は [] になる', async () => {
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(DEFAULT_WAKE_TARGET));
+      if (key === 'alarm-ids') return Promise.resolve('broken[[[');
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.target).not.toBeNull();
+    expect(state.alarmIds).toEqual([]);
   });
 });

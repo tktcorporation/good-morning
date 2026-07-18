@@ -112,4 +112,48 @@ describe('syncAlarmsEffect', () => {
     expect(mockCancelAlarm).not.toHaveBeenCalled();
     expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
   });
+
+  test('セッション進行中に target を OFF にしてもペンディングスヌーズはキャンセルされない', async () => {
+    // wake-target の ON/OFF は「将来の朝」の設定。進行中の起床フローの
+    // スヌーズ（ネイティブ先行スケジュール済み）まで殺すと、
+    // 二度寝したユーザーを起こす手段がなくなる
+    const target = createTarget({ enabled: false });
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: ['wake-1'] });
+    useMorningSessionStore.setState({
+      session: {
+        recordId: 'rec-1',
+        date: '2026-03-06',
+        startedAt: '2026-03-06T07:00:00.000Z',
+        todos: [{ id: 'todo-1', title: 'Test', completed: false, completedAt: null }],
+        windowEnd: '2026-03-06T07:30:00.000Z',
+        liveActivityId: null,
+        goalDeadline: null,
+        snoozeAlarmIds: ['snooze-1', 'snooze-2'],
+        snoozeFiresAt: '2026-03-06T07:09:00.000Z',
+      },
+      loaded: true,
+    });
+    mockGetAllAlarms.mockReturnValue(['wake-1', 'snooze-1', 'snooze-2']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).toHaveBeenCalledWith('wake-1');
+    expect(mockCancelAlarm).not.toHaveBeenCalledWith('snooze-1');
+    expect(mockCancelAlarm).not.toHaveBeenCalledWith('snooze-2');
+    expect(useWakeTargetStore.getState().alarmIds).toEqual([]);
+  });
+
+  test('スケジュール失敗時は store の alarmIds を巻き戻さず旧 ID を保持する', async () => {
+    // 失敗時は旧アラームがネイティブに残る（scheduleWakeTargetAlarm が温存する）ため、
+    // store 側も旧 ID を保持し続けるのが一貫した状態
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: ['old-1'] });
+    mockGetAllAlarms.mockReturnValue(['old-1']);
+    mockScheduleRepeatingAlarm.mockRejectedValue(new Error('native failure'));
+
+    await expect(runEffect(syncAlarmsEffect)).rejects.toBeDefined();
+
+    expect(mockCancelAlarm).not.toHaveBeenCalledWith('old-1');
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(['old-1']);
+  });
 });

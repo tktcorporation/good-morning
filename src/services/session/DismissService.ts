@@ -112,12 +112,18 @@ export const handleAlarmDismissEffect = (
 
     // 3. スヌーズスケジュール（失敗してもセッションは有効に保つ）
     yield* Effect.gen(function* () {
+      let snoozeIds: readonly string[] = [];
       const nativeSnoozeIds = yield* kit.getSnoozeAlarmIds;
-      let snoozeIds: readonly string[];
       if (nativeSnoozeIds.length > 0) {
-        snoozeIds = nativeSnoozeIds;
+        // 取り込み前に別経路の syncAlarms が孤立キャンセルで消している可能性が
+        // あるため、ネイティブ台帳と突合して生存している ID だけ採用する。
+        // 死んだ ID を採用すると Live Activity はカウントダウンを表示するのに
+        // 9 分後に何も鳴らない
+        const registered = new Set(yield* kit.getAllAlarms);
+        snoozeIds = nativeSnoozeIds.filter((id) => registered.has(id));
         yield* kit.clearSnoozeAlarmIds;
-      } else {
+      }
+      if (snoozeIds.length === 0) {
         snoozeIds = yield* scheduleSnoozeAlarms(dismissTime);
       }
       const snoozeFiresAt = new Date(

@@ -118,7 +118,17 @@ const handlePayloadEvent = (
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
     if (isSnoozePayload(payload)) {
-      yield* handleSnoozeArrivalEffect;
+      const handled = yield* handleSnoozeArrivalEffect;
+      if (!handled) {
+        // アプリ非起動中に本アラームが dismiss され、スヌーズ通知経由で
+        // 起動したケース。セッションが無いままスヌーズ到着だけ処理して終わると、
+        // 未消化の primary dismiss イベント（WakeRecord・セッション・
+        // ネイティブスヌーズ取り込み）が放置される
+        if (context === 'cold-start') {
+          yield* restoreSessionOnLaunch(dayBoundaryHour);
+        }
+        yield* recoverMissedDismiss(dayBoundaryHour);
+      }
       routerPush('/');
       return;
     }
@@ -128,8 +138,8 @@ const handlePayloadEvent = (
     const recovered = yield* recoverMissedDismiss(dayBoundaryHour);
     if (!recovered) {
       yield* handleInlineDismiss(dayBoundaryHour);
-      routerPush('/');
     }
+    routerPush('/');
   });
 
 // ─── 統一エントリポイント ──────────────────────────────────────────
@@ -146,12 +156,23 @@ export const handleAlarmEventEffect = (
     routerPush: (path: string) => void;
     dayBoundaryHour: number;
     clearExpiredOverride?: () => void;
+    /**
+     * 呼び出し元が読み取り済みの launch payload（cold-start 用）。
+     *
+     * ネイティブの getLaunchPayload は取得と同時にクリアされる consume-once API。
+     * _layout.tsx が waitFor の分岐判定のために先に読み取るため、ここで
+     * 再読すると常に null になり、payload 分岐（dismiss 処理・スヌーズ到着）が
+     * 一切実行されなくなる。読み取りは 1 箇所に限定し、値は明示的に引き渡す。
+     * undefined（未指定）の場合のみネイティブから読む（foreground-resume 用）。
+     */
+    launchPayload?: { alarmId: string; payload: string | null } | null;
   },
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
     const { routerPush, dayBoundaryHour, clearExpiredOverride } = opts;
     const kit = yield* AlarmKit;
-    const payload = yield* kit.checkLaunchPayload;
+    const payload =
+      opts.launchPayload !== undefined ? opts.launchPayload : yield* kit.checkLaunchPayload;
 
     if (payload !== null) {
       yield* handlePayloadEvent(context, payload, routerPush, dayBoundaryHour);

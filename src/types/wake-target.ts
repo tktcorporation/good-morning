@@ -1,4 +1,4 @@
-import { formatLocalDate } from '../utils/date';
+import { formatLocalDate, getLogicalDate } from '../utils/date';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 /**
@@ -89,9 +89,14 @@ export interface WakeTarget {
  * Resolve the alarm time for a given date.
  * Priority: nextOverride > dayOverride > defaultTime.
  * Returns null if the day is set to OFF.
+ *
+ * nextOverride は targetDate の当日にのみ適用する。期限切れ override のクリアは
+ * 通常起動時（clearExpiredOverride）にしか走らず数日残留しうるため、日付で
+ * スコープしないと他の日のセッションウィンドウ・起床記録まで override 時刻に
+ * 引きずられる。
  */
 export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
-  if (target.nextOverride !== null) {
+  if (target.nextOverride !== null && formatLocalDate(date) === target.nextOverride.targetDate) {
     return target.nextOverride.time;
   }
 
@@ -117,19 +122,44 @@ export function isNextOverrideExpired(override: NextOverride, now: Date = new Da
     return true;
   }
   const [year, month, day] = override.targetDate.split('-').map(Number);
-  if (year === undefined || month === undefined || day === undefined) return true;
+  // NaN を素通しすると比較が常に false になり「永遠に期限切れにならない」
+  // override が残るため、パース不能な targetDate は期限切れとして掃除させる
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return true;
+  }
 
   const expiresAt = new Date(year, month - 1, day, override.time.hour, override.time.minute, 0);
   return now.getTime() > expiresAt.getTime();
 }
 
 /**
- * setNextOverride 用: 現在時刻からオーバーライド対象日を算出する。
- * scheduleWakeTargetAlarm と同じロジック — 時刻が今日を過ぎていれば明日、そうでなければ今日。
+ * setNextOverride 用: 「明日だけ変更」の対象日を算出する。
+ *
+ * UI（target-edit の tomorrowOnly）が指すのは「次に迎える朝 = 論理的な翌日」。
+ * 暦日ではなく dayBoundaryHour で判定するのは、日付変更ライン前の深夜
+ * （例: 0:30）に設定した場合、ユーザーの言う「明日」はこのあと数時間後に
+ * 迎える今夜の起床（暦日では当日）を指すため。
+ * 「時刻が未到来なら今日」にすると、朝 7:30 に設定した「明日だけ 8:00」が
+ * 30 分後の当日 8:00 に鳴ってしまい、肝心の翌日には何も鳴らない。
  */
-export function computeOverrideTargetDate(time: AlarmTime, now: Date = new Date()): string {
-  const alarmDate = new Date(now);
+export function computeOverrideTargetDate(
+  time: AlarmTime,
+  dayBoundaryHour: number,
+  now: Date = new Date(),
+): string {
+  // getLogicalDate は調整不要のとき引数と同一参照を返すため、now を壊さないよう複製する
+  const alarmDate = new Date(getLogicalDate(now, dayBoundaryHour).getTime());
+  alarmDate.setDate(alarmDate.getDate() + 1);
   alarmDate.setHours(time.hour, time.minute, 0, 0);
+  // 論理翌日でも指定時刻が既に過去（深夜に翌 0 時台を指定等）なら、
+  // 即座に期限切れ扱いになる無効な override を作らないよう 1 日先送りする
   if (alarmDate.getTime() <= now.getTime()) {
     alarmDate.setDate(alarmDate.getDate() + 1);
   }
