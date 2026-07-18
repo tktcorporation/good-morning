@@ -1,6 +1,5 @@
 import { View } from 'react-native';
-import { SleepDetailSection } from 'good-morning';
-import { useSettingsStore } from '../../src/stores/settings-store';
+import { SleepDetailSection, useSettingsStore } from 'good-morning';
 
 // SleepDetailSection returns null outright when HealthKit isn't connected
 // in the shared settings store, so every story needs it primed to true

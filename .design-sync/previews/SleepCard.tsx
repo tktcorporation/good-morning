@@ -1,6 +1,5 @@
 import { View } from 'react-native';
-import { SleepCard } from 'good-morning';
-import { useSettingsStore } from '../../src/stores/settings-store';
+import { SleepCard, useSettingsStore } from 'good-morning';
 
 // SleepCard reads healthKitEnabled from the shared settings store and shows
 // a "connect" prompt (not the summary) while it's false. Every ?story=

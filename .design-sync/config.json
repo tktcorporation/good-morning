@@ -7,6 +7,17 @@
   "tsconfig": "tsconfig.json",
   "extraEntries": [
     "./src/i18n/index.ts",
-    "./src/constants/theme.ts"
-  ]
+    "./src/constants/theme.ts",
+    "./src/stores/settings-store.ts",
+    "./src/stores/morning-session-store.ts"
+  ],
+  "overrides": {
+    "DayBoundaryPicker": { "cardMode": "single", "primaryStory": "OpenNearTop" },
+    "SleepDurationPickerModal": { "cardMode": "single", "primaryStory": "EightHours" },
+    "TodosStep": { "cardMode": "column" },
+    "WelcomeStep": { "cardMode": "column" },
+    "SleepTimelineBar": { "cardMode": "column" },
+    "MorningRoutineBanner": { "cardMode": "single", "primaryStory": "NearlyComplete" }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
 }

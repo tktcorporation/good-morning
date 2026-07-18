@@ -1,12 +1,5 @@
 import { View } from 'react-native';
-import { MorningRoutineBanner } from 'good-morning';
-// コンポーネントが読むのと同一インスタンスを共有するため、パッケージ経由ではなく
-// 相対パスで直接インポートする（esbuild は解決後の絶対パスでモジュールを重複排除する）。
-// good-morning パッケージは .design-sync/.cache/web-nm/node_modules/good-morning/src/
-// の同期コピーを指すため、実リポジトリの src/ ではなくこちらを指す必要がある
-// （実 src/ を指すと node_modules 解決がリポジトリ本物の node_modules/react-native
-// （Flow 構文）まで辿ってしまいビルドが壊れる）。
-import { useMorningSessionStore } from '../.cache/web-nm/node_modules/good-morning/src/stores/morning-session-store';
+import { MorningRoutineBanner, useMorningSessionStore } from 'good-morning';
 
 /**
  * MorningRoutineBanner は props を持たず、Zustand ストアの session を直接購読して
