@@ -1,0 +1,12 @@
+{
+  "projectId": "655a6413-bdd1-4b65-8fb5-3a7d2416c37f",
+  "pkg": "good-morning",
+  "globalName": "GoodMorning",
+  "shape": "package",
+  "srcDir": "src/components",
+  "tsconfig": "tsconfig.json",
+  "extraEntries": [
+    "./src/i18n/index.ts",
+    "./src/constants/theme.ts"
+  ]
+}
