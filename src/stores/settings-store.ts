@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
+import { readStorageItemWithRetry } from '../utils/storage-read';
 
 const STORAGE_KEY = STORAGE_KEYS.appSettings;
 const DEFAULT_DAY_BOUNDARY_HOUR = 3;
@@ -26,6 +27,26 @@ async function persist(settings: AppSettings): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
+/** 永続化済み settings のパース。破損はデフォルト値扱い（loaded=false のまま固まるのを防ぐ）。 */
+function parseStoredSettings(raw: string | null): AppSettings {
+  const defaults: AppSettings = {
+    dayBoundaryHour: DEFAULT_DAY_BOUNDARY_HOUR,
+    healthKitEnabled: false,
+    alarmKitGranted: false,
+  };
+  if (raw === null) return defaults;
+  try {
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      dayBoundaryHour: parsed.dayBoundaryHour ?? DEFAULT_DAY_BOUNDARY_HOUR,
+      healthKitEnabled: parsed.healthKitEnabled ?? false,
+      alarmKitGranted: parsed.alarmKitGranted ?? false,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 /** 現在の永続化対象フィールドをまとめて返す。persist() に渡す用途。 */
 function currentSettings(get: () => SettingsState): AppSettings {
   return {
@@ -42,18 +63,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loaded: false,
 
   loadSettings: async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw) as Partial<AppSettings>;
-      set({
-        dayBoundaryHour: parsed.dayBoundaryHour ?? DEFAULT_DAY_BOUNDARY_HOUR,
-        healthKitEnabled: parsed.healthKitEnabled ?? false,
-        alarmKitGranted: parsed.alarmKitGranted ?? false,
-        loaded: true,
-      });
-    } else {
-      set({ loaded: true });
+    // パース失敗（データは読めたが壊れている）はデフォルト値扱いで確定して
+    // よいが、読み取り自体の失敗（リトライしても解決しない）は実際の設定値の
+    // 有無が確認できていない。loaded=true にすると dayBoundaryHour 等が
+    // デフォルト値のまま syncAlarmsEffect 等の「settings ロード待ち」ガードが
+    // 誤って解除され、誤った設定でアラーム同期・セッション判定が走ってしまう
+    // ため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
+    let raw: string | null;
+    try {
+      raw = await readStorageItemWithRetry(STORAGE_KEY);
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
+      console.error('[settings-store] loadSettings failed after retries', error);
+      return;
     }
+    set({ ...parseStoredSettings(raw), loaded: true });
   },
 
   setDayBoundaryHour: async (hour: number) => {

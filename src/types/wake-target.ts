@@ -1,4 +1,4 @@
-import { formatLocalDate } from '../utils/date';
+import { formatLocalDate, getLogicalDate, getLogicalDateString } from '../utils/date';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 /**
@@ -85,16 +85,8 @@ export interface WakeTarget {
   readonly wakeUpGoalBufferMinutes: number;
 }
 
-/**
- * Resolve the alarm time for a given date.
- * Priority: nextOverride > dayOverride > defaultTime.
- * Returns null if the day is set to OFF.
- */
-export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
-  if (target.nextOverride !== null) {
-    return target.nextOverride.time;
-  }
-
+/** nextOverride を考慮せず、dayOverrides/defaultTime だけでその日の時刻を解決する。 */
+export function resolveRegularTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
   const dayOfWeek = date.getDay() as DayOfWeek;
   const override = target.dayOverrides[dayOfWeek];
 
@@ -109,6 +101,164 @@ export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | 
 }
 
 /**
+ * Resolve the alarm time for a given date.
+ * Priority: nextOverride > dayOverride > defaultTime.
+ * Returns null if the day is set to OFF.
+ *
+ * nextOverride は targetDate の当日にのみ適用する。期限切れ override のクリアは
+ * 通常起動時（clearExpiredOverride）にしか走らず数日残留しうるため、日付で
+ * スコープしないと他の日のセッションウィンドウ・起床記録まで override 時刻に
+ * 引きずられる。
+ *
+ * override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
+ * のため、この関数は「その日どちらのアラームが実際に発火したか」を区別
+ * できない。dismiss 処理（記録の作成）では resolveTimeForDismiss を使うこと。
+ */
+export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
+  if (target.nextOverride !== null && formatLocalDate(date) === target.nextOverride.targetDate) {
+    return target.nextOverride.time;
+  }
+  return resolveRegularTimeForDate(target, date);
+}
+
+/** resolveDismissCandidate の戻り値。dayOffset は dismissTime の暦日からの相対日数（0 か -1）。 */
+interface DismissCandidate {
+  readonly time: AlarmTime;
+  readonly dayOffset: number;
+}
+
+/** DismissCandidate が実際に発火する絶対日時を計算する。 */
+function toDismissInstant(dismissTime: Date, candidate: DismissCandidate): Date {
+  const base = new Date(dismissTime.getTime() + candidate.dayOffset * 24 * 60 * 60 * 1000);
+  return new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
+    candidate.time.hour,
+    candidate.time.minute,
+    0,
+  );
+}
+
+/**
+ * dismissTime を基準に、実際に発火した可能性のあるアラーム候補（当日・前日 ×
+ * 通常・override）を列挙する。存在しない組み合わせ（override 対象日でない等）
+ * は含めない。
+ *
+ * override 対象日は通常の繰り返しアラームも鳴り続ける設計（二重鳴動を許容）
+ * のため、当日・前日それぞれで override と通常アラームの両方が候補になりうる。
+ * 例えば通常 23:50（前日）・override 00:10（当日）という近接設定では、
+ * 「当日候補（override・通常）」だけで判定すると両方ともまだ未来になって
+ * しまい、実際に発火済みの前日 23:50 の通常アラームを見落とす。
+ */
+function collectDismissCandidates(
+  target: WakeTarget,
+  dismissTime: Date,
+): readonly DismissCandidate[] {
+  const candidates: DismissCandidate[] = [];
+  const override = target.nextOverride;
+  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
+
+  const todayRegular = resolveRegularTimeForDate(target, dismissTime);
+  if (todayRegular !== null) candidates.push({ time: todayRegular, dayOffset: 0 });
+
+  const prevRegular = resolveRegularTimeForDate(target, prevDay);
+  if (prevRegular !== null) candidates.push({ time: prevRegular, dayOffset: -1 });
+
+  if (override !== null) {
+    if (formatLocalDate(dismissTime) === override.targetDate) {
+      candidates.push({ time: override.time, dayOffset: 0 });
+    }
+    if (formatLocalDate(prevDay) === override.targetDate) {
+      candidates.push({ time: override.time, dayOffset: -1 });
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラーム候補（時刻 + 発火日）を解決する。
+ *
+ * collectDismissCandidates で列挙した候補のうち、dismissTime 時点で既に
+ * 発火済み（候補の絶対日時 <= dismissTime）のものだけを対象に、dismissTime
+ * に最も近いものを選ぶ。dismiss は必ず発火済みのアラームに対して起きるため、
+ * 時刻が近いだけの未来の候補（例: override 7:00・通常 7:10 が近接し、
+ * dismiss が 7:06 の場合の 7:10）を誤採用しない。
+ * 理論上すべての候補が未来という異常系では、フォールバックとして全候補の
+ * 中から dismissTime に最も近いものを返す。
+ */
+function resolveDismissCandidate(target: WakeTarget, dismissTime: Date): DismissCandidate | null {
+  const candidates = collectDismissCandidates(target, dismissTime);
+  if (candidates.length === 0) return null;
+
+  const withInstant = candidates.map((candidate) => ({
+    candidate,
+    instant: toDismissInstant(dismissTime, candidate),
+  }));
+  const fired = withInstant.filter((c) => c.instant.getTime() <= dismissTime.getTime());
+  const pool = fired.length > 0 ? fired : withInstant;
+
+  return pool.reduce((closest, current) => {
+    const closestDiff = Math.abs(dismissTime.getTime() - closest.instant.getTime());
+    const currentDiff = Math.abs(dismissTime.getTime() - current.instant.getTime());
+    return currentDiff < closestDiff ? current : closest;
+  }).candidate;
+}
+
+/**
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラーム時刻を解決する。
+ * 詳細な選定ロジックは resolveDismissCandidate を参照。
+ */
+export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): AlarmTime | null {
+  return resolveDismissCandidate(target, dismissTime)?.time ?? null;
+}
+
+/**
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラームの完全な日時を解決する。
+ *
+ * resolveTimeForDismiss は時刻（AlarmTime）のみを返すため、深夜またぎで前日の
+ * override が採用された場合にその情報が失われる。goalDeadline のように
+ * 「発火時刻 + バッファ分」を日付をまたいで計算する場面で
+ * `dismissTime の暦日 + resolveTimeForDismiss の時刻` を組み合わせると、
+ * 前日 23:50 発火のアラームが翌日基準で計算され、締め切りが 1 日ズレる。
+ * この関数は resolveDismissCandidate の dayOffset を反映した正しい日付で
+ * Date を組み立てる。
+ */
+export function resolveDismissInstant(target: WakeTarget, dismissTime: Date): Date | null {
+  const candidate = resolveDismissCandidate(target, dismissTime);
+  return candidate === null ? null : toDismissInstant(dismissTime, candidate);
+}
+
+/**
+ * dismiss を記録する際の対象日（暦日文字列）を、実際に発火したアラーム
+ * （resolveDismissInstant で解決した alarmInstant）を基準に解決する。
+ *
+ * 「dismissTime の暦日が override 対象日と一致するか」だけで判定すると、
+ * 日付変更直後（暦日は既に override 対象日だが、実際に鳴ったのは前日の
+ * 通常アラーム）の dismiss で override 対象日を誤って採用してしまう。
+ * alarmInstant が override 自身の時刻・対象日と一致する場合のみ
+ * override.targetDate を採用し、それ以外は通常の論理日付にフォールバックする。
+ */
+export function resolveDismissDateStr(
+  alarmInstant: Date,
+  dismissTime: Date,
+  target: WakeTarget,
+  dayBoundaryHour: number,
+): string {
+  const override = target.nextOverride;
+  if (
+    override !== null &&
+    formatLocalDate(alarmInstant) === override.targetDate &&
+    alarmInstant.getHours() === override.time.hour &&
+    alarmInstant.getMinutes() === override.time.minute
+  ) {
+    return override.targetDate;
+  }
+  return getLogicalDateString(dismissTime, dayBoundaryHour);
+}
+
+/**
  * nextOverride が期限切れかどうかを判定する。
  * targetDate が存在しない（レガシーデータ）場合も期限切れとみなす。
  */
@@ -117,19 +267,193 @@ export function isNextOverrideExpired(override: NextOverride, now: Date = new Da
     return true;
   }
   const [year, month, day] = override.targetDate.split('-').map(Number);
-  if (year === undefined || month === undefined || day === undefined) return true;
+  // NaN を素通しすると比較が常に false になり「永遠に期限切れにならない」
+  // override が残るため、パース不能な targetDate は期限切れとして掃除させる
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return true;
+  }
 
   const expiresAt = new Date(year, month - 1, day, override.time.hour, override.time.minute, 0);
   return now.getTime() > expiresAt.getTime();
 }
 
 /**
- * setNextOverride 用: 現在時刻からオーバーライド対象日を算出する。
- * scheduleWakeTargetAlarm と同じロジック — 時刻が今日を過ぎていれば明日、そうでなければ今日。
+ * 「明日だけ変更」ピッカーが指す論理的な翌日を返す。
+ *
+ * UI（target-edit の tomorrowOnly）が指すのは「次に迎える朝 = 論理的な翌日」。
+ * 暦日ではなく dayBoundaryHour で判定するのは、日付変更ライン前の深夜
+ * （例: 0:30）に設定した場合、ユーザーの言う「明日」はこのあと数時間後に
+ * 迎える今夜の起床（暦日では当日）を指すため。time 依存の先送り判定は
+ * 含まない — ここはピッカーに「次に迎える朝」の予定値を表示するための
+ * ものであり、実際の targetDate 確定は resolveOverrideSaveDate が行う。
  */
-export function computeOverrideTargetDate(time: AlarmTime, now: Date = new Date()): string {
-  const alarmDate = new Date(now);
-  alarmDate.setHours(time.hour, time.minute, 0, 0);
+export function getNextLogicalDay(dayBoundaryHour: number, now: Date = new Date()): Date {
+  const nextDay = new Date(getLogicalDate(now, dayBoundaryHour).getTime());
+  nextDay.setDate(nextDay.getDate() + 1);
+  return nextDay;
+}
+
+/** resolveNextAlarmCandidate の戻り値。date は time が属する暦日（ラベル表示等に使う）。 */
+interface NextAlarmCandidate {
+  readonly time: AlarmTime;
+  readonly date: Date;
+}
+
+/**
+ * 現在時刻を基準に、次に鳴る予定のアラーム候補（時刻 + 属する日付）を解決する。
+ *
+ * override 対象日でも通常の繰り返しアラームは維持される設計（二重鳴動を許容）
+ * のため、resolveTimeForDate（override 優先で1候補しか返さない）をそのまま
+ * 「次のアラーム」に使うと、通常アラームがまだ発火していないのに override を
+ * 誤って報告したり、override 発火後にまだ発火していない同日の通常アラームを
+ * 見逃したりする。当日・翌日それぞれの通常アラーム・override 候補を列挙し、
+ * その中から now より未来で最も早いものを選ぶ。
+ *
+ * dayBoundaryHour がアラーム時刻より後に設定されている場合、アラーム発火後
+ * 〜境界通過前の時間帯は論理日がまだ前日のままのため、getNextLogicalDay
+ * （論理日 + 1日）が「今日」に戻ってしまう。候補日が now の暦日と同じままなら
+ * 実際に翌日になるまでさらに 1 日ずつ進める。
+ *
+ * dayOverrides は曜日（7種）単位の設定のため、翌日が OFF でもその次の曜日が
+ * 有効なことがある。翌日だけを候補にすると、翌日が OFF の場合に候補が尽きて
+ * 実際にはまだアクティブな繰り返しアラームを「次のアラームなし」と誤って
+ * 報告してしまう。翌日以降 7 日分（週内の全曜日パターン）を候補にする。
+ */
+function resolveNextAlarmCandidate(
+  target: WakeTarget,
+  now: Date,
+  dayBoundaryHour: number,
+): NextAlarmCandidate | null {
+  let nextDay = getNextLogicalDay(dayBoundaryHour, now);
+  while (formatLocalDate(nextDay) === formatLocalDate(now)) {
+    nextDay = new Date(nextDay.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  const dates = [now];
+  let cursor = nextDay;
+  for (let i = 0; i < 7; i++) {
+    dates.push(cursor);
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+  }
+  const override = target.nextOverride;
+  const options: NextAlarmCandidate[] = [];
+  for (const date of dates) {
+    const regular = resolveRegularTimeForDate(target, date);
+    if (regular !== null) options.push({ time: regular, date });
+    if (override !== null && formatLocalDate(date) === override.targetDate) {
+      options.push({ time: override.time, date });
+    }
+  }
+
+  const upcoming = options
+    .map((option) => ({
+      option,
+      instant: new Date(
+        option.date.getFullYear(),
+        option.date.getMonth(),
+        option.date.getDate(),
+        option.time.hour,
+        option.time.minute,
+        0,
+      ),
+    }))
+    .filter((o) => o.instant.getTime() > now.getTime());
+  if (upcoming.length === 0) return null;
+
+  return upcoming.reduce((closest, current) =>
+    current.instant.getTime() < closest.instant.getTime() ? current : closest,
+  ).option;
+}
+
+/** 次に鳴る予定のアラーム時刻。詳細は resolveNextAlarmCandidate を参照。 */
+export function resolveNextAlarmTime(
+  target: WakeTarget,
+  now: Date,
+  dayBoundaryHour: number,
+): AlarmTime | null {
+  return resolveNextAlarmCandidate(target, now, dayBoundaryHour)?.time ?? null;
+}
+
+/**
+ * 次に鳴る予定のアラームが属する日付。曜日ラベル表示など、時刻だけでなく
+ * 日付（今日 or 翌日）も必要な場面で resolveNextAlarmTime と対で使う。
+ */
+export function resolveNextAlarmDate(
+  target: WakeTarget,
+  now: Date,
+  dayBoundaryHour: number,
+): Date | null {
+  return resolveNextAlarmCandidate(target, now, dayBoundaryHour)?.date ?? null;
+}
+
+/**
+ * 「明日だけ変更」ピッカーが表示・対象とする論理日を解決する。
+ *
+ * dayBoundaryHour がアラーム時刻より後で、境界通過前（例: アラーム発火後
+ * 〜境界前）に開くと、getNextLogicalDay だけでは論理日がまだ前日のままの
+ * ため +1 日しても今日の暦日に戻ってしまう。その日の通常スケジュール時刻が
+ * 既に過ぎていると、保存時に「即座に期限切れになる override を作らない」
+ * ため resolveOverrideSaveDate がさらに 1 日先送りするが、ピッカーの表示は
+ * それを考慮しないと、表示される曜日設定と実際に保存される曜日がズレる。
+ * resolveOverrideSaveDate と同じ「既に過ぎていれば 1 日先送り」判定を
+ * ここでも行い、表示と保存の対象日を一致させる。
+ */
+export function resolveOverrideEditDay(
+  target: WakeTarget,
+  dayBoundaryHour: number,
+  now: Date = new Date(),
+): Date {
+  const day = getNextLogicalDay(dayBoundaryHour, now);
+  const time = resolveTimeForDate(target, day) ?? target.defaultTime;
+  const candidate = new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    time.hour,
+    time.minute,
+    0,
+    0,
+  );
+  if (candidate.getTime() <= now.getTime()) {
+    return new Date(day.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return day;
+}
+
+/**
+ * resolveOverrideEditDay で確定した対象日とユーザーが選択した時刻から、
+ * 実際に保存する override の対象日（暦日文字列）を解決する。
+ *
+ * 保存時に now と選択時刻だけから対象日を独立して再計算すると、ピッカーが
+ * 表示していた対象日とズレることがある。例えば dayBoundaryHour がアラーム
+ * 時刻より後の設定で、境界通過前にピッカーが翌日を表示していても、
+ * ユーザーが初期値から「今日はまだ来ていない時刻」に変更すると、独立算出は
+ * 当日を返してしまい、「明日だけ変更」のはずが当日 30 分後に鳴ってしまう。
+ * resolveOverrideEditDay が確定した対象日をそのまま使い、選択時刻がその
+ * 対象日で既に過去（例: 深夜に翌 0 時台を選択）の場合のみ、即座に期限切れに
+ * なる無効な override を避けるため 1 日先送りする。
+ */
+export function resolveOverrideSaveDate(
+  editDay: Date,
+  time: AlarmTime,
+  now: Date = new Date(),
+): string {
+  const alarmDate = new Date(
+    editDay.getFullYear(),
+    editDay.getMonth(),
+    editDay.getDate(),
+    time.hour,
+    time.minute,
+    0,
+    0,
+  );
   if (alarmDate.getTime() <= now.getTime()) {
     alarmDate.setDate(alarmDate.getDate() + 1);
   }

@@ -17,7 +17,6 @@ import {
   syncWidgetEffect,
 } from '../src/services';
 import { registerBackgroundSync } from '../src/services/background-sync';
-import { isSnoozePayload } from '../src/services/session/types';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../src/stores/morning-session-store';
 import { useSettingsStore } from '../src/stores/settings-store';
@@ -57,8 +56,10 @@ export default function RootLayout() {
     // バックグラウンドフェッチ登録（fire-and-forget）
     registerBackgroundSync().catch(logInitError('registerBackgroundSync'));
 
-    // 全ストアロード完了後に Effect ランタイムで初回ウィジェット同期
-    Promise.all([sessionLoaded, targetLoaded, recordsLoaded, settingsLoaded, gradesLoaded])
+    // 全ストアロード完了後に Effect ランタイムで初回ウィジェット同期。
+    // allSettled: 1 ストアの読み込み失敗で他ストアの反映まで巻き込んで
+    // 失敗させない（同期自体は他ストアのデフォルト値で試みる）
+    Promise.allSettled([sessionLoaded, targetLoaded, recordsLoaded, settingsLoaded, gradesLoaded])
       .then(() => runEffect(syncWidgetEffect))
       .catch(logInitError('initial widget sync'));
 
@@ -76,24 +77,27 @@ export default function RootLayout() {
       })
       .catch(logInitError('AlarmKit initialize'));
 
-    const coreLoaded = Promise.all([sessionLoaded, settingsLoaded]);
-
-    // スヌーズ経由の cold-start のみ session ロードを待てば足りる。
-    // それ以外は core（session + settings）を待ってからアラームイベントを処理する。
+    // launch payload はネイティブ側で「取得と同時にクリア」される consume-once API。
+    // ここで 1 回だけ読み取り、handleAlarmEventEffect には opts 経由で引き渡す
+    // （Effect 内で再読すると常に null になり、dismiss・スヌーズ処理が消える）
     const firstPayload = checkLaunchPayload();
-    const waitFor = (() => {
-      if (firstPayload === null) return Promise.all([coreLoaded, targetLoaded, recordsLoaded]);
-      if (isSnoozePayload(firstPayload)) return sessionLoaded;
-      return coreLoaded;
-    })();
 
-    waitFor
+    // dismiss 回収（recoverMissedDismiss）は target・records・session・settings の
+    // 全てを読むため、payload の種類に関わらず全ストアのロードを待つ。
+    // AsyncStorage の読み取りは数 ms で、起動体感には影響しない。
+    // allSettled: consume-once の launch payload は既に読み取り済みで
+    // リトライ手段がない。1 ストアの読み込み失敗（rare）で Promise.all が
+    // reject すると payload 処理ごと永久に失われるため、失敗があっても
+    // 到達した各ストアの状態で処理を続行する（未ロードのストアは
+    // loaded=false のままガードされ、recoverMissedDismiss 等が安全に no-op する）
+    Promise.allSettled([sessionLoaded, settingsLoaded, targetLoaded, recordsLoaded])
       .then(async () => {
         await runEffect(
           handleAlarmEventEffect('cold-start', {
             routerPush: (path) => router.push(path),
             dayBoundaryHour: useSettingsStore.getState().dayBoundaryHour,
             clearExpiredOverride: () => useWakeTargetStore.getState().clearExpiredOverride(),
+            launchPayload: firstPayload,
           }),
         );
         // アラーム状態を現在の target に同期する

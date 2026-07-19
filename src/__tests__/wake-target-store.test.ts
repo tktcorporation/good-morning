@@ -57,12 +57,43 @@ describe('useWakeTargetStore', () => {
 
   test('setNextOverride sets with targetDate and clearNextOverride clears', async () => {
     await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-    await useWakeTargetStore.getState().setNextOverride({ hour: 5, minute: 30 });
+    await useWakeTargetStore
+      .getState()
+      .setNextOverride({ hour: 5, minute: 30 }, new Date('2026-02-26'));
     const override = useWakeTargetStore.getState().target?.nextOverride;
     expect(override?.time).toEqual({ hour: 5, minute: 30 });
     expect(override?.targetDate).toBeDefined();
     await useWakeTargetStore.getState().clearNextOverride();
     expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
+  });
+
+  test('setNextOverride は editDay の時刻がまだ来ていなければ editDay をそのまま対象日にする', async () => {
+    jest.useFakeTimers({ now: new Date('2026-02-25T07:30:00') });
+    try {
+      await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+      // 8:00 は今日まだ来ていないが、editDay（翌日）が対象なので翌日 8:00 になる
+      await useWakeTargetStore
+        .getState()
+        .setNextOverride({ hour: 8, minute: 0 }, new Date('2026-02-26'));
+      expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-26');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('setNextOverride は editDay の時刻が既に過去なら 1 日先送りする', async () => {
+    // ピッカーが確定した editDay（当日）で選択時刻が既に過去（0:15 < now 0:30）の場合、
+    // 即座に期限切れになる無効な override を作らないよう翌日に先送りする
+    jest.useFakeTimers({ now: new Date('2026-02-25T00:30:00') });
+    try {
+      await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+      await useWakeTargetStore
+        .getState()
+        .setNextOverride({ hour: 0, minute: 15 }, new Date('2026-02-25'));
+      expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-26');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('loadTarget preserves expired nextOverride (cleared by clearExpiredOverride instead)', async () => {
@@ -247,5 +278,149 @@ describe('useWakeTargetStore', () => {
     });
     await useWakeTargetStore.getState().loadTarget();
     expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBeNull();
+  });
+
+  // ─── マイグレーション正規化（欠落・破損フィールドでスケジューリングを例外死させない） ───
+
+  function stubStoredTarget(value: string): void {
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(value);
+      return Promise.resolve(null);
+    });
+  }
+
+  test('loadTarget は dayOverrides / nextOverride 欠落のレガシーデータを {} / null に正規化する', async () => {
+    // dayOverrides が undefined のままだと groupDaysByTime が TypeError で死に、
+    // 旧アラーム全キャンセル後にスケジュール 0 本で終わる（アラームが鳴らなくなる）
+    stubStoredTarget(JSON.stringify({ defaultTime: { hour: 7, minute: 0 }, enabled: true }));
+    await useWakeTargetStore.getState().loadTarget();
+    const target = useWakeTargetStore.getState().target;
+    expect(target?.dayOverrides).toEqual({});
+    expect(target?.nextOverride).toBeNull();
+  });
+
+  test('loadTarget は enabled 欠落を true に正規化する（保存済みデータの持ち主は利用継続中のため）', async () => {
+    stubStoredTarget(JSON.stringify({ defaultTime: { hour: 7, minute: 0 } }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.enabled).toBe(true);
+  });
+
+  test('loadTarget は defaultTime 欠落・不正値をデフォルト時刻に正規化する', async () => {
+    stubStoredTarget(JSON.stringify({ enabled: true }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.defaultTime).toEqual(
+      DEFAULT_WAKE_TARGET.defaultTime,
+    );
+
+    stubStoredTarget(JSON.stringify({ defaultTime: { hour: 99, minute: -5 }, enabled: true }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.defaultTime).toEqual(
+      DEFAULT_WAKE_TARGET.defaultTime,
+    );
+  });
+
+  test('loadTarget は time 欠損の破損 nextOverride を null に正規化する', async () => {
+    stubStoredTarget(
+      JSON.stringify({
+        ...DEFAULT_WAKE_TARGET,
+        nextOverride: { targetDate: '2026-03-01' },
+      }),
+    );
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
+  });
+
+  test('loadTarget は不正な dayOverrides エントリを捨てて有効なものだけ残す', async () => {
+    stubStoredTarget(
+      JSON.stringify({
+        ...DEFAULT_WAKE_TARGET,
+        dayOverrides: {
+          0: { type: 'off' },
+          1: { type: 'custom', time: { hour: 6, minute: 30 } },
+          2: { type: 'custom' },
+          3: { type: 'unknown' },
+        },
+      }),
+    );
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.dayOverrides).toEqual({
+      0: { type: 'off' },
+      1: { type: 'custom', time: { hour: 6, minute: 30 } },
+    });
+  });
+
+  test('loadTarget は破損 JSON では reject せず、target を確定できないため corrupted 状態にする', async () => {
+    // raw が存在する（何か保存されていた）のに破損している場合、
+    // loaded=true で捏造した DEFAULT_WAKE_TARGET を確定させると、
+    // 次の syncAlarmsEffect が alarmIds（実在するネイティブアラーム）を
+    // previousIds として使い、7:00 のデフォルトアラームを新規登録した上で
+    // ユーザーの実際の設定に基づく旧アラームをキャンセルしてしまう。
+    // target が確定するまで同期させないほうが安全。
+    // 一方で loaded=false のまま放置すると、ダッシュボードがローディング画面に
+    // 固まり続け、resetCorruptedTarget によるユーザーの復旧手段にも到達できない。
+    // loaded=true・corrupted=true にして、画面遷移と復旧導線の両方を確保する
+    stubStoredTarget('not-json{{{');
+    await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.corrupted).toBe(true);
+    expect(state.target).toBeNull();
+  });
+
+  test('loadTarget は文字列 "null" が保存されていても corrupted 状態にする', async () => {
+    stubStoredTarget('null');
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.corrupted).toBe(true);
+    expect(state.target).toBeNull();
+  });
+
+  test('loadTarget は破損 JSON でも alarmIds が読めていればストアに反映する（次回再試行時のため）', async () => {
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve('not-json{{{');
+      if (key === 'alarm-ids') return Promise.resolve(JSON.stringify(['native-1', 'native-2']));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.corrupted).toBe(true);
+    expect(state.alarmIds).toEqual(['native-1', 'native-2']);
+  });
+
+  test('resetCorruptedTarget は corrupted を解除し、無効化した DEFAULT_WAKE_TARGET を保存する', async () => {
+    stubStoredTarget('not-json{{{');
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().corrupted).toBe(true);
+
+    await useWakeTargetStore.getState().resetCorruptedTarget();
+
+    const state = useWakeTargetStore.getState();
+    expect(state.corrupted).toBe(false);
+    expect(state.target).toEqual({ ...DEFAULT_WAKE_TARGET, enabled: false });
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      JSON.stringify({ ...DEFAULT_WAKE_TARGET, enabled: false }),
+    );
+  });
+
+  test('loadTarget は未設定（初回起動）のみ enabled: false にフォールバックする', async () => {
+    mockGetItem.mockResolvedValue(null);
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.target).toEqual({ ...DEFAULT_WAKE_TARGET, enabled: false });
+  });
+
+  test('loadTarget は alarm-ids が破損していても target のロードに成功し alarmIds は [] になる', async () => {
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(DEFAULT_WAKE_TARGET));
+      if (key === 'alarm-ids') return Promise.resolve('broken[[[');
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.target).not.toBeNull();
+    expect(state.alarmIds).toEqual([]);
   });
 });

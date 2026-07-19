@@ -11,10 +11,11 @@
 
 import { useDailyGradeStore } from '../stores/daily-grade-store';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useSettingsStore } from '../stores/settings-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { DayOfWeek } from '../types/alarm';
 import { formatTime } from '../types/alarm';
-import { resolveTimeForDate } from '../types/wake-target';
+import { resolveNextAlarmDate, resolveNextAlarmTime } from '../types/wake-target';
 import type { WidgetData } from '../types/widget-data';
 import { getLocalizedTodoTitle } from '../utils/todo-display';
 
@@ -37,17 +38,23 @@ export function buildWidgetData(): WidgetData {
   const target = useWakeTargetStore.getState().target;
   const sessionState = useMorningSessionStore.getState();
   const { streak } = useDailyGradeStore.getState();
+  const { dayBoundaryHour } = useSettingsStore.getState();
 
   // --- nextAlarm ---
+  // resolveTimeForDate(target, now) だけだと「今日」の予定を返すのみで、
+  // 今日のアラームを消化した後（夕方以降）も同じ時刻を表示し続け、翌日に
+  // 予定された nextOverride が反映されない。resolveNextAlarmTime/Date で
+  // 実際に次に鳴るアラームの時刻・曜日を解決する
   let nextAlarm: WidgetData['nextAlarm'] = null;
   if (target !== null) {
     const now = new Date();
-    const alarmTime = resolveTimeForDate(target, now);
-    if (alarmTime !== null) {
+    const alarmTime = resolveNextAlarmTime(target, now, dayBoundaryHour);
+    const alarmDate = resolveNextAlarmDate(target, now, dayBoundaryHour);
+    if (alarmTime !== null && alarmDate !== null) {
       nextAlarm = {
         time: formatTime(alarmTime),
         enabled: target.enabled,
-        label: DAY_LABELS[now.getDay() as DayOfWeek],
+        label: DAY_LABELS[alarmDate.getDay() as DayOfWeek],
       };
     }
   }

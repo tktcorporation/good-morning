@@ -1,8 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { WakeRecord } from '../types/wake-record';
 
+const mockGetItem = AsyncStorage.getItem as jest.Mock;
+
 beforeEach(() => {
   useWakeRecordStore.setState({ records: [], loaded: false });
+  mockGetItem.mockReset();
+  mockGetItem.mockResolvedValue(null);
 });
 
 const sampleRecord: Omit<WakeRecord, 'id'> = {
@@ -99,5 +104,49 @@ describe('wake-record store', () => {
     expect(stats.totalRecords).toBe(3);
     expect(stats.successRate).toBeCloseTo(66.7, 0);
     expect(stats.averageDiffMinutes).toBe(10);
+  });
+});
+
+describe('loadRecords', () => {
+  test('AsyncStorage.getItem が一時的に reject してもリトライで復旧し、実データを失わない', async () => {
+    // 1回目は一時的な失敗、2回目で成功するケース。ここで即座に records=[] に
+    // 倒すと、実際にはストレージに残っている履歴を「存在しない」ものとして
+    // 扱ってしまい、後続の addRecord で上書き消失する
+    mockGetItem
+      .mockRejectedValueOnce(new Error('transient storage error'))
+      .mockResolvedValueOnce(JSON.stringify([{ ...sampleRecord, id: 'existing-1' }]));
+    await expect(useWakeRecordStore.getState().loadRecords()).resolves.toBeUndefined();
+    const state = useWakeRecordStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.records).toHaveLength(1);
+    expect(state.records[0]?.id).toBe('existing-1');
+  });
+
+  test('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まり既存データを破棄しない', async () => {
+    // 読み取り自体が失敗し続ける場合、ストレージ上の実データの有無が
+    // 確認できていない。loaded=true・records=[] にすると、次の addRecord が
+    // 空配列を実データの上に永続化し既存の起床履歴を消してしまうため、
+    // loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
+    // readStorageItemWithRetry のリトライ回数（3回）分だけ reject を積む。
+    // mockRejectedValue（永続）だと以降のテストにもモックが漏れ出すため使わない
+    mockGetItem
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce(new Error('storage unavailable'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(useWakeRecordStore.getState().loadRecords()).resolves.toBeUndefined();
+    const state = useWakeRecordStore.getState();
+    expect(state.loaded).toBe(false);
+    expect(state.records).toEqual([]);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('破損 JSON では reject せず loaded=true・records=[] で確定する（データは読めたが復元不能なため）', async () => {
+    mockGetItem.mockResolvedValueOnce('not-json{{{');
+    await expect(useWakeRecordStore.getState().loadRecords()).resolves.toBeUndefined();
+    const state = useWakeRecordStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.records).toEqual([]);
   });
 });

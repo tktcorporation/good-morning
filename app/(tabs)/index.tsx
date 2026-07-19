@@ -28,15 +28,13 @@ import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { WakeTarget } from '../../src/types/wake-target';
-import { resolveTimeForDate } from '../../src/types/wake-target';
+import {
+  getNextLogicalDay,
+  resolveOverrideEditDay,
+  resolveTimeForDate,
+} from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 import { getLocalizedTodoTitle } from '../../src/utils/todo-display';
-
-function getTomorrowDate(): Date {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow;
-}
 
 /** 週間スタッツカード。レコードが0件の時は何も表示しない（"0/0 成功" は意味不明なため） */
 function WeeklyStatsCard({
@@ -267,6 +265,8 @@ export default function DashboardScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
+  const corrupted = useWakeTargetStore((s) => s.corrupted);
+  const resetCorruptedTarget = useWakeTargetStore((s) => s.resetCorruptedTarget);
 
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
@@ -291,7 +291,18 @@ export default function DashboardScreen() {
   const today = useMemo(() => new Date(), []);
   const todaySummary = useDailySummary(today);
 
-  const tomorrow = useMemo(() => getTomorrowDate(), []);
+  // target-edit のピッカー（resolveOverrideEditDay）と同じ対象日を表示する。
+  // getNextLogicalDay だけだと、dayBoundaryHour がアラーム時刻より後の設定で
+  // 境界通過前（アラーム発火後〜境界前）に開いた場合、論理日がまだ前日のまま
+  // なので今日の暦日に戻ってしまい、既に過ぎた当日の予定を「明日」として
+  // 表示してしまう（編集画面を開くと実際は翌日の予定になっている）
+  const tomorrow = useMemo(
+    () =>
+      target !== null
+        ? resolveOverrideEditDay(target, dayBoundaryHour)
+        : getNextLogicalDay(dayBoundaryHour),
+    [target, dayBoundaryHour],
+  );
   const resolvedTime = useMemo(
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),
     [target, tomorrow],
@@ -393,6 +404,22 @@ export default function DashboardScreen() {
     );
   }
 
+  if (corrupted) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadingText}>{t('corrupted.message')}</Text>
+        <Pressable
+          style={styles.corruptedResetButton}
+          onPress={() => {
+            void resetCorruptedTarget();
+          }}
+        >
+          <Text style={styles.corruptedResetButtonText}>{t('corrupted.resetButton')}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   const sessionActive = session !== null;
   const progress = sessionActive ? getProgress() : null;
 
@@ -490,6 +517,20 @@ const styles = StyleSheet.create({
   loadingText: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
+    textAlign: 'center',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  corruptedResetButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  corruptedResetButtonText: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
   errorBanner: {
     backgroundColor: 'rgba(233, 69, 96, 0.15)',

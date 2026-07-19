@@ -68,6 +68,10 @@
     "save": "Save"
   },
   "alarmKitUnavailable": "Alarm features unavailable. Please rebuild the Development Build.",
+  "corrupted": {
+    "message": "Your wake-up settings could not be loaded. Reset to create a new setup.",
+    "resetButton": "Reset Settings"
+  },
   "sleep": {
     "title": "Sleep Goal",
     "setup": "Set sleep goal",

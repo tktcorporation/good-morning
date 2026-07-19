@@ -3,9 +3,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
+import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
-import { resolveTimeForDate } from '../src/types/wake-target';
+import { resolveOverrideEditDay, resolveTimeForDate } from '../src/types/wake-target';
 
 type EditMode = 'tomorrowOnly' | 'changeDefault';
 
@@ -16,13 +17,24 @@ export default function TargetEditScreen() {
   const target = useWakeTargetStore((s) => s.target);
   const setNextOverride = useWakeTargetStore((s) => s.setNextOverride);
   const updateDefaultTime = useWakeTargetStore((s) => s.updateDefaultTime);
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
+
+  // 「明日だけ変更」の対象日。ピッカーの初期値表示（下の currentResolvedTime）と
+  // 保存時（handleSave の setNextOverride）の両方でこの同じ値を使うことで、
+  // ユーザーがピッカーの初期値から時刻を変更した場合でも、表示していた対象日と
+  // 実際に保存される対象日がズレないようにする。dayBoundaryHour がアラーム時刻
+  // より後だと、境界通過前は暦日ベースの +1日だけでは今日に戻ってしまい、その日の
+  // 時刻が既に過ぎていても気づけない（保存時に独立して再計算すると、ここで
+  // 確定した対象日とズレて別日の override になってしまう）
+  const editDay = useMemo(() => {
+    if (target === null) return null;
+    return resolveOverrideEditDay(target, dayBoundaryHour);
+  }, [target, dayBoundaryHour]);
 
   const currentResolvedTime = useMemo(() => {
-    if (target === null) return { hour: 7, minute: 0 };
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return resolveTimeForDate(target, tomorrow) ?? { hour: 7, minute: 0 };
-  }, [target]);
+    if (target === null || editDay === null) return { hour: 7, minute: 0 };
+    return resolveTimeForDate(target, editDay) ?? { hour: 7, minute: 0 };
+  }, [target, editDay]);
 
   const [hour, setHour] = useState(currentResolvedTime.hour);
   const [minute, setMinute] = useState(currentResolvedTime.minute);
@@ -39,12 +51,13 @@ export default function TargetEditScreen() {
   const handleSave = useCallback(async () => {
     const time: AlarmTime = { hour, minute };
     if (mode === 'tomorrowOnly') {
-      await setNextOverride(time);
+      if (editDay === null) return;
+      await setNextOverride(time, editDay);
     } else {
       await updateDefaultTime(time);
     }
     router.back();
-  }, [hour, minute, mode, setNextOverride, updateDefaultTime, router]);
+  }, [hour, minute, mode, editDay, setNextOverride, updateDefaultTime, router]);
 
   return (
     <View style={styles.container}>

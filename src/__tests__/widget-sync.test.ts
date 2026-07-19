@@ -60,6 +60,34 @@ test('returns nextAlarm with time when target exists', () => {
   expect(data.nextAlarm?.enabled).toBe(true);
 });
 
+test('翌日 nextOverride が設定されていて、今日のアラームが既に発火済みなら override 時刻を表示する', () => {
+  // resolveTimeForDate(target, now) だけで判定すると、今日のアラームを
+  // 消化した後（夕方など）も同じ通常時刻を表示し続け、翌日に予定された
+  // nextOverride が夜通し反映されない。二重鳴動を許容する設計のため
+  // override 対象日でも通常アラームは維持されるので、通常アラーム(10:00)を
+  // override(9:00)より後に設定し、翌日最初に鳴るのが override になるようにする
+  jest.useFakeTimers().setSystemTime(new Date('2026-02-26T20:00:00'));
+  try {
+    useWakeTargetStore.setState({
+      target: {
+        defaultTime: { hour: 10, minute: 0 },
+        dayOverrides: {},
+        nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-27' },
+        todos: [],
+        enabled: true,
+        targetSleepMinutes: null,
+        wakeUpGoalBufferMinutes: 30,
+      },
+      loaded: true,
+      alarmIds: [],
+    });
+    const data = buildWidgetData();
+    expect(data.nextAlarm?.time).toBe('09:00');
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test('returns null session when no active session', () => {
   const data = buildWidgetData();
   expect(data.session).toBeNull();

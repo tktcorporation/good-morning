@@ -9,6 +9,8 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import { runEffect, syncAlarmsEffect } from '../services';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useSettingsStore } from '../stores/settings-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 
@@ -36,7 +38,9 @@ beforeEach(() => {
   mockScheduleRepeatingAlarm.mockResolvedValue(true);
   mockCancelAlarm.mockResolvedValue(true);
   useMorningSessionStore.setState({ session: null, loaded: true });
-  useWakeTargetStore.setState({ target: null, loaded: false, alarmIds: [] });
+  useWakeRecordStore.setState({ records: [], loaded: true });
+  useWakeTargetStore.setState({ target: null, loaded: false, corrupted: false, alarmIds: [] });
+  useSettingsStore.setState({ loaded: true });
 });
 
 describe('syncAlarmsEffect', () => {
@@ -111,5 +115,108 @@ describe('syncAlarmsEffect', () => {
 
     expect(mockCancelAlarm).not.toHaveBeenCalled();
     expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('target が corrupted 状態のときは何もしない（実際の設定に基づく旧アラームを誤ってキャンセルしない）', async () => {
+    // corrupted 中は target を確定できていない。同期させると捏造した
+    // DEFAULT_WAKE_TARGET でユーザーの実際の設定に基づく旧アラームを
+    // キャンセルしてしまう
+    useWakeTargetStore.setState({ target: null, loaded: true, corrupted: true, alarmIds: [] });
+    mockGetAllAlarms.mockReturnValue(['native-alarm-1']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('records ストア未ロード時は何もしない（未取り込みのネイティブ先行スヌーズを孤立キャンセルしない）', async () => {
+    // dismiss 処理は records 未ロード時に WakeRecord・セッション作成を諦める
+    // （履歴上書き防止）。この状態で sync を実行すると、まだセッションに
+    // 取り込まれていないネイティブ先行スヌーズが孤立扱いで消えてしまう
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useWakeRecordStore.setState({ records: [], loaded: false });
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('session ストア未ロード時は何もしない（永続化済みの進行中セッションのスヌーズを孤立キャンセルしない）', async () => {
+    // session が未ロードだと session.snoozeAlarmIds は必ず null（空扱い）になる。
+    // 実際には永続化された進行中セッションが存在するのに、これを未ロードのまま
+    // sync すると、そのセッションのネイティブ先行スヌーズが孤立扱いで消える
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useMorningSessionStore.setState({ session: null, loaded: false });
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('settings ストア未ロード時は何もしない（未回収の dismiss が確保するはずのネイティブ先行スヌーズを孤立キャンセルしない）', async () => {
+    // recoverMissedDismiss/handleAlarmDismissEffect は settings 未ロード時に
+    // dismiss イベントを未処理のまま保持する（再試行に委ねる）。この状態で
+    // sync を実行すると、これから回収されるはずのネイティブ先行スヌーズが
+    // まだセッションに取り込まれておらず、孤立扱いで消えてしまう
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useSettingsStore.setState({ loaded: false });
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('セッション進行中に target を OFF にしてもペンディングスヌーズはキャンセルされない', async () => {
+    // wake-target の ON/OFF は「将来の朝」の設定。進行中の起床フローの
+    // スヌーズ（ネイティブ先行スケジュール済み）まで殺すと、
+    // 二度寝したユーザーを起こす手段がなくなる
+    const target = createTarget({ enabled: false });
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: ['wake-1'] });
+    useMorningSessionStore.setState({
+      session: {
+        recordId: 'rec-1',
+        date: '2026-03-06',
+        startedAt: '2026-03-06T07:00:00.000Z',
+        todos: [{ id: 'todo-1', title: 'Test', completed: false, completedAt: null }],
+        windowEnd: '2026-03-06T07:30:00.000Z',
+        liveActivityId: null,
+        goalDeadline: null,
+        snoozeAlarmIds: ['snooze-1', 'snooze-2'],
+        snoozeFiresAt: '2026-03-06T07:09:00.000Z',
+      },
+      loaded: true,
+    });
+    mockGetAllAlarms.mockReturnValue(['wake-1', 'snooze-1', 'snooze-2']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).toHaveBeenCalledWith('wake-1');
+    expect(mockCancelAlarm).not.toHaveBeenCalledWith('snooze-1');
+    expect(mockCancelAlarm).not.toHaveBeenCalledWith('snooze-2');
+    expect(useWakeTargetStore.getState().alarmIds).toEqual([]);
+  });
+
+  test('スケジュール失敗時は store の alarmIds を巻き戻さず旧 ID を保持する', async () => {
+    // 失敗時は旧アラームがネイティブに残る（scheduleWakeTargetAlarm が温存する）ため、
+    // store 側も旧 ID を保持し続けるのが一貫した状態
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: ['old-1'] });
+    mockGetAllAlarms.mockReturnValue(['old-1']);
+    mockScheduleRepeatingAlarm.mockRejectedValue(new Error('native failure'));
+
+    await expect(runEffect(syncAlarmsEffect)).rejects.toBeDefined();
+
+    expect(mockCancelAlarm).not.toHaveBeenCalledWith('old-1');
+    expect(useWakeTargetStore.getState().alarmIds).toEqual(['old-1']);
   });
 });

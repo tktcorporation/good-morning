@@ -14,11 +14,12 @@
 
 import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTarget } from '../../types/wake-target';
-import { resolveTimeForDate } from '../../types/wake-target';
+import { resolveDismissDateStr, resolveDismissInstant } from '../../types/wake-target';
 import { AlarmKit } from '../AlarmKitService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
@@ -44,6 +45,18 @@ const tryAutoStartSession = (
 ): Effect.Effect<boolean, never> =>
   Effect.gen(function* () {
     const sessionStore = useMorningSessionStore.getState();
+    const recordState = useWakeRecordStore.getState();
+
+    // session/records が未ロードのまま進むと、isActive()（session !== null）が
+    // 常に false になり、実際には永続化されている進行中セッションがあっても
+    // startSession が新規セッションで上書きしてしまう。records 未ロードでも
+    // 同様に、完了済みレコードを見逃して同日にセッションを再度自動開始してしまう。
+    // settings 未ロード時は dayBoundaryHour が呼び出し元のデフォルト値のまま
+    // 渡されている可能性があり、checkSessionWindow が誤った論理日付・
+    // ウィンドウでセッションを自動開始・永続化してしまう
+    if (!(sessionStore.loaded && recordState.loaded && useSettingsStore.getState().loaded)) {
+      return false;
+    }
 
     if (sessionStore.isActive()) return false;
 
@@ -51,7 +64,7 @@ const tryAutoStartSession = (
     const windowInfo = checkSessionWindow(now, target, dayBoundaryHour);
     if (windowInfo === null) return false;
 
-    const { records } = useWakeRecordStore.getState();
+    const { records } = recordState;
     const todayRecord = records.find((r) => r.date === windowInfo.dateStr);
     if (todayRecord?.todosCompleted) return false;
 
@@ -92,12 +105,25 @@ const handleInlineDismiss = (
   Effect.gen(function* () {
     const { target } = useWakeTargetStore.getState();
     if (target === null) return;
-    const resolvedTime = resolveTimeForDate(target, new Date());
-    if (resolvedTime === null) return;
     const now = new Date();
+    const alarmInstant = resolveDismissInstant(target, now);
+    if (alarmInstant === null) return;
+
+    // override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
+    // のため、同日内で override → 通常アラームの順に2回 dismiss されうる。
+    // recoverMissedDismiss はセッションアクティブ・recordId 確定済みを「重複」
+    // として false を返すが、呼び出し元はこれを「未処理」と誤認してここに
+    // フォールバックする。addRecord は同日マージで上書きする実装のため、
+    // 無条件に処理すると既存の WakeRecord（TODO 進捗・完了状態）を巻き戻してしまう
+    const recordState = useWakeRecordStore.getState();
+    if (recordState.loaded) {
+      const dateStr = resolveDismissDateStr(alarmInstant, now, target, dayBoundaryHour);
+      if (recordState.records.some((r) => r.date === dateStr)) return;
+    }
+
     yield* handleAlarmDismissEffect({
       target,
-      resolvedTime,
+      alarmInstant,
       dismissTime: now,
       mountedAt: now,
       dayBoundaryHour,
@@ -118,7 +144,24 @@ const handlePayloadEvent = (
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
     if (isSnoozePayload(payload)) {
-      yield* handleSnoozeArrivalEffect;
+      const handled = yield* handleSnoozeArrivalEffect;
+      // handleSnoozeArrivalEffect は session が存在すれば true を返すが、
+      // tryAutoStartSession による自動開始セッション（recordId=null）は
+      // 「dismiss 未処理」を意味する。true だからと dismiss 復元をスキップ
+      // すると、WakeRecord が作られずネイティブスヌーズもセッションに
+      // 取り込まれないまま残り、後続の同期処理にそのスヌーズを孤立扱いで
+      // キャンセルされてしまう
+      const recordId = useMorningSessionStore.getState().session?.recordId ?? null;
+      if (!handled || recordId === null) {
+        // アプリ非起動中に本アラームが dismiss され、スヌーズ通知経由で
+        // 起動したケース。セッションが無いままスヌーズ到着だけ処理して終わると、
+        // 未消化の primary dismiss イベント（WakeRecord・セッション・
+        // ネイティブスヌーズ取り込み）が放置される
+        if (context === 'cold-start') {
+          yield* restoreSessionOnLaunch(dayBoundaryHour);
+        }
+        yield* recoverMissedDismiss(dayBoundaryHour);
+      }
       routerPush('/');
       return;
     }
@@ -128,8 +171,8 @@ const handlePayloadEvent = (
     const recovered = yield* recoverMissedDismiss(dayBoundaryHour);
     if (!recovered) {
       yield* handleInlineDismiss(dayBoundaryHour);
-      routerPush('/');
     }
+    routerPush('/');
   });
 
 // ─── 統一エントリポイント ──────────────────────────────────────────
@@ -146,12 +189,23 @@ export const handleAlarmEventEffect = (
     routerPush: (path: string) => void;
     dayBoundaryHour: number;
     clearExpiredOverride?: () => void;
+    /**
+     * 呼び出し元が読み取り済みの launch payload（cold-start 用）。
+     *
+     * ネイティブの getLaunchPayload は取得と同時にクリアされる consume-once API。
+     * _layout.tsx が waitFor の分岐判定のために先に読み取るため、ここで
+     * 再読すると常に null になり、payload 分岐（dismiss 処理・スヌーズ到着）が
+     * 一切実行されなくなる。読み取りは 1 箇所に限定し、値は明示的に引き渡す。
+     * undefined（未指定）の場合のみネイティブから読む（foreground-resume 用）。
+     */
+    launchPayload?: { alarmId: string; payload: string | null } | null;
   },
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
     const { routerPush, dayBoundaryHour, clearExpiredOverride } = opts;
     const kit = yield* AlarmKit;
-    const payload = yield* kit.checkLaunchPayload;
+    const payload =
+      opts.launchPayload !== undefined ? opts.launchPayload : yield* kit.checkLaunchPayload;
 
     if (payload !== null) {
       yield* handlePayloadEvent(context, payload, routerPush, dayBoundaryHour);

@@ -132,6 +132,40 @@ describe('alarm-kit service', () => {
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(2);
     });
 
+    test('nextOverride 対象日の曜日も繰り返しアラームの対象から除外しない（iOS がdismiss時にアプリを起動しないケースでの消失防止）', async () => {
+      // 対象曜日を除外すると、次にアプリが起動され syncAlarmsEffect が
+      // 走るまでその曜日の繰り返しアラームが丸ごと消える。iOS は dismiss 時に
+      // アプリを起動しないことがあるため（RecoveryService 参照）、
+      // 除外は「次にアプリを開くまで鳴らない」リスクを負う。
+      // override 日の二重鳴動は許容し、繰り返し側は常に維持する。
+      jest.useFakeTimers({ now: new Date('2026-02-25T06:00:00') });
+      try {
+        mockGetAllAlarms.mockReturnValue([]);
+        let uuidCounter = 0;
+        mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+
+        // 2026-02-26 は木曜日（DayOfWeek 4 → iOS weekday 5）
+        const target: WakeTarget = {
+          ...DEFAULT_WAKE_TARGET,
+          defaultTime: { hour: 7, minute: 0 },
+          nextOverride: { time: { hour: 8, minute: 0 }, targetDate: '2026-02-26' },
+          enabled: true,
+        };
+
+        await runEffect(scheduleWakeTargetAlarm(target, [], []));
+
+        expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(1);
+        const repeatingCall = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as {
+          weekdays: number[];
+        };
+        expect(repeatingCall.weekdays).toContain(5);
+        expect(repeatingCall.weekdays).toHaveLength(7);
+        expect(mockScheduleAlarm).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     test('schedules one-time alarm for nextOverride', async () => {
       mockGetAllAlarms.mockReturnValue([]);
       let uuidCounter = 0;
@@ -162,6 +196,128 @@ describe('alarm-kit service', () => {
       const ids = await runEffect(scheduleWakeTargetAlarm(target, [], []));
       expect(ids).toEqual([]);
       expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+    });
+
+    test('スケジュール失敗（reject）時は旧アラームをキャンセルせず温存する', async () => {
+      // 「先キャンセル→後スケジュール」だと、ネイティブの一時的な失敗 1 回で
+      // アラームが 0 本になり翌朝何も鳴らなくなる。失敗時は旧アラームが残ること。
+      mockGetAllAlarms.mockReturnValue(['old-1']);
+      mockScheduleRepeatingAlarm.mockRejectedValue(new Error('native failure'));
+
+      const target: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: true };
+
+      await expect(runEffect(scheduleWakeTargetAlarm(target, ['old-1'], []))).rejects.toBeDefined();
+      expect(mockCancelAlarm).not.toHaveBeenCalledWith('old-1');
+    });
+
+    test('スケジュールが false を返したら失敗として扱い、部分登録をロールバックする', async () => {
+      // success=false を黙って握ると、その曜日グループだけ静かに鳴らなくなる
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+      mockGetAllAlarms.mockReturnValue(['old-1']);
+      mockScheduleRepeatingAlarm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+      const target: WakeTarget = {
+        ...DEFAULT_WAKE_TARGET,
+        defaultTime: { hour: 7, minute: 0 },
+        dayOverrides: { 6: { type: 'custom', time: { hour: 8, minute: 30 } } },
+        enabled: true,
+      };
+
+      await expect(runEffect(scheduleWakeTargetAlarm(target, ['old-1'], []))).rejects.toBeDefined();
+      // 登録済みの新規分はロールバックされる
+      expect(mockCancelAlarm).toHaveBeenCalledWith('uuid-1');
+      // 旧アラームは温存される
+      expect(mockCancelAlarm).not.toHaveBeenCalledWith('old-1');
+    });
+
+    test('登録成功後の孤立掃除は新規登録分とスヌーズを温存する', async () => {
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+      // ネイティブ台帳に新規登録分が既に現れているケース（実機の getAllAlarms 相当）
+      mockGetAllAlarms.mockReturnValue(['old-1', 'stale-x', 'snooze-1', 'uuid-1']);
+
+      const target: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: true };
+
+      const ids = await runEffect(scheduleWakeTargetAlarm(target, ['old-1'], ['snooze-1']));
+
+      expect(ids).toEqual(['uuid-1']);
+      expect(mockCancelAlarm).toHaveBeenCalledWith('old-1');
+      expect(mockCancelAlarm).toHaveBeenCalledWith('stale-x');
+      expect(mockCancelAlarm).not.toHaveBeenCalledWith('snooze-1');
+      expect(mockCancelAlarm).not.toHaveBeenCalledWith('uuid-1');
+    });
+
+    test('登録成功後の掃除（旧アラームキャンセル）が失敗しても新規登録分は返す', async () => {
+      // 掃除フェーズの失敗で Effect ごと失敗させると、新アラームは登録済みなのに
+      // 呼び出し元が setAlarmIds を呼ばず store が旧 ID のまま固定化する
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+      mockGetAllAlarms.mockReturnValue(['old-1', 'uuid-1']);
+      mockCancelAlarm.mockRejectedValue(new Error('cancel failed'));
+
+      const target: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: true };
+
+      const ids = await runEffect(scheduleWakeTargetAlarm(target, ['old-1'], []));
+
+      expect(ids).toEqual(['uuid-1']);
+    });
+
+    test('nextOverride のワンショットは保存済み targetDate の日に登録される', async () => {
+      // now から再計算すると「明日だけ 8:00」を朝 7:30 に設定した場合に
+      // 当日 8:00 へ載ってしまい、肝心の翌日に鳴らない
+      jest.useFakeTimers({ now: new Date('2026-02-25T07:30:00') });
+      try {
+        let uuidCounter = 0;
+        mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+
+        const target: WakeTarget = {
+          ...DEFAULT_WAKE_TARGET,
+          nextOverride: { time: { hour: 8, minute: 0 }, targetDate: '2026-02-26' },
+          enabled: true,
+        };
+
+        await runEffect(scheduleWakeTargetAlarm(target, [], []));
+
+        const expectedEpoch = Math.floor(new Date('2026-02-26T08:00:00').getTime() / 1000);
+        expect(mockScheduleAlarm).toHaveBeenCalledTimes(1);
+        expect(mockScheduleAlarm).toHaveBeenCalledWith(
+          expect.objectContaining({ epochSeconds: expectedEpoch }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('期限切れの nextOverride はワンショットを登録しない', async () => {
+      const target: WakeTarget = {
+        ...DEFAULT_WAKE_TARGET,
+        nextOverride: { time: { hour: 6, minute: 0 }, targetDate: '2020-01-01' },
+        enabled: true,
+      };
+
+      await runEffect(scheduleWakeTargetAlarm(target, [], []));
+      expect(mockScheduleAlarm).not.toHaveBeenCalled();
+    });
+
+    test('nextOverride のワンショット登録が false なら全体を失敗とし、新規登録分をロールバックして旧アラームを温存する', async () => {
+      // 半端な新旧混在スケジュールを残さない「全か無か」を保証する。
+      // 失敗時はネイティブ状態を変えない（旧アラームがそのまま鳴る）のが安全側。
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+      mockGetAllAlarms.mockReturnValue(['old-1']);
+      mockScheduleAlarm.mockResolvedValue(false);
+
+      const target: WakeTarget = {
+        ...DEFAULT_WAKE_TARGET,
+        nextOverride: { time: { hour: 6, minute: 0 }, targetDate: '2099-12-31' },
+        enabled: true,
+      };
+
+      await expect(runEffect(scheduleWakeTargetAlarm(target, ['old-1'], []))).rejects.toBeDefined();
+      // 繰り返しアラーム（uuid-1）はロールバックでキャンセルされ、旧アラームは残る
+      expect(mockCancelAlarm).toHaveBeenCalledWith('uuid-1');
+      expect(mockCancelAlarm).not.toHaveBeenCalledWith('old-1');
     });
   });
 
@@ -218,7 +374,8 @@ describe('alarm-kit service', () => {
       mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
       mockScheduleAlarm.mockResolvedValue(true);
 
-      const baseTime = new Date('2026-02-28T07:00:00.000Z');
+      // 過去時刻のスヌーズは登録されないため、基準は現在時刻以降にする
+      const baseTime = new Date(Date.now() + 60 * 1000);
       const ids = await runEffect(scheduleSnoozeAlarms(baseTime, 3));
 
       expect(ids).toHaveLength(3);
@@ -265,6 +422,27 @@ describe('alarm-kit service', () => {
       const ids = await runEffect(scheduleSnoozeAlarms(new Date()));
       expect(ids).toHaveLength(SNOOZE_MAX_COUNT);
       expect(mockScheduleAlarm).toHaveBeenCalledTimes(SNOOZE_MAX_COUNT);
+    });
+
+    test('過去時刻になるスヌーズはスケジュールせず、未来分だけ登録する', async () => {
+      // 遅延リカバリ（dismiss の数十分後にアプリを開いた等）で、
+      // 既に過ぎた時刻のスヌーズをネイティブに渡さない
+      let uuidCounter = 0;
+      mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
+      mockScheduleAlarm.mockResolvedValue(true);
+
+      // 30 分前が基準 → +9/+18/+27 分は過去、+36/+45 分は未来
+      const baseTime = new Date(Date.now() - 30 * 60 * 1000);
+      const ids = await runEffect(scheduleSnoozeAlarms(baseTime, 5));
+
+      expect(mockScheduleAlarm).toHaveBeenCalledTimes(2);
+      expect(ids).toHaveLength(2);
+      const calledEpochs = mockScheduleAlarm.mock.calls.map(
+        (c) => (c[0] as { epochSeconds: number }).epochSeconds,
+      );
+      for (const epoch of calledEpochs) {
+        expect(epoch * 1000).toBeGreaterThan(Date.now() - 1000);
+      }
     });
   });
 });

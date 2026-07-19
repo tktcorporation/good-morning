@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from '../constants/storage-keys';
 import { runEffectFork, syncWidgetEffect } from '../services';
 import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
+import { readStorageItemWithRetry } from '../utils/storage-read';
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
@@ -67,19 +68,39 @@ async function persistSession(session: MorningSession | null): Promise<void> {
   }
 }
 
+/** 永続化済み session のパース。破損は未設定（null）扱い（loaded=false のまま固まるのを防ぐ）。 */
+function parseStoredSession(raw: string | null): MorningSession | null {
+  if (raw === null) return null;
+  try {
+    // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
+    const parsed = JSON.parse(raw) as StoredMorningSession;
+    return normalizeStoredSession(parsed);
+  } catch {
+    return null;
+  }
+}
+
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
   session: null,
   loaded: false,
 
   loadSession: async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw !== null) {
-      // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
-      const parsed = JSON.parse(raw) as StoredMorningSession;
-      set({ session: normalizeStoredSession(parsed), loaded: true });
-    } else {
-      set({ loaded: true });
+    // パース失敗（データは読めたが壊れている）は未設定扱いで確定してよいが、
+    // 読み取り自体の失敗（リトライしても解決しない）はストレージ上に永続化済みの
+    // 進行中セッションの有無が確認できていない。loaded=true・session=null にすると、
+    // syncAlarmsEffect が生存中のスヌーズを孤立とみなしてキャンセルしたり、
+    // 自動開始/dismiss 処理が新規セッションを永続化済みセッションの上に
+    // 上書きしてしまうため、loaded=false のまま留めて以降の再試行
+    // （アプリ再起動等）に委ねる
+    let raw: string | null;
+    try {
+      raw = await readStorageItemWithRetry(STORAGE_KEY);
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
+      console.error('[morning-session-store] loadSession failed after retries', error);
+      return;
     }
+    set({ session: parseStoredSession(raw), loaded: true });
   },
 
   startSession: async (

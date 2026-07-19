@@ -94,6 +94,14 @@ export const expireSessionIfNeeded: Effect.Effect<boolean, SessionError, AlarmKi
     const session = sessionStore.session;
     if (session === null) return false;
 
+    // updateRecord は records 配列全体を書き戻す実装のため、records 未ロード
+    // （空配列のまま）で呼ぶと、その空配列がそのまま永続化され、実際に
+    // ストレージへ保存済みの起床履歴が失われる。recordId が無ければ
+    // records には触れないため、その場合のみロード未完了でも続行してよい
+    if (session.recordId !== null && !useWakeRecordStore.getState().loaded) {
+      return false;
+    }
+
     const kit = yield* AlarmKit;
 
     // 1. スヌーズアラームキャンセル

@@ -297,3 +297,55 @@ describe('morning-session-store', () => {
     });
   });
 });
+
+describe('loadSession', () => {
+  test('AsyncStorage.getItem が一時的に reject してもリトライで復旧し、永続化済みセッションを失わない', async () => {
+    // 1回目は一時的な失敗、2回目で成功するケース。ここで即座に session=null に
+    // 倒すと、実際には永続化されている進行中セッションを「存在しない」ものとして
+    // 扱ってしまい、syncAlarmsEffect が生存中のスヌーズを孤立キャンセルしたり、
+    // 自動開始処理が新規セッションで上書きしてしまう
+    const storedSession = {
+      recordId: 'wake_existing',
+      date: '2026-02-22',
+      startedAt: '2026-02-22T07:00:00.000Z',
+      todos: [{ id: 'todo_1', title: 'Test', completed: false, completedAt: null }],
+      liveActivityId: null,
+      goalDeadline: null,
+    };
+    (AsyncStorage.getItem as jest.Mock)
+      .mockRejectedValueOnce(new Error('transient storage error'))
+      .mockResolvedValueOnce(JSON.stringify(storedSession));
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.session?.recordId).toBe('wake_existing');
+  });
+
+  test('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まり既存セッションを破棄しない', async () => {
+    // 読み取り自体が失敗し続ける場合、永続化済みセッションの有無が確認できて
+    // いない。loaded=true・session=null にすると、生存中のスヌーズが孤立
+    // キャンセルされたり新規セッションで上書きされてしまうため、loaded=false の
+    // まま留めて以降の再試行（アプリ再起動等）に委ねる
+    // readStorageItemWithRetry のリトライ回数（3回）分だけ reject を積む。
+    // mockRejectedValue（永続）だと以降のテストにもモックが漏れ出すため使わない
+    (AsyncStorage.getItem as jest.Mock)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce(new Error('storage unavailable'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(false);
+    expect(state.session).toBeNull();
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('破損 JSON では reject せず loaded=true・session=null で確定する（データは読めたが復元不能なため）', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce('not-json{{{');
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.session).toBeNull();
+  });
+});
