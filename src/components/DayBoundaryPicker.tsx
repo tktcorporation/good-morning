@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '@/constants/theme';
+import { borderRadius, colors, fontSize, semanticColors, spacing } from '@/constants/theme';
 
 /** FlatList の各行の高さ。getItemLayout で固定高さを指定してスクロール性能を最適化する。 */
 const ITEM_HEIGHT = 48;
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   // Modal overlay & sheet — ボトムシート風モーダル
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: semanticColors.overlay,
     justifyContent: 'flex-end',
   },
   sheet: {

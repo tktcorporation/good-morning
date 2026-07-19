@@ -24,6 +24,18 @@
       "suspicious": {
         "noExplicitAny": "error",
         "noConsole": "warn"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "noReactNativeLiteralColors": "error",
+        "noReactNativeRawText": {
+          "level": "error",
+          "options": {
+            "skip": ["SvgText"]
+          }
+        },
+        "noShadow": "error"
       }
     }
   },

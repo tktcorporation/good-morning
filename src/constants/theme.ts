@@ -59,6 +59,8 @@ export const RESULT_COLORS: Readonly<Record<WakeResult, string>> = {
 export const semanticColors = {
   successLight: 'rgba(46, 213, 115, 0.15)',
   warningLight: 'rgba(255, 165, 2, 0.15)',
+  errorLight: 'rgba(233, 69, 96, 0.15)',
+  overlay: 'rgba(0, 0, 0, 0.5)',
 } as const;
 
 export const commonStyles = StyleSheet.create({

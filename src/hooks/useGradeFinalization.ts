@@ -174,7 +174,10 @@ export function useGradeFinalization(): void {
       }
     };
 
-    finalize();
+    finalize().catch((error: unknown) => {
+      // biome-ignore lint/suspicious/noConsole: グレード確定処理の失敗を握り潰さず可視化する
+      console.error('[useGradeFinalization] finalize failed', error);
+    });
   }, [
     gradeLoaded,
     recordsLoaded,

@@ -10,7 +10,14 @@ import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
-import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  semanticColors,
+  spacing,
+} from '../../src/constants/theme';
 import { useCountdown } from '../../src/hooks/useCountdown';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
@@ -356,10 +363,10 @@ export default function DashboardScreen() {
             const kit = yield* AlarmKit;
             yield* kit.updateLiveActivity(
               activityId,
-              currentSession.todos.map((t) => ({
-                id: t.id,
-                title: getLocalizedTodoTitle(t),
-                completed: t.completed,
+              currentSession.todos.map((todo) => ({
+                id: todo.id,
+                title: getLocalizedTodoTitle(todo),
+                completed: todo.completed,
               })),
               snoozeEpoch,
             );
@@ -533,7 +540,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorBanner: {
-    backgroundColor: 'rgba(233, 69, 96, 0.15)',
+    backgroundColor: semanticColors.errorLight,
     borderWidth: 1,
     borderColor: colors.primary,
     borderRadius: borderRadius.sm,
