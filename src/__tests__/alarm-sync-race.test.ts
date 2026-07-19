@@ -13,6 +13,7 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import { runEffect, syncAlarmsEffect } from '../services';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 
@@ -52,6 +53,7 @@ async function flushMacrotasks(n: number): Promise<void> {
 beforeEach(() => {
   jest.clearAllMocks();
   useMorningSessionStore.setState({ session: null, loaded: true });
+  useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: false, alarmIds: [] });
 });
 

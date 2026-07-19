@@ -9,6 +9,7 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import { runEffect, syncAlarmsEffect } from '../services';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 
@@ -36,6 +37,7 @@ beforeEach(() => {
   mockScheduleRepeatingAlarm.mockResolvedValue(true);
   mockCancelAlarm.mockResolvedValue(true);
   useMorningSessionStore.setState({ session: null, loaded: true });
+  useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: false, alarmIds: [] });
 });
 
@@ -106,6 +108,21 @@ describe('syncAlarmsEffect', () => {
 
   test('does nothing when store is not loaded yet', async () => {
     useWakeTargetStore.setState({ target: null, loaded: false });
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('records ストア未ロード時は何もしない（未取り込みのネイティブ先行スヌーズを孤立キャンセルしない）', async () => {
+    // dismiss 処理は records 未ロード時に WakeRecord・セッション作成を諦める
+    // （履歴上書き防止）。この状態で sync を実行すると、まだセッションに
+    // 取り込まれていないネイティブ先行スヌーズが孤立扱いで消えてしまう
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useWakeRecordStore.setState({ records: [], loaded: false });
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
 
     await runEffect(syncAlarmsEffect);
 

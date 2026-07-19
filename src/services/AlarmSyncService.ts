@@ -6,6 +6,7 @@
 
 import { Effect, Ref } from 'effect';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmKit, AlarmKitError } from './AlarmKitService';
 import { cancelAlarmsExcept, scheduleWakeTargetAlarm } from './AlarmSchedulerService';
@@ -38,6 +39,12 @@ const generationRef = Ref.unsafeMake(0);
  * スケジュール失敗時は store の alarmIds を更新しない。
  * scheduleWakeTargetAlarm が旧アラームをネイティブに温存するため、
  * 旧 ID を保持し続けるのが実態と一致する。
+ *
+ * records 未ロードでもスキップする: 孤立掃除の keep 対象は
+ * session.snoozeAlarmIds だが、dismiss 処理側は records 未ロード時に
+ * WakeRecord・セッション作成を諦める（履歴上書き防止のため）。
+ * そのため records 未ロードのまま sync を実行すると、まだセッションに
+ * 取り込まれていないネイティブ先行スヌーズを孤立として消してしまう。
  */
 export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Effect.gen(
   function* () {
@@ -49,7 +56,7 @@ export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Ef
         if (myGeneration !== latest) return;
 
         const targetState = useWakeTargetStore.getState();
-        if (!targetState.loaded) return;
+        if (!(targetState.loaded && useWakeRecordStore.getState().loaded)) return;
 
         const { target } = targetState;
         const snoozeAlarmIds = useMorningSessionStore.getState().session?.snoozeAlarmIds ?? [];
