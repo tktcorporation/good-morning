@@ -11,7 +11,7 @@ import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import type { NextOverride, WakeTarget } from '../../types/wake-target';
-import { resolveRegularTimeForDate, resolveTimeForDate } from '../../types/wake-target';
+import { resolveRegularTimeForDate } from '../../types/wake-target';
 import { formatLocalDate, getLogicalDateString } from '../../utils/date';
 import type { AlarmKitError } from '../AlarmKitService';
 import type { NotificationError } from '../errors';
@@ -153,6 +153,12 @@ export function resolveOverrideAwareDateStr(
  * 現在時刻がセッションウィンドウ内かどうかを判定する。
  * セッション自動開始の判定に使用。
  *
+ * override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
+ * のため、resolveTimeForDate（override 優先で1候補しか返さない）だけで判定すると、
+ * override 時刻とかけ離れた通常アラームがまだ発火していないのにそのウィンドウを
+ * 見落とし、セッションの自動開始が override 時刻まで遅れてしまう。当日の通常
+ * アラーム・override の両方を候補にし、now が実際に含まれるウィンドウを選ぶ。
+ *
  * @returns ウィンドウ内ならセッション情報、そうでなければ null
  */
 export function checkSessionWindow(
@@ -164,15 +170,22 @@ export function checkSessionWindow(
 
   const dateStr = resolveOverrideAwareDateStr(now, target, dayBoundaryHour);
   const logicalDate = new Date(`${dateStr}T12:00:00`);
-  const resolvedTime = resolveTimeForDate(target, logicalDate);
-  if (resolvedTime === null) return null;
-
   const [year, month, day] = dateStr.split('-').map(Number) as [number, number, number];
   const baseDate = new Date(year, month - 1, day);
-  const { start, end } = getSessionWindow(resolvedTime, baseDate);
 
-  if (now.getTime() >= start.getTime() && now.getTime() < end.getTime()) {
-    return { resolvedTime, windowEnd: end, dateStr };
+  const candidates: AlarmTime[] = [];
+  const regularTime = resolveRegularTimeForDate(target, logicalDate);
+  if (regularTime !== null) candidates.push(regularTime);
+  const { nextOverride } = target;
+  if (nextOverride !== null && formatLocalDate(logicalDate) === nextOverride.targetDate) {
+    candidates.push(nextOverride.time);
+  }
+
+  for (const resolvedTime of candidates) {
+    const { start, end } = getSessionWindow(resolvedTime, baseDate);
+    if (now.getTime() >= start.getTime() && now.getTime() < end.getTime()) {
+      return { resolvedTime, windowEnd: end, dateStr };
+    }
   }
   return null;
 }

@@ -155,4 +155,46 @@ describe('checkSessionWindow', () => {
     expect(result?.resolvedTime).toEqual({ hour: 23, minute: 50 });
     expect(result?.dateStr).toBe('2026-02-25');
   });
+
+  test('override 対象日でも、まだ発火していない通常アラームのウィンドウ内なら通常アラームでセッションを自動開始する', () => {
+    // 二重鳴動を許容する設計のため、override 対象日でも通常アラームは維持される。
+    // resolveTimeForDate は override を常に優先するため、これをそのまま使うと
+    // 通常アラーム(7:00)のウィンドウ内でも override(9:00)のウィンドウ判定に
+    // 落ちてしまい、実際に発火する 7:00 のアラームでセッションが自動開始されない
+    const target = targetWithTodos({
+      defaultTime: { hour: 7, minute: 0 },
+      nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T06:45:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('override 対象日で、override 自身のウィンドウ内なら override でセッションを自動開始する', () => {
+    const target = targetWithTodos({
+      defaultTime: { hour: 7, minute: 0 },
+      nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T08:45:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 9, minute: 0 });
+  });
+
+  test('override 対象日で、通常・override いずれのウィンドウにも入っていなければ自動開始しない', () => {
+    const target = targetWithTodos({
+      defaultTime: { hour: 7, minute: 0 },
+      nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T08:00:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).toBeNull();
+  });
 });
