@@ -128,11 +128,13 @@ describe('resolveTimeForDismiss', () => {
   test('override 対象日で、dismiss 時刻が通常アラーム時刻に近ければ通常時刻を採用する', () => {
     const target: WakeTarget = {
       ...baseTarget,
+      defaultTime: { hour: 8, minute: 0 },
       nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
     };
-    // 9:00（通常）の方が 7:00（override）より dismiss 時刻に近い
+    // 両方とも dismiss 時刻より前（発火済み）。8:00（通常）の方が 7:00（override）
+    // より dismiss 時刻に近い
     const dismissTime = new Date('2026-02-26T08:58:00');
-    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 9, minute: 0 });
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 8, minute: 0 });
   });
 
   test('override 対象日の当該曜日が OFF でも override 時刻を候補にする', () => {
@@ -160,11 +162,38 @@ describe('resolveTimeForDismiss', () => {
   test('override が深夜に近くても、日をまたいだ dismiss が翌日の通常アラームに近ければ通常時刻を採用する', () => {
     const target: WakeTarget = {
       ...baseTarget,
+      defaultTime: { hour: 8, minute: 0 },
       nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
     };
-    // 08:58 は 2026-02-27（targetDate の翌日）の通常アラーム(9:00)に近い
+    // 08:58 は 2026-02-27（targetDate の翌日）の通常アラーム(8:00、発火済み)に近い
     const dismissTime = new Date('2026-02-27T08:58:00');
-    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 9, minute: 0 });
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 8, minute: 0 });
+  });
+
+  test('通常アラームが時刻的に近くても、まだ発火していない（未来の）場合は候補から除外する', () => {
+    // override(7:00, 一回限り) と通常アラーム(7:10) が近接。dismiss(7:06) は
+    // override 発火後 6 分・通常アラームの発火(7:10)まではまだ 4 分ある。
+    // 絶対時刻差だけで比較すると 7:10 の方が近く選ばれてしまうが、
+    // 7:10 のアラームは 7:06 時点でまだ鳴っていないので dismiss の原因になり得ない
+    const target: WakeTarget = {
+      ...baseTarget,
+      defaultTime: { hour: 7, minute: 10 },
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-26T07:06:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('深夜またぎでも、通常アラームがまだ発火していない場合は override を採用する', () => {
+    // override（前日 23:50）は常に発火済み。通常アラーム（当日 00:10）は
+    // dismiss(00:05) 時点ではまだ未来なので候補から除外し、override を採用する
+    const target: WakeTarget = {
+      ...baseTarget,
+      defaultTime: { hour: 0, minute: 10 },
+      nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-27T00:05:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 23, minute: 50 });
   });
 });
 
