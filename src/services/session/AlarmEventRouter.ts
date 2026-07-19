@@ -19,7 +19,7 @@ import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTarget } from '../../types/wake-target';
-import { resolveDismissInstant } from '../../types/wake-target';
+import { resolveDismissDateStr, resolveDismissInstant } from '../../types/wake-target';
 import { AlarmKit } from '../AlarmKitService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
@@ -29,12 +29,7 @@ import {
   recoverMissedDismiss,
   restoreSessionOnLaunch,
 } from './RecoveryService';
-import {
-  checkSessionWindow,
-  isSnoozePayload,
-  resolveOverrideAwareDateStr,
-  type SessionError,
-} from './types';
+import { checkSessionWindow, isSnoozePayload, type SessionError } from './types';
 
 // ─── セッション自動開始 ─────────────────────────────────────────
 
@@ -122,7 +117,7 @@ const handleInlineDismiss = (
     // 無条件に処理すると既存の WakeRecord（TODO 進捗・完了状態）を巻き戻してしまう
     const recordState = useWakeRecordStore.getState();
     if (recordState.loaded) {
-      const dateStr = resolveOverrideAwareDateStr(now, target, dayBoundaryHour);
+      const dateStr = resolveDismissDateStr(alarmInstant, now, target, dayBoundaryHour);
       if (recordState.records.some((r) => r.date === dateStr)) return;
     }
 

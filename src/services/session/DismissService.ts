@@ -17,7 +17,7 @@ import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeRecord, WakeTodoRecord } from '../../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../../types/wake-record';
-import type { WakeTarget } from '../../types/wake-target';
+import { resolveDismissDateStr, type WakeTarget } from '../../types/wake-target';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit } from '../AlarmKitService';
 import {
@@ -27,12 +27,7 @@ import {
 } from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
 import { scheduleReminderNotifications } from '../TodoReminderService';
-import {
-  type AlarmDismissParams,
-  resolveOverrideAwareDateStr,
-  SESSION_WINDOW_AFTER_MINUTES,
-  type SessionError,
-} from './types';
+import { type AlarmDismissParams, SESSION_WINDOW_AFTER_MINUTES, type SessionError } from './types';
 
 /** recordWakeDismiss の戻り値。呼び出し元がセッション紐づけの要否を判断するための情報を含む。 */
 interface WakeDismissRecord {
@@ -146,7 +141,7 @@ export const handleAlarmDismissEffect = (
     }
 
     const kit = yield* AlarmKit;
-    const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
+    const dateStr = resolveDismissDateStr(alarmInstant, dismissTime, target, dayBoundaryHour);
 
     // 1. WakeRecord 作成
     const { record, goalDeadline, hasTodos } = yield* recordWakeDismiss(

@@ -1,4 +1,4 @@
-import { formatLocalDate, getLogicalDate } from '../utils/date';
+import { formatLocalDate, getLogicalDate, getLogicalDateString } from '../utils/date';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 /**
@@ -228,6 +228,34 @@ export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): Al
 export function resolveDismissInstant(target: WakeTarget, dismissTime: Date): Date | null {
   const candidate = resolveDismissCandidate(target, dismissTime);
   return candidate === null ? null : toDismissInstant(dismissTime, candidate);
+}
+
+/**
+ * dismiss を記録する際の対象日（暦日文字列）を、実際に発火したアラーム
+ * （resolveDismissInstant で解決した alarmInstant）を基準に解決する。
+ *
+ * 「dismissTime の暦日が override 対象日と一致するか」だけで判定すると、
+ * 日付変更直後（暦日は既に override 対象日だが、実際に鳴ったのは前日の
+ * 通常アラーム）の dismiss で override 対象日を誤って採用してしまう。
+ * alarmInstant が override 自身の時刻・対象日と一致する場合のみ
+ * override.targetDate を採用し、それ以外は通常の論理日付にフォールバックする。
+ */
+export function resolveDismissDateStr(
+  alarmInstant: Date,
+  dismissTime: Date,
+  target: WakeTarget,
+  dayBoundaryHour: number,
+): string {
+  const override = target.nextOverride;
+  if (
+    override !== null &&
+    formatLocalDate(alarmInstant) === override.targetDate &&
+    alarmInstant.getHours() === override.time.hour &&
+    alarmInstant.getMinutes() === override.time.minute
+  ) {
+    return override.targetDate;
+  }
+  return getLogicalDateString(dismissTime, dayBoundaryHour);
 }
 
 /**

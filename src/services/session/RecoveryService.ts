@@ -17,7 +17,11 @@ import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
-import { resolveDismissInstant, type WakeTarget } from '../../types/wake-target';
+import {
+  resolveDismissDateStr,
+  resolveDismissInstant,
+  type WakeTarget,
+} from '../../types/wake-target';
 import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
@@ -242,23 +246,24 @@ const processPrimaryDismissEvent = (
     const parsedDismissTime = new Date(event.dismissedAt);
     // dismissedAt が壊れていても回収自体は続行する（時刻は現在で代替）
     const dismissTime = Number.isNaN(parsedDismissTime.getTime()) ? new Date() : parsedDismissTime;
-    // tryAutoStartSession は checkSessionWindow（override 考慮）で session.date を
-    // 決めている。ここを単純な論理日付のままにすると、override 対象日の dismiss で
-    // 既存セッション・レコードとの重複判定がズレ、DismissService 側の
-    // resolveOverrideAwareDateStr とも食い違って別日として記録されてしまう
-    const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
+    const alarmInstant = resolveDismissInstant(target, dismissTime);
+    if (alarmInstant === null) {
+      yield* reclaimUnmanagedNativeSnoozes;
+      return false;
+    }
+
+    // dateStr は実際に発火した alarmInstant を基準に解決する（DismissService
+    // 側の resolveDismissDateStr と同じ基準）。dismissTime の暦日だけで override
+    // 対象日を判定すると、日付変更直後に前夜の通常アラームが dismiss された
+    // ケースで override 対象日を誤って採用し、後続の実際の override dismiss と
+    // 別日として記録されるべきものが同日重複と誤判定されてしまう
+    const dateStr = resolveDismissDateStr(alarmInstant, dismissTime, target, dayBoundaryHour);
 
     // records は呼び出し元がループ開始前に固定したスナップショット。
     // ループ内で自分より前のイベント処理により追加されたレコード（進捗のない
     // 初期状態）はここに含まれないため、二重鳴動で同日に複数イベントが
     // 積まれていても、最新イベントを誤って「重複」として弾かない
     if (records.some((r) => r.date === dateStr)) {
-      yield* reclaimUnmanagedNativeSnoozes;
-      return false;
-    }
-
-    const alarmInstant = resolveDismissInstant(target, dismissTime);
-    if (alarmInstant === null) {
       yield* reclaimUnmanagedNativeSnoozes;
       return false;
     }

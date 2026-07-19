@@ -2,6 +2,7 @@ import {
   computeOverrideTargetDate,
   getNextLogicalDay,
   isNextOverrideExpired,
+  resolveDismissDateStr,
   resolveDismissInstant,
   resolveNextAlarmDate,
   resolveNextAlarmTime,
@@ -254,6 +255,35 @@ describe('resolveDismissInstant', () => {
     };
     const dismissTime = new Date('2026-02-27T08:58:00');
     expect(resolveDismissInstant(target, dismissTime)).toEqual(new Date('2026-02-27T08:00:00'));
+  });
+});
+
+describe('resolveDismissDateStr', () => {
+  const baseTarget: WakeTarget = {
+    defaultTime: { hour: 23, minute: 50 },
+    dayOverrides: {},
+    nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+    todos: [],
+    enabled: true,
+    targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
+  };
+
+  test('override 自身が発火した場合は override.targetDate を返す', () => {
+    const dismissTime = new Date('2026-02-26T00:10:00');
+    const alarmInstant = resolveDismissInstant(baseTarget, dismissTime);
+    if (alarmInstant === null) throw new Error('alarmInstant should not be null');
+    expect(resolveDismissDateStr(alarmInstant, dismissTime, baseTarget, 4)).toBe('2026-02-26');
+  });
+
+  test('暦日は override 対象日と一致するが、実際に発火したのは前夜の通常アラームの場合は前日の論理日付を返す', () => {
+    // dismissTime（00:05）の暦日は override.targetDate（2026-02-26）と一致するが、
+    // 実際に発火したのは前夜 23:50 の通常アラーム。dateStr は override 対象日では
+    // なく、発火したアラームの論理日付（2026-02-25）を返す必要がある
+    const dismissTime = new Date('2026-02-26T00:05:00');
+    const alarmInstant = resolveDismissInstant(baseTarget, dismissTime);
+    if (alarmInstant === null) throw new Error('alarmInstant should not be null');
+    expect(resolveDismissDateStr(alarmInstant, dismissTime, baseTarget, 4)).toBe('2026-02-25');
   });
 });
 

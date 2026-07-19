@@ -401,6 +401,53 @@ describe('handleAlarmDismissEffect', () => {
     expect(records.map((r) => r.date).sort()).toEqual(['2026-02-25', '2026-02-26']);
   });
 
+  test('日付変更後に dismiss された前夜の通常アラームと override dismiss が別日として記録される', async () => {
+    // 前夜 23:50 の通常アラームを日付が変わった直後（00:05）に dismiss すると、
+    // dismissTime の暦日は既に override.targetDate と一致してしまう。
+    // resolveDismissInstant は正しく前夜の通常アラームを発火候補と判定するが、
+    // dateStr が dismissTime の暦日一致だけで override 対象日を採用すると、
+    // 前夜の通常アラーム記録が override 対象日に紐づき、後続の実際の
+    // override dismiss（00:10）が同日重複と誤判定されて記録されなくなる
+    const target: WakeTarget = {
+      defaultTime: { hour: 23, minute: 50 },
+      dayOverrides: {},
+      nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+      todos: [],
+      enabled: true,
+      targetSleepMinutes: null,
+      wakeUpGoalBufferMinutes: 30,
+    };
+
+    const regularDismissTime = new Date('2026-02-26T00:05:00');
+    const regularAlarmInstant = resolveDismissInstant(target, regularDismissTime);
+    if (regularAlarmInstant === null) throw new Error('regularAlarmInstant should not be null');
+    await runEffect(
+      handleAlarmDismissEffect({
+        target,
+        alarmInstant: regularAlarmInstant,
+        dismissTime: regularDismissTime,
+        mountedAt: regularDismissTime,
+        dayBoundaryHour: 4,
+      }),
+    );
+
+    const overrideDismissTime = new Date('2026-02-26T00:10:00');
+    const overrideAlarmInstant = resolveDismissInstant(target, overrideDismissTime);
+    if (overrideAlarmInstant === null) throw new Error('overrideAlarmInstant should not be null');
+    await runEffect(
+      handleAlarmDismissEffect({
+        target,
+        alarmInstant: overrideAlarmInstant,
+        dismissTime: overrideDismissTime,
+        mountedAt: overrideDismissTime,
+        dayBoundaryHour: 4,
+      }),
+    );
+
+    const records = useWakeRecordStore.getState().records;
+    expect(records.map((r) => r.date).sort()).toEqual(['2026-02-25', '2026-02-26']);
+  });
+
   test('深夜またぎで override が採用された dismiss は、goalDeadline が発火日基準で正しく計算される', async () => {
     // resolveDismissInstant が前日の override 発火日時を正しく返さないと、
     // goalDeadline が dismissTime の暦日（2026-02-27）基準で計算され、
