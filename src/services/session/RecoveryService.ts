@@ -186,9 +186,14 @@ export const recoverMissedDismiss = (
 
     // アプリを開かないまま複数の朝にわたって dismiss されると、ネイティブ
     // キューに複数件たまることがある。最後の1件だけ処理してキュー全体を
-    // クリアすると、それ以前の日の起床記録が永久に失われる。古い順に
-    // 全件処理し、各回で最新の records を見て重複判定する（前の回で
-    // 追加された record を次の回の重複判定に反映させるため）。
+    // クリアすると、それ以前の日の起床記録が永久に失われる。古い順に全件
+    // 処理する。重複判定はループ開始前の records スナップショットに対して
+    // 行う（ループの途中で再取得しない）: 二重鳴動を許容する設計のため、
+    // override・通常アラーム両方の primary dismiss イベントが同じ論理日付に
+    // 積まれることがある。もし前の回で作成した進捗のないレコードを次の回の
+    // 重複判定に反映させてしまうと、最新（実際にセッションを開始すべき）
+    // イベントが「重複」として弾かれ、WakeRecord はあるのにセッション・
+    // スヌーズが一切開始されなくなる。
     // ライブセッション・スヌーズの取り込みは最新（最後）のイベントだけに
     // 限定する: ネイティブの App Groups スヌーズ ID は最新イベントのものに
     // 上書きされているため、古いイベントでセッションを開始すると、
@@ -196,16 +201,16 @@ export const recoverMissedDismiss = (
     const sortedEvents = [...primaryEvents].sort((a, b) =>
       a.dismissedAt.localeCompare(b.dismissedAt),
     );
+    const initialRecords = useWakeRecordStore.getState().records;
     let recovered = false;
     for (let i = 0; i < sortedEvents.length; i++) {
       const event = sortedEvents[i] as (typeof sortedEvents)[number];
       const isLatest = i === sortedEvents.length - 1;
-      const currentRecords = useWakeRecordStore.getState().records;
       const result = yield* processPrimaryDismissEvent(
         target,
         event,
         dayBoundaryHour,
-        currentRecords,
+        initialRecords,
         isLatest,
       );
       recovered = recovered || result;
@@ -243,6 +248,10 @@ const processPrimaryDismissEvent = (
     // resolveOverrideAwareDateStr とも食い違って別日として記録されてしまう
     const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
 
+    // records は呼び出し元がループ開始前に固定したスナップショット。
+    // ループ内で自分より前のイベント処理により追加されたレコード（進捗のない
+    // 初期状態）はここに含まれないため、二重鳴動で同日に複数イベントが
+    // 積まれていても、最新イベントを誤って「重複」として弾かない
     if (records.some((r) => r.date === dateStr)) {
       yield* reclaimUnmanagedNativeSnoozes;
       return false;

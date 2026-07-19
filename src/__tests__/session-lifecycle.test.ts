@@ -1078,4 +1078,37 @@ describe('recoverMissedDismiss', () => {
     expect(session?.date).toBe('2026-02-26');
     expect(session?.snoozeAlarmIds).toEqual(['ns-1']);
   });
+
+  test('二重鳴動で同一論理日付に2件の primary dismiss イベントがあっても、最新イベントでセッションが開始される', async () => {
+    // 二重鳴動を許容する設計（override 対象日でも通常アラームが維持される）
+    // のため、同じ論理日付に override・通常アラーム両方の primary dismiss
+    // イベントが積まれることがある。古いイベントで作成した進捗のない
+    // レコードとの同日重複判定で最新イベントを弾いてしまうと、WakeRecord は
+    // あるのにセッション・スヌーズが一切開始されないまま起床フローが失われる
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+    const target: WakeTarget = {
+      defaultTime: { hour: 9, minute: 0 },
+      dayOverrides: {},
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+      todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+      enabled: true,
+      targetSleepMinutes: null,
+      wakeUpGoalBufferMinutes: 30,
+    };
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: '2026-02-26T07:03:00.000Z', payload: '' },
+      { alarmId: 'alarm-2', dismissedAt: '2026-02-26T09:05:00.000Z', payload: '' },
+    ]);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(true);
+    const records = useWakeRecordStore.getState().records;
+    expect(records.filter((r) => r.date === '2026-02-26')).toHaveLength(1);
+    const session = useMorningSessionStore.getState().session;
+    expect(session).not.toBeNull();
+    expect(session?.recordId).not.toBeNull();
+  });
 });
