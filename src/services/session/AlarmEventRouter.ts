@@ -29,7 +29,12 @@ import {
   recoverMissedDismiss,
   restoreSessionOnLaunch,
 } from './RecoveryService';
-import { checkSessionWindow, isSnoozePayload, type SessionError } from './types';
+import {
+  checkSessionWindow,
+  isSnoozePayload,
+  resolveOverrideAwareDateStr,
+  type SessionError,
+} from './types';
 
 // ─── セッション自動開始 ─────────────────────────────────────────
 
@@ -108,6 +113,19 @@ const handleInlineDismiss = (
     const now = new Date();
     const resolvedTime = resolveTimeForDismiss(target, now);
     if (resolvedTime === null) return;
+
+    // override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
+    // のため、同日内で override → 通常アラームの順に2回 dismiss されうる。
+    // recoverMissedDismiss はセッションアクティブ・recordId 確定済みを「重複」
+    // として false を返すが、呼び出し元はこれを「未処理」と誤認してここに
+    // フォールバックする。addRecord は同日マージで上書きする実装のため、
+    // 無条件に処理すると既存の WakeRecord（TODO 進捗・完了状態）を巻き戻してしまう
+    const recordState = useWakeRecordStore.getState();
+    if (recordState.loaded) {
+      const dateStr = resolveOverrideAwareDateStr(now, target, dayBoundaryHour);
+      if (recordState.records.some((r) => r.date === dateStr)) return;
+    }
+
     yield* handleAlarmDismissEffect({
       target,
       resolvedTime,

@@ -5,6 +5,7 @@
  * runEffect() 経由でテストする。expo-alarm-kit / expo-notifications は jest.setup.js でグローバルモック済み。
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AlarmDismissParams } from '../services';
 import {
   handleAlarmDismissEffect,
@@ -640,6 +641,22 @@ describe('restoreSessionOnLaunch', () => {
     expect(useMorningSessionStore.getState().session).toBeNull();
     expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-expired');
     expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-expired');
+  });
+
+  test('records ストア未ロード時は期限切れセッションの WakeRecord 更新をスキップし、AsyncStorage の起床履歴を空で上書きしない', async () => {
+    // updateRecord は records 配列全体を書き戻す実装のため、records 未ロード
+    // （空配列のまま）で呼ぶと、その空配列がそのまま AsyncStorage に永続化され、
+    // 実際にストレージへ保存済みの起床履歴が失われる
+    useWakeRecordStore.setState({ records: [], loaded: false });
+    setActiveSession({
+      windowEnd: '2020-01-01T00:00:00.000Z',
+      liveActivityId: 'activity-expired',
+      snoozeAlarmIds: ['snooze-expired'],
+    });
+
+    await runEffect(restoreSessionOnLaunch(4));
+
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('wake-records', expect.any(String));
   });
 });
 

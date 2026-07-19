@@ -164,6 +164,57 @@ describe('handleAlarmEventEffect: cold-start + payload あり（非スヌーズ�
     expect(session?.recordId).not.toBeNull();
     expect(session?.snoozeAlarmIds).toEqual(['ns-1', 'ns-2']);
   });
+
+  test('セッションアクティブ・recordId確定済みで同日の既存 record がある場合は上書きしない', async () => {
+    // 二重鳴動を許容する設計（override 対象日でも通常アラームが維持される）のため、
+    // 同日内で override → 通常アラームの順に2回 dismiss されることがある。
+    // recoverMissedDismiss はセッションアクティブ・recordId 確定済みを「重複」として
+    // false を返すが、handlePayloadEvent はこれを「未処理」と誤認して
+    // handleInlineDismiss にフォールバックし、addRecord の同日マージで
+    // 既存の TODO 進捗・完了状態を巻き戻してしまう
+    useWakeTargetStore.setState({ target: createTarget(), loaded: true, alarmIds: [] });
+    setActiveSession({ recordId: 'rec-1' });
+    const today = todayLogicalDate();
+    useWakeRecordStore.setState({
+      records: [
+        {
+          id: 'rec-1',
+          alarmId: 'wake-target',
+          date: today,
+          targetTime: { hour: 7, minute: 0 },
+          alarmTriggeredAt: new Date().toISOString(),
+          dismissedAt: new Date().toISOString(),
+          healthKitWakeTime: null,
+          result: 'great',
+          diffMinutes: 0,
+          todos: [
+            {
+              id: 'todo-1',
+              title: 'Stretch',
+              completedAt: new Date().toISOString(),
+              orderCompleted: 1,
+            },
+          ],
+          todoCompletionSeconds: 60,
+          alarmLabel: '',
+          todosCompleted: true,
+          todosCompletedAt: new Date().toISOString(),
+          goalDeadline: null,
+        },
+      ],
+      loaded: true,
+    });
+    mockGetDismissEvents.mockReturnValue([]);
+
+    const { opts } = routerOpts({ launchPayload: { alarmId: 'alarm-2', payload: null } });
+
+    await runEffect(handleAlarmEventEffect('cold-start', opts));
+
+    const records = useWakeRecordStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]?.todosCompleted).toBe(true);
+    expect(records[0]?.todos[0]?.completedAt).not.toBeNull();
+  });
 });
 
 describe('handleAlarmEventEffect: スヌーズ payload', () => {
