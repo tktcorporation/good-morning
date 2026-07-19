@@ -22,6 +22,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-pnpm
+      # tsc --incremental の .tsbuildinfo をキャッシュし、変更のないファイルの
+      # 再チェックをスキップして高速化する。key に github.sha を含めて実行ごとに
+      # 新規保存させ (同一キーは actions/cache が上書き保存しないため)、
+      # restore-keys で直近の保存分を fallback として拾う。
+      - name: Cache tsc incremental build info
+        uses: actions/cache@v6
+        with:
+          path: .tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-
       - run: pnpm typecheck
 
   lint:
@@ -47,9 +58,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # 変更検出に origin/${{ base_ref }} との diff が要るため PR では全履歴を取得する。
+      # main への push では変更検出自体を行わないので、無駄な full clone を避け
+      # デフォルトの shallow clone (depth=1) のままにする。
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+
+      # PR で test に影響しうるファイルが変更されていなければスキップする。
+      # `paths:` トリガーでジョブごと止めると required status check が
+      # success を報告できずマージが永久ブロックされるため使わない
+      # (native-target-guard.yml 参照)。ジョブ自体は必ず起動し、
+      # 内部の git diff で判定してから後続 step を skip する。
+      - name: Detect test-relevant changes
+        id: changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- \
+            app src package.json pnpm-lock.yaml patches \
+            jest.config.js jest.setup.js babel.config.js tsconfig.json \
+            .github/workflows/ci.yml .github/actions/setup-pnpm)
+          if [ -z "$CHANGED" ]; then
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "## Test — Skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠️ このPRはテストに影響するファイルを変更していないため \`pnpm test\` をスキップしました。" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: ./.github/actions/setup-pnpm
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
       - run: pnpm test
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
 
   doctor:
     name: Expo Doctor
@@ -73,6 +117,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # 変更検出に origin/${{ base_ref }} との diff が要るため PR では全履歴を取得する。
+      # main への push では変更検出自体を行わないので、無駄な full clone を避け
+      # デフォルトの shallow clone (depth=1) のままにする。
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+
+      # PR でバンドルに影響しうるファイルが変更されていなければスキップする。
+      # スキップの安全性については test ジョブの同名 step のコメントを参照。
+      - name: Detect bundle-relevant changes
+        id: changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- \
+            app src assets package.json pnpm-lock.yaml patches \
+            app.config.ts babel.config.js tsconfig.json \
+            .github/workflows/ci.yml .github/actions/setup-pnpm)
+          if [ -z "$CHANGED" ]; then
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "## Bundle Export — Skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠️ このPRはバンドルに影響するファイルを変更していないため \`expo export\` をスキップしました。" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: ./.github/actions/setup-pnpm
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
       - run: pnpm bundle:check
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'

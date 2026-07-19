@@ -174,6 +174,27 @@ jobs:
             pod install --repo-update
           }
 
+      # DerivedData 全体（オブジェクトファイル等）はキャッシュしない: このジョブは
+      # 毎回 actions/checkout で全ファイルを再取得するため mtime が実行の度に
+      # リセットされ、xcodebuild のインクリメンタルビルド判定 (mtime ベース) が
+      # 「ソースは変わっていない」と誤判定し、古いバイナリのまま build 成功を
+      # 返すリスクがある。これは本ジョブの目的（起動直後クラッシュの検出）を
+      # 無意味にする偽陽性を生みかねないため避ける。
+      #
+      # 代わりに ModuleCache.noindex（Clang の pcm モジュールキャッシュ）だけを
+      # キャッシュする。これはヘッダー内容とコンパイラフラグのハッシュでキー化
+      # されており、mtime に依存しない。ロード時に Clang 自身が内容の整合性を
+      # 検証して不整合なら再生成するため、古いキャッシュが誤って使われることはない。
+      # 多数の native pod のヘッダーをモジュール化する一回限りのコストを削減できる。
+      - name: Cache Clang module cache
+        if: steps.sdk.outputs.available == 'true'
+        uses: actions/cache@v6
+        with:
+          path: ios-build/ModuleCache.noindex
+          key: ${{ runner.os }}-modulecache-${{ hashFiles('pnpm-lock.yaml', 'app.config.ts', 'patches/**', 'targets/**') }}
+          restore-keys: |
+            ${{ runner.os }}-modulecache-
+
       - name: Build for Simulator
         if: steps.sdk.outputs.available == 'true'
         # CODE_SIGNING_ALLOWED=NO で署名をスキップ（Simulator 用なので不要）
