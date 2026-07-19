@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": ["babel.config.js", "targets/widget/expo-target.config.js"],
+  "ignoreBinaries": ["eas", "xcrun"],
+  "ignoreDependencies": [
+    "babel-preset-expo",
+    "expo-system-ui",
+    "@expo/vector-icons",
+    "expo-splash-screen",
+    "expo-status-bar"
+  ],
+  "rules": {
+    "exports": "warn",
+    "types": "warn",
+    "nsExports": "warn",
+    "nsTypes": "warn"
+  }
+}

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Post-edit check for a single file (Claude Code PostToolUse hook target)"
+set -euo pipefail
+
+file="${1:-}"
+[[ -z "$file" || ! -f "$file" ]] && exit 0
+
+case "$file" in
+  *.ts | *.tsx) ;;
+  *) exit 0 ;;
+esac
+
+cd "${MISE_PROJECT_ROOT:-.}"
+pnpm exec biome check "$file"

@@ -19,7 +19,11 @@
 - `pnpm lint` - Biome lint チェック
 - `pnpm lint:fix` - lint 自動修正
 - `pnpm format` - コードフォーマット
+- `pnpm format:check` - フォーマットチェック（`--write` なし、CIと同一）
 - `pnpm typecheck` - TypeScript 型チェック
+- `pnpm unused` - 未使用ファイル/exports/依存関係の検出（knip）
+- `pnpm expo:check` - Expo 依存パッケージの互換性チェック
+- `pnpm expo:doctor` - expo-doctor によるプロジェクト診断（`pnpm doctor` は pnpm 組み込みコマンドと衝突するため使わない）
 
 ## iOS ビルド方法
 
@@ -90,9 +94,11 @@ CI で落ちる修正を防ぐため、1つでも失敗したらプッシュし�
 ```bash
 pnpm typecheck                          # 型チェック
 pnpm lint                               # Biome lint
-pnpm biome format .                     # フォーマットチェック
+pnpm format:check                       # フォーマットチェック
 pnpm test                               # テスト実行
-npx expo install --check                # Expo 依存パッケージの互換性
+pnpm unused                             # 未使用ファイル/exports/依存関係の検出（knip）
+pnpm expo:check                         # Expo 依存パッケージの互換性
+pnpm expo:doctor                        # expo-doctor によるプロジェクト診断
 pnpm changeset status --since=origin/main  # changeset の有無（コード変更時は必須）
 ```
 
