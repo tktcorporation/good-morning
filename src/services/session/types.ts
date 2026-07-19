@@ -11,7 +11,7 @@ import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import type { WakeTarget } from '../../types/wake-target';
-import { isNextOverrideExpired, resolveTimeForDate } from '../../types/wake-target';
+import { resolveTimeForDate } from '../../types/wake-target';
 import { formatLocalDate, getLogicalDateString } from '../../utils/date';
 import type { AlarmKitError } from '../AlarmKitService';
 import type { NotificationError } from '../errors';
@@ -72,15 +72,17 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
  * dayBoundaryHour をアラーム時刻より後に設定している場合（UI は 0〜23 時を
  * 許可する）、アラーム前の時間帯では論理日付が前日に倒れ、
  * nextOverride.targetDate（暦日）と噛み合わなくなり override を見失う。
- * now の暦日が targetDate と一致する＝まさに override 対象日の朝を
- * 迎えている場合は、論理日付計算を経由せず targetDate を直接使う。
+ * now の暦日が targetDate と一致する＝まさに override 対象日を迎えている
+ * 場合は、論理日付計算を経由せず targetDate を直接使う。
+ *
+ * 期限切れ判定（isNextOverrideExpired）はここでは行わない。override は
+ * アラーム時刻ちょうどに期限切れとなるため、それを条件に含めると
+ * アラーム後 〜 セッションウィンドウ終了（+30分）までの後半が
+ * defaultTime 基準の判定に落ちてセッション自動開始に失敗する。
+ * 暦日一致の条件だけで「日をまたいだ古い override」は除外できている。
  */
 function resolveSessionDateStr(now: Date, target: WakeTarget, dayBoundaryHour: number): string {
-  if (
-    target.nextOverride !== null &&
-    !isNextOverrideExpired(target.nextOverride, now) &&
-    formatLocalDate(now) === target.nextOverride.targetDate
-  ) {
+  if (target.nextOverride !== null && formatLocalDate(now) === target.nextOverride.targetDate) {
     return target.nextOverride.targetDate;
   }
   return getLogicalDateString(now, dayBoundaryHour);

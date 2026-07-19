@@ -41,8 +41,13 @@ export const handleAlarmDismissEffect = (
     // WakeRecord の永続化はメモリ上の records 配列全体を書き戻す実装のため、
     // records が未ロード（空配列のまま）の状態で addRecord すると、
     // 既存の起床履歴全体が新規レコード 1 件で上書きされる。
-    // ロードが完了していない場合は履歴を壊すより処理を諦める方が安全。
-    if (!useWakeRecordStore.getState().loaded) return;
+    // session も同様: 未ロードだと isActive()（session !== null）が false
+    // になり、実際には進行中セッションが永続化されているのに startSession
+    // が新規セッションで上書き保存してしまう。
+    // ロードが完了していない場合は履歴・セッションを壊すより処理を諦める方が安全。
+    if (!(useWakeRecordStore.getState().loaded && useMorningSessionStore.getState().loaded)) {
+      return;
+    }
 
     const kit = yield* AlarmKit;
 

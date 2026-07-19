@@ -76,6 +76,22 @@ describe('checkSessionWindow', () => {
     expect(result?.resolvedTime).toEqual({ hour: 7, minute: 0 });
   });
 
+  test('override 発火直後（アラーム後〜windowEnd の後半）でも nextOverride のウィンドウが有効なまま', () => {
+    // isNextOverrideExpired はアラーム時刻ちょうどで期限切れになるため、
+    // これを条件に含めるとアラーム後半分（07:00-07:30）が defaultTime 基準の
+    // 判定に落ち、鳴った直後にアプリを開いてもセッションが自動開始しない
+    const target = targetWithTodos({
+      defaultTime: { hour: 22, minute: 0 },
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T07:15:00');
+
+    const result = checkSessionWindow(now, target, 8);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 7, minute: 0 });
+  });
+
   test('now の暦日が targetDate と異なる場合は nextOverride を適用しない', () => {
     const target = targetWithTodos({
       defaultTime: { hour: 9, minute: 0 },

@@ -115,7 +115,7 @@ beforeEach(() => {
   mockStartLiveActivity.mockResolvedValue('activity-1');
   mockEndLiveActivity.mockResolvedValue(true);
 
-  useMorningSessionStore.setState({ session: null, loaded: false });
+  useMorningSessionStore.setState({ session: null, loaded: true });
   useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: true, alarmIds: [] });
 });
@@ -150,6 +150,21 @@ describe('handleAlarmDismissEffect', () => {
     await runEffect(handleAlarmDismissEffect(params));
 
     expect(useWakeRecordStore.getState().records).toEqual(existingRecordsSnapshot);
+    expect(useMorningSessionStore.getState().session).toBeNull();
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+  });
+
+  test('session ストア未ロード時は既存の進行中セッションを上書きせず何もしない', async () => {
+    // startSession は無条件に新規セッションを永続化する実装のため、
+    // session が未ロード（isActive()=false と誤認）の状態で呼ぶと、
+    // 実際には永続化されている進行中セッションを新規セッションで上書きしてしまう
+    useWakeRecordStore.setState({ records: [], loaded: true });
+    useMorningSessionStore.setState({ session: null, loaded: false });
+    const params = createStartParams();
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    expect(useWakeRecordStore.getState().records).toHaveLength(0);
     expect(useMorningSessionStore.getState().session).toBeNull();
     expect(mockScheduleAlarm).not.toHaveBeenCalled();
   });
