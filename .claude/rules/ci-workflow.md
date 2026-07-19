@@ -3,7 +3,7 @@
 ## プッシュ前の必須手順
 
 1. `.github/workflows/` の全ワークフローを読み、`push`/`pull_request` トリガーの `run:` コマンドをリストアップ
-2. ローカル実行可能なコマンドを全て実行（lint, test, knip, build 等）
+2. ローカル実行可能なコマンドを全て実行（lint, test, unused（knip）, build 等）
 3. **全 pass を確認してからプッシュ**
 
 **スキップ可**: CI固有シークレット必要なコマンド、GitHub API操作、E2Eテスト（明示指示時以外）、Docker環境依存

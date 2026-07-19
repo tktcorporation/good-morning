@@ -2,7 +2,7 @@
 #MISE description="Full verification before Claude Code completion (Stop hook target)"
 set -uo pipefail
 
-cd "${MISE_PROJECT_ROOT:-.}"
+cd "${MISE_PROJECT_ROOT:-.}" || exit 1
 
 status=0
 pnpm typecheck || status=1

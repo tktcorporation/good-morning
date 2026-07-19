@@ -33,7 +33,7 @@ jobs:
           key: ${{ runner.os }}-tsbuildinfo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-tsbuildinfo-
-      - run: pnpm typecheck
+      - run: pnpm run typecheck
 
   lint:
     name: Lint
@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-pnpm
-      - run: pnpm lint
+      - run: pnpm run lint
 
   format:
     name: Format
@@ -51,16 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-pnpm
-      - run: pnpm format:check
-
-  unused:
-    name: Unused Code
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-pnpm
-      - run: pnpm unused
+      - run: pnpm run format:check
 
   test:
     name: Test
@@ -102,8 +93,17 @@ jobs:
 
       - uses: ./.github/actions/setup-pnpm
         if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
-      - run: pnpm test
+      - run: pnpm run test
         if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
+
+  unused:
+    name: Unused Code
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm run unused
 
   doctor:
     name: Expo Doctor
@@ -112,14 +112,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-pnpm
-      - run: pnpm expo:check
+      - run: pnpm run expo:check
       # expo-doctor は devDependencies に固定したものを使う。
       # `npx -y expo-doctor` だと毎 run で registry の latest を未レビューのまま
       # 実行することになり、lockfile によるサプライチェーン保護が効かない。
       # script 名は `doctor` ではなく `expo:doctor`（pnpm 10 の組み込み `pnpm doctor`
       # サブコマンドと衝突し、そちらが優先されて package.json の script が
-      # 無言で実行されなくなるため）。
-      - run: pnpm expo:doctor
+      # 無言で実行されなくなるため）。`pnpm run` 明示も同種の衝突を防ぐ保険
+      # （CLAUDE.md の Commands セクション参照）。
+      - run: pnpm run expo:doctor
 
   # Metro バンドルが通ることを CI で保証する。
   # 起動直後にクラッシュする原因の多くは、未解決 import や循環参照など
@@ -160,5 +161,5 @@ jobs:
 
       - uses: ./.github/actions/setup-pnpm
         if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
-      - run: pnpm bundle:check
+      - run: pnpm run bundle:check
         if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'

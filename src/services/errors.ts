@@ -22,7 +22,7 @@ export class AlarmKitOperationError extends Data.TaggedError('AlarmKitOperationE
   readonly cause?: unknown;
 }> {}
 
-/** AsyncStorage の読み書きが失敗（I/O自体の失敗。リトライしても解決しない） */
+/** AsyncStorage の読み書きが失敗（I/O自体の失敗。読み取りは内部で数回リトライ済みで、それでも解決しなかったもの） */
 export class StorageError extends Data.TaggedError('StorageError')<{
   readonly operation: 'read' | 'write' | 'remove';
   readonly key: string;
