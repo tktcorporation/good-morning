@@ -87,6 +87,12 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
  * dismiss が同日重複と誤判定されて記録されなくなる。resolveTimeForDismiss と
  * 同じ基準（絶対時刻差）で regular より override に近い場合のみ true を返し、
  * 判定を一致させる。
+ *
+ * ただし単純な分差の近さだけで比較すると、通常アラームが既に発火して
+ * アフターウィンドウ内（有効中）でも、まだ発火していない override の方が
+ * 分差で近ければ override を優先してしまう。発火済みで現在アフター
+ * ウィンドウ内の通常アラームがあれば、常にそちらを優先する（未発火の
+ * override が現在進行中のセッションを奪ってはならない）。
  */
 function isPreMidnightOverrideWindow(
   now: Date,
@@ -105,7 +111,13 @@ function isPreMidnightOverrideWindow(
   if (regular === null) return true;
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const regularDiff = Math.abs(nowMinutes - (regular.hour * 60 + regular.minute));
+  const regularMinutes = regular.hour * 60 + regular.minute;
+  const minutesSinceRegularFired = nowMinutes - regularMinutes;
+  if (minutesSinceRegularFired >= 0 && minutesSinceRegularFired <= SESSION_WINDOW_AFTER_MINUTES) {
+    return false;
+  }
+
+  const regularDiff = Math.abs(nowMinutes - regularMinutes);
   return overrideDiff <= regularDiff;
 }
 
