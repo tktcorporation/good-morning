@@ -31,9 +31,40 @@ function toIOSWeekday(day: DayOfWeek): number {
 }
 
 /**
- * 曜日ごとのアラーム時刻を解決し、OFF の曜日は null を返す。
+ * nextOverride の対象日を Date として解決する（時刻は 00:00）。
+ * 期限切れ・破損 targetDate（isNextOverrideExpired が拾いきれない
+ * NaN 以外の形状異常を含む）は null。
  */
-function resolveTimeForDay(target: WakeTarget, day: DayOfWeek): AlarmTime | null {
+function resolveNextOverrideDate(target: WakeTarget): Date | null {
+  if (target.nextOverride === null || isNextOverrideExpired(target.nextOverride)) return null;
+  const [year, month, day] = target.nextOverride.targetDate.split('-').map(Number);
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * 曜日ごとのアラーム時刻を解決し、OFF の曜日は null を返す。
+ *
+ * nextOverride の対象日の曜日は繰り返しアラームの対象から除外する。
+ * override はワンショットとして別途スケジュールされるため、除外しないと
+ * 同じ曜日にデフォルト/dayOverride 時刻の繰り返しアラームも残り、
+ * override 日に 2 回鳴ってしまう。
+ */
+function resolveTimeForDay(
+  target: WakeTarget,
+  day: DayOfWeek,
+  overrideDate: Date | null,
+): AlarmTime | null {
+  if (overrideDate !== null && (overrideDate.getDay() as DayOfWeek) === day) return null;
   const override = target.dayOverrides[day];
   if (override !== undefined) {
     if (override.type === 'off') return null;
@@ -49,10 +80,11 @@ function resolveTimeForDay(target: WakeTarget, day: DayOfWeek): AlarmTime | null
 function groupDaysByTime(
   target: WakeTarget,
 ): ReadonlyMap<string, { time: AlarmTime; weekdays: number[] }> {
+  const overrideDate = resolveNextOverrideDate(target);
   const groups = new Map<string, { time: AlarmTime; weekdays: number[] }>();
   for (let d = 0; d < 7; d++) {
     const day = d as DayOfWeek;
-    const time = resolveTimeForDay(target, day);
+    const time = resolveTimeForDay(target, day, overrideDate);
     if (time === null) continue;
     const key = `${time.hour}:${time.minute}`;
     const existing = groups.get(key);
@@ -79,21 +111,11 @@ const scheduleNextOverrideAlarm = (
   target: WakeTarget,
 ): Effect.Effect<string | null, AlarmKitError, AlarmKit> =>
   Effect.gen(function* () {
-    if (target.nextOverride === null || isNextOverrideExpired(target.nextOverride)) return null;
-    const { time, targetDate } = target.nextOverride;
-    const [year, month, day] = targetDate.split('-').map(Number);
-    if (
-      year === undefined ||
-      month === undefined ||
-      day === undefined ||
-      !Number.isFinite(year) ||
-      !Number.isFinite(month) ||
-      !Number.isFinite(day)
-    ) {
-      // isNextOverrideExpired が破損 targetDate を期限切れ扱いにするため通常到達しない
-      return null;
-    }
-    const alarmDate = new Date(year, month - 1, day, time.hour, time.minute, 0, 0);
+    const overrideDate = resolveNextOverrideDate(target);
+    if (overrideDate === null || target.nextOverride === null) return null;
+    const { time } = target.nextOverride;
+    const alarmDate = new Date(overrideDate);
+    alarmDate.setHours(time.hour, time.minute, 0, 0);
     if (alarmDate.getTime() <= Date.now()) return null;
 
     const kit = yield* AlarmKit;
