@@ -198,6 +198,21 @@ describe('resolveTimeForDismiss', () => {
     const dismissTime = new Date('2026-02-27T00:05:00');
     expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 23, minute: 50 });
   });
+
+  test('override 対象日当日でも、前日の通常アラームがまだ発火していない override より近ければそちらを採用する', () => {
+    // 通常 23:50(前日)・override 00:10(targetDate=当日) で、dismiss が
+    // override 対象日当日の 00:05（override 発火前）に行われた場合、
+    // 「同日候補（当日 override・当日 regular）」だけで判定すると両方とも
+    // まだ未来になってしまい、実際に発火済みの前日 23:50 の通常アラームが
+    // 候補から漏れて誤った結果になる
+    const target: WakeTarget = {
+      ...baseTarget,
+      defaultTime: { hour: 23, minute: 50 },
+      nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-26T00:05:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 23, minute: 50 });
+  });
 });
 
 describe('resolveDismissInstant', () => {
@@ -379,6 +394,18 @@ describe('resolveNextAlarmTime', () => {
     };
     const now = new Date('2026-02-26T06:00:00');
     expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('dayBoundaryHour がアラーム時刻より後だと、発火後〜境界通過前は翌日の時刻を返す（境界前に戻らない）', () => {
+    // dayBoundaryHour=8, アラーム=7:00。now=7:30 はアラーム発火後だが、
+    // まだ境界(8:00)を過ぎていない。getNextLogicalDay(8, 7:30) は論理日が
+    // まだ前日のままのため +1日しても「今日」に戻ってしまい、既に過ぎた
+    // 7:00 を再び「次のアラーム」として返してしまう
+    const now = new Date('2026-02-26T07:30:00');
+    expect(resolveNextAlarmTime(baseTarget, now, 8)).toEqual({ hour: 7, minute: 0 });
+    const resolvedDate = resolveNextAlarmDate(baseTarget, now, 8);
+    expect(resolvedDate).not.toBeNull();
+    expect(formatLocalDate(resolvedDate as Date)).toBe('2026-02-27');
   });
 });
 

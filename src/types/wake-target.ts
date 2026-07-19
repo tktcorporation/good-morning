@@ -121,91 +121,89 @@ export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | 
   return resolveRegularTimeForDate(target, date);
 }
 
-const toMinutes = (t: AlarmTime): number => t.hour * 60 + t.minute;
-
-/**
- * dismiss 時点でまだ発火していない（未来の）候補は除外して2候補から選ぶ。
- *
- * override と通常アラームが時刻的に近接していると、絶対時刻差だけの比較では
- * 「まだ鳴っていない側」が dismiss 原因として選ばれてしまうことがある
- * （例: override 7:00・通常 7:10 で dismiss が 7:06 の場合、7:10 はまだ未来）。
- * dismiss は必ず発火済みのアラームに対して起きるため、発火済みの候補のみを
- * 比較対象にする。両方とも発火済み（または理論上両方未来という異常系）なら、
- * dismiss 時刻に近い方を採用する。
- */
-function pickFiredDismissCandidate(
-  a: AlarmTime,
-  aMinutes: number,
-  b: AlarmTime,
-  bMinutes: number,
-  dismissMinutes: number,
-): AlarmTime {
-  const aFired = aMinutes <= dismissMinutes;
-  const bFired = bMinutes <= dismissMinutes;
-  if (aFired !== bFired) return aFired ? a : b;
-  const aDiff = Math.abs(dismissMinutes - aMinutes);
-  const bDiff = Math.abs(dismissMinutes - bMinutes);
-  return aDiff <= bDiff ? a : b;
-}
-
 /** resolveDismissCandidate の戻り値。dayOffset は dismissTime の暦日からの相対日数（0 か -1）。 */
 interface DismissCandidate {
   readonly time: AlarmTime;
   readonly dayOffset: number;
 }
 
+/** DismissCandidate が実際に発火する絶対日時を計算する。 */
+function toDismissInstant(dismissTime: Date, candidate: DismissCandidate): Date {
+  const base = new Date(dismissTime.getTime() + candidate.dayOffset * 24 * 60 * 60 * 1000);
+  return new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
+    candidate.time.hour,
+    candidate.time.minute,
+    0,
+  );
+}
+
+/**
+ * dismissTime を基準に、実際に発火した可能性のあるアラーム候補（当日・前日 ×
+ * 通常・override）を列挙する。存在しない組み合わせ（override 対象日でない等）
+ * は含めない。
+ *
+ * override 対象日は通常の繰り返しアラームも鳴り続ける設計（二重鳴動を許容）
+ * のため、当日・前日それぞれで override と通常アラームの両方が候補になりうる。
+ * 例えば通常 23:50（前日）・override 00:10（当日）という近接設定では、
+ * 「当日候補（override・通常）」だけで判定すると両方ともまだ未来になって
+ * しまい、実際に発火済みの前日 23:50 の通常アラームを見落とす。
+ */
+function collectDismissCandidates(
+  target: WakeTarget,
+  dismissTime: Date,
+): readonly DismissCandidate[] {
+  const candidates: DismissCandidate[] = [];
+  const override = target.nextOverride;
+  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
+
+  const todayRegular = resolveRegularTimeForDate(target, dismissTime);
+  if (todayRegular !== null) candidates.push({ time: todayRegular, dayOffset: 0 });
+
+  const prevRegular = resolveRegularTimeForDate(target, prevDay);
+  if (prevRegular !== null) candidates.push({ time: prevRegular, dayOffset: -1 });
+
+  if (override !== null) {
+    if (formatLocalDate(dismissTime) === override.targetDate) {
+      candidates.push({ time: override.time, dayOffset: 0 });
+    }
+    if (formatLocalDate(prevDay) === override.targetDate) {
+      candidates.push({ time: override.time, dayOffset: -1 });
+    }
+  }
+
+  return candidates;
+}
+
 /**
  * dismiss 時刻に基づいて、実際に発火したと思われるアラーム候補（時刻 + 発火日）を解決する。
  *
- * override 対象日は通常の繰り返しアラームも鳴り続ける設計のため、
- * 「対象日なら常に override」という単純な判定では、通常アラームが dismiss
- * された場合でも override 時刻を誤って採用し、WakeRecord の targetTime・
- * diffMinutes・result が不正確になる。dismissTime の時刻部分に近い方の候補を
- * 実際に鳴ったアラームとみなす。
- *
- * override が前日深夜（例: 23:50）に設定されている場合、実際に鳴った直後でも
- * dismiss が日付をまたいでから行われることがある。暦日一致だけで判定すると
- * 翌日（targetDate の翌日）の通常アラームに誤って解決してしまうため、前日
- * override との実経過時間も候補にする（この場合 dayOffset は -1 になる）。
- *
- * どちらのケースでも、まだ発火していない（dismissTime より未来の）候補は
- * pickFiredDismissCandidate / 発火チェックで除外する。dismiss は必ず発火済みの
- * アラームに対して起きるため、時刻が近いだけの未来の候補を誤採用しない。
+ * collectDismissCandidates で列挙した候補のうち、dismissTime 時点で既に
+ * 発火済み（候補の絶対日時 <= dismissTime）のものだけを対象に、dismissTime
+ * に最も近いものを選ぶ。dismiss は必ず発火済みのアラームに対して起きるため、
+ * 時刻が近いだけの未来の候補（例: override 7:00・通常 7:10 が近接し、
+ * dismiss が 7:06 の場合の 7:10）を誤採用しない。
+ * 理論上すべての候補が未来という異常系では、フォールバックとして全候補の
+ * 中から dismissTime に最も近いものを返す。
  */
 function resolveDismissCandidate(target: WakeTarget, dismissTime: Date): DismissCandidate | null {
-  const regular = resolveRegularTimeForDate(target, dismissTime);
-  const override = target.nextOverride;
-  if (override === null) return regular === null ? null : { time: regular, dayOffset: 0 };
+  const candidates = collectDismissCandidates(target, dismissTime);
+  if (candidates.length === 0) return null;
 
-  const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
+  const withInstant = candidates.map((candidate) => ({
+    candidate,
+    instant: toDismissInstant(dismissTime, candidate),
+  }));
+  const fired = withInstant.filter((c) => c.instant.getTime() <= dismissTime.getTime());
+  const pool = fired.length > 0 ? fired : withInstant;
 
-  if (formatLocalDate(dismissTime) === override.targetDate) {
-    if (regular === null) return { time: override.time, dayOffset: 0 };
-    const picked = pickFiredDismissCandidate(
-      override.time,
-      toMinutes(override.time),
-      regular,
-      toMinutes(regular),
-      dismissMinutes,
-    );
-    return { time: picked, dayOffset: 0 };
-  }
-
-  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
-  if (formatLocalDate(prevDay) === override.targetDate) {
-    if (regular === null) return { time: override.time, dayOffset: -1 };
-    const regularMinutes = toMinutes(regular);
-    if (regularMinutes > dismissMinutes) return { time: override.time, dayOffset: -1 };
-
-    const overrideMinutesUntilMidnight = 24 * 60 - toMinutes(override.time);
-    const overrideElapsed = dismissMinutes + overrideMinutesUntilMidnight;
-    const regularElapsed = dismissMinutes - regularMinutes;
-    return overrideElapsed <= regularElapsed
-      ? { time: override.time, dayOffset: -1 }
-      : { time: regular, dayOffset: 0 };
-  }
-
-  return regular === null ? null : { time: regular, dayOffset: 0 };
+  return pool.reduce((closest, current) => {
+    const closestDiff = Math.abs(dismissTime.getTime() - closest.instant.getTime());
+    const currentDiff = Math.abs(dismissTime.getTime() - current.instant.getTime());
+    return currentDiff < closestDiff ? current : closest;
+  }).candidate;
 }
 
 /**
@@ -229,16 +227,7 @@ export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): Al
  */
 export function resolveDismissInstant(target: WakeTarget, dismissTime: Date): Date | null {
   const candidate = resolveDismissCandidate(target, dismissTime);
-  if (candidate === null) return null;
-  const base = new Date(dismissTime.getTime() + candidate.dayOffset * 24 * 60 * 60 * 1000);
-  return new Date(
-    base.getFullYear(),
-    base.getMonth(),
-    base.getDate(),
-    candidate.time.hour,
-    candidate.time.minute,
-    0,
-  );
+  return candidate === null ? null : toDismissInstant(dismissTime, candidate);
 }
 
 /**
@@ -308,6 +297,12 @@ interface NextAlarmCandidate {
  * ウィジェット等の「次のアラームはいつか」表示にそのまま使うと、今日の
  * アラームを消化した後も同じ時刻を表示し続け、翌日に予定された
  * nextOverride があってもそれが反映されない。
+ *
+ * dayBoundaryHour がアラーム時刻より後に設定されている場合、アラーム発火後
+ * 〜境界通過前の時間帯は論理日がまだ前日のままのため、getNextLogicalDay
+ * （論理日 + 1日）が「今日」に戻ってしまい、既に過ぎたアラームを再び
+ * 「次のアラーム」として返してしまう。候補日が now の暦日と同じままなら
+ * 実際に未来になるまでさらに 1 日ずつ進める。
  */
 function resolveNextAlarmCandidate(
   target: WakeTarget,
@@ -322,7 +317,10 @@ function resolveNextAlarmCandidate(
       return { time: todayTime, date: now };
     }
   }
-  const nextDay = getNextLogicalDay(dayBoundaryHour, now);
+  let nextDay = getNextLogicalDay(dayBoundaryHour, now);
+  while (formatLocalDate(nextDay) === formatLocalDate(now)) {
+    nextDay = new Date(nextDay.getTime() + 24 * 60 * 60 * 1000);
+  }
   const nextTime = resolveTimeForDate(target, nextDay);
   return nextTime === null ? null : { time: nextTime, date: nextDay };
 }
