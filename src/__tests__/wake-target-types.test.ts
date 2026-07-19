@@ -3,6 +3,8 @@ import {
   getNextLogicalDay,
   isNextOverrideExpired,
   resolveDismissInstant,
+  resolveNextAlarmDate,
+  resolveNextAlarmTime,
   resolveTimeForDate,
   resolveTimeForDismiss,
   type WakeTarget,
@@ -331,5 +333,73 @@ describe('getNextLogicalDay', () => {
     expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe(
       computeOverrideTargetDate({ hour: 6, minute: 0 }, DAY_BOUNDARY_HOUR, now),
     );
+  });
+});
+
+describe('resolveNextAlarmTime', () => {
+  // resolveTimeForDate(target, now) は「今日」の予定時刻を返すだけで、
+  // 今日のアラームが既に発火済みかどうかは考慮しない。ウィジェット等の
+  // 「次のアラームはいつか」表示にそのまま使うと、今日のアラームを消化した
+  // 後も同じ時刻を表示し続け、翌日に予定された nextOverride が反映されない
+  const baseTarget: WakeTarget = {
+    defaultTime: { hour: 7, minute: 0 },
+    dayOverrides: {},
+    nextOverride: null,
+    todos: [],
+    enabled: true,
+    targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
+  };
+
+  test('今日のアラームがまだ発火していなければ今日の時刻を返す', () => {
+    const now = new Date('2026-02-26T06:00:00');
+    expect(resolveNextAlarmTime(baseTarget, now, 4)).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('今日のアラームが既に発火済みなら翌日の時刻を返す', () => {
+    const target: WakeTarget = { ...baseTarget, dayOverrides: { 5: { type: 'off' } } };
+    // 2026-02-26 は木曜(4)、翌日 2026-02-27 は金曜(5) で OFF に設定
+    const now = new Date('2026-02-26T08:00:00');
+    expect(resolveNextAlarmTime(target, now, 4)).toBeNull();
+  });
+
+  test('翌日に nextOverride が設定されていて、今日のアラームが既に発火済みなら override 時刻を返す', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-27' },
+    };
+    const now = new Date('2026-02-26T08:00:00');
+    expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 9, minute: 0 });
+  });
+
+  test('翌日に nextOverride が設定されていても、今日のアラームがまだ発火していなければ今日の時刻を返す', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-27' },
+    };
+    const now = new Date('2026-02-26T06:00:00');
+    expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 7, minute: 0 });
+  });
+});
+
+describe('resolveNextAlarmDate', () => {
+  const baseTarget: WakeTarget = {
+    defaultTime: { hour: 7, minute: 0 },
+    dayOverrides: {},
+    nextOverride: null,
+    todos: [],
+    enabled: true,
+    targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
+  };
+
+  test('今日のアラームがまだ発火していなければ今日の日付を返す', () => {
+    const now = new Date('2026-02-26T06:00:00');
+    expect(resolveNextAlarmDate(baseTarget, now, 4)).toEqual(now);
+  });
+
+  test('今日のアラームが既に発火済みなら翌日の日付を返す', () => {
+    const now = new Date('2026-02-26T08:00:00');
+    expect(formatLocalDate(resolveNextAlarmDate(baseTarget, now, 4) as Date)).toBe('2026-02-27');
   });
 });

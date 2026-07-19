@@ -294,6 +294,60 @@ export function getNextLogicalDay(dayBoundaryHour: number, now: Date = new Date(
   return nextDay;
 }
 
+/** resolveNextAlarmCandidate の戻り値。date は time が属する暦日（ラベル表示等に使う）。 */
+interface NextAlarmCandidate {
+  readonly time: AlarmTime;
+  readonly date: Date;
+}
+
+/**
+ * 現在時刻を基準に、次に鳴る予定のアラーム候補（時刻 + 属する日付）を解決する。
+ *
+ * resolveTimeForDate(target, now) は「今日」の予定時刻を返すだけで、今日の
+ * アラームが既に発火済み（現在時刻が過ぎている）かどうかは考慮しない。
+ * ウィジェット等の「次のアラームはいつか」表示にそのまま使うと、今日の
+ * アラームを消化した後も同じ時刻を表示し続け、翌日に予定された
+ * nextOverride があってもそれが反映されない。
+ */
+function resolveNextAlarmCandidate(
+  target: WakeTarget,
+  now: Date,
+  dayBoundaryHour: number,
+): NextAlarmCandidate | null {
+  const todayTime = resolveTimeForDate(target, now);
+  if (todayTime !== null) {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const todayMinutes = todayTime.hour * 60 + todayTime.minute;
+    if (todayMinutes > nowMinutes) {
+      return { time: todayTime, date: now };
+    }
+  }
+  const nextDay = getNextLogicalDay(dayBoundaryHour, now);
+  const nextTime = resolveTimeForDate(target, nextDay);
+  return nextTime === null ? null : { time: nextTime, date: nextDay };
+}
+
+/** 次に鳴る予定のアラーム時刻。詳細は resolveNextAlarmCandidate を参照。 */
+export function resolveNextAlarmTime(
+  target: WakeTarget,
+  now: Date,
+  dayBoundaryHour: number,
+): AlarmTime | null {
+  return resolveNextAlarmCandidate(target, now, dayBoundaryHour)?.time ?? null;
+}
+
+/**
+ * 次に鳴る予定のアラームが属する日付。曜日ラベル表示など、時刻だけでなく
+ * 日付（今日 or 翌日）も必要な場面で resolveNextAlarmTime と対で使う。
+ */
+export function resolveNextAlarmDate(
+  target: WakeTarget,
+  now: Date,
+  dayBoundaryHour: number,
+): Date | null {
+  return resolveNextAlarmCandidate(target, now, dayBoundaryHour)?.date ?? null;
+}
+
 export function computeOverrideTargetDate(
   time: AlarmTime,
   dayBoundaryHour: number,

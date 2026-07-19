@@ -28,15 +28,9 @@ import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { WakeTarget } from '../../src/types/wake-target';
-import { resolveTimeForDate } from '../../src/types/wake-target';
+import { getNextLogicalDay, resolveTimeForDate } from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 import { getLocalizedTodoTitle } from '../../src/utils/todo-display';
-
-function getTomorrowDate(): Date {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow;
-}
 
 /** 週間スタッツカード。レコードが0件の時は何も表示しない（"0/0 成功" は意味不明なため） */
 function WeeklyStatsCard({
@@ -293,7 +287,10 @@ export default function DashboardScreen() {
   const today = useMemo(() => new Date(), []);
   const todaySummary = useDailySummary(today);
 
-  const tomorrow = useMemo(() => getTomorrowDate(), []);
+  // setNextOverride の保存対象日（computeOverrideTargetDate）と同じ基準で
+  // 「次に迎える朝」を決める。暦日ベースの +1日だと、dayBoundaryHour より前の
+  // 深夜には、保存された override の曜日とズレた表示になる
+  const tomorrow = useMemo(() => getNextLogicalDay(dayBoundaryHour), [dayBoundaryHour]);
   const resolvedTime = useMemo(
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),
     [target, tomorrow],
