@@ -1,5 +1,7 @@
-import { toWakeTodoRecords } from '../services/session/types';
+import { checkSessionWindow, toWakeTodoRecords } from '../services/session/types';
 import type { SessionTodo } from '../types/morning-session';
+import type { WakeTarget } from '../types/wake-target';
+import { DEFAULT_WAKE_TARGET } from '../types/wake-target';
 
 describe('toWakeTodoRecords', () => {
   const todo = (over: Partial<SessionTodo>): SessionTodo => ({
@@ -34,5 +36,58 @@ describe('toWakeTodoRecords', () => {
       orderCompleted: null,
       type: 'squat',
     });
+  });
+});
+
+describe('checkSessionWindow', () => {
+  function targetWithTodos(overrides?: Partial<WakeTarget>): WakeTarget {
+    return {
+      ...DEFAULT_WAKE_TARGET,
+      todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+      ...overrides,
+    };
+  }
+
+  test('dayBoundaryHour がアラーム時刻より後でも、当日朝の nextOverride を見失わない', () => {
+    // dayBoundaryHour=8（アラーム 7:00 より後）だと、アラーム前の時間帯は
+    // 論理日付が前日に倒れ、nextOverride.targetDate（暦日）と噛み合わなくなる。
+    // now の暦日が targetDate と一致する場合はそれを優先すべき
+    const target = targetWithTodos({
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T06:45:00');
+
+    const result = checkSessionWindow(now, target, 8);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 7, minute: 0 });
+    expect(result?.dateStr).toBe('2026-02-26');
+  });
+
+  test('dayBoundaryHour が通常どおりアラーム時刻より前なら nextOverride を正しく解決する', () => {
+    const target = targetWithTodos({
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T06:45:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('now の暦日が targetDate と異なる場合は nextOverride を適用しない', () => {
+    const target = targetWithTodos({
+      defaultTime: { hour: 9, minute: 0 },
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-27' },
+    });
+    // defaultTime(9:00) のウィンドウ内（8:30-9:30）。
+    // nextOverride が誤って適用されると resolvedTime が 7:00 になってしまう
+    const now = new Date('2026-02-26T08:45:00');
+
+    const result = checkSessionWindow(now, target, 8);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 9, minute: 0 });
   });
 });

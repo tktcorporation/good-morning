@@ -130,6 +130,21 @@ describe('syncAlarmsEffect', () => {
     expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
   });
 
+  test('session ストア未ロード時は何もしない（永続化済みの進行中セッションのスヌーズを孤立キャンセルしない）', async () => {
+    // session が未ロードだと session.snoozeAlarmIds は必ず null（空扱い）になる。
+    // 実際には永続化された進行中セッションが存在するのに、これを未ロードのまま
+    // sync すると、そのセッションのネイティブ先行スヌーズが孤立扱いで消える
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useMorningSessionStore.setState({ session: null, loaded: false });
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
   test('セッション進行中に target を OFF にしてもペンディングスヌーズはキャンセルされない', async () => {
     // wake-target の ON/OFF は「将来の朝」の設定。進行中の起床フローの
     // スヌーズ（ネイティブ先行スケジュール済み）まで殺すと、

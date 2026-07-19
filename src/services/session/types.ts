@@ -11,8 +11,8 @@ import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import type { WakeTarget } from '../../types/wake-target';
-import { resolveTimeForDate } from '../../types/wake-target';
-import { getLogicalDateString } from '../../utils/date';
+import { isNextOverrideExpired, resolveTimeForDate } from '../../types/wake-target';
+import { formatLocalDate, getLogicalDateString } from '../../utils/date';
 import type { AlarmKitError } from '../AlarmKitService';
 import type { NotificationError } from '../errors';
 
@@ -67,6 +67,26 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
 }
 
 /**
+ * セッションウィンドウ判定用の対象日（暦日文字列）を解決する。
+ *
+ * dayBoundaryHour をアラーム時刻より後に設定している場合（UI は 0〜23 時を
+ * 許可する）、アラーム前の時間帯では論理日付が前日に倒れ、
+ * nextOverride.targetDate（暦日）と噛み合わなくなり override を見失う。
+ * now の暦日が targetDate と一致する＝まさに override 対象日の朝を
+ * 迎えている場合は、論理日付計算を経由せず targetDate を直接使う。
+ */
+function resolveSessionDateStr(now: Date, target: WakeTarget, dayBoundaryHour: number): string {
+  if (
+    target.nextOverride !== null &&
+    !isNextOverrideExpired(target.nextOverride, now) &&
+    formatLocalDate(now) === target.nextOverride.targetDate
+  ) {
+    return target.nextOverride.targetDate;
+  }
+  return getLogicalDateString(now, dayBoundaryHour);
+}
+
+/**
  * 現在時刻がセッションウィンドウ内かどうかを判定する。
  * セッション自動開始の判定に使用。
  *
@@ -79,7 +99,7 @@ export function checkSessionWindow(
 ): { resolvedTime: AlarmTime; windowEnd: Date; dateStr: string } | null {
   if (!target.enabled || target.todos.length === 0) return null;
 
-  const dateStr = getLogicalDateString(now, dayBoundaryHour);
+  const dateStr = resolveSessionDateStr(now, target, dayBoundaryHour);
   const logicalDate = new Date(`${dateStr}T12:00:00`);
   const resolvedTime = resolveTimeForDate(target, logicalDate);
   if (resolvedTime === null) return null;

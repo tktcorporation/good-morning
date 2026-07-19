@@ -40,11 +40,14 @@ const generationRef = Ref.unsafeMake(0);
  * scheduleWakeTargetAlarm が旧アラームをネイティブに温存するため、
  * 旧 ID を保持し続けるのが実態と一致する。
  *
- * records 未ロードでもスキップする: 孤立掃除の keep 対象は
- * session.snoozeAlarmIds だが、dismiss 処理側は records 未ロード時に
- * WakeRecord・セッション作成を諦める（履歴上書き防止のため）。
- * そのため records 未ロードのまま sync を実行すると、まだセッションに
- * 取り込まれていないネイティブ先行スヌーズを孤立として消してしまう。
+ * records / session 未ロードでもスキップする: 孤立掃除の keep 対象は
+ * session.snoozeAlarmIds だが、これはストアが未ロードだと必ず null
+ * （＝空扱い）になる。records は dismiss 処理側が未ロード時に
+ * WakeRecord・セッション作成を諦める（履歴上書き防止のため）ので、
+ * その状態のまま sync するとセッションに取り込まれていないネイティブ
+ * 先行スヌーズを孤立として消す。session 自体が未ロードの場合も同様に、
+ * 永続化済みの進行中セッションが持つスヌーズを「存在しない」ものとして
+ * 扱ってしまい、同じく孤立キャンセルの対象にしてしまう。
  */
 export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Effect.gen(
   function* () {
@@ -56,10 +59,13 @@ export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Ef
         if (myGeneration !== latest) return;
 
         const targetState = useWakeTargetStore.getState();
-        if (!(targetState.loaded && useWakeRecordStore.getState().loaded)) return;
+        const sessionState = useMorningSessionStore.getState();
+        if (!(targetState.loaded && useWakeRecordStore.getState().loaded && sessionState.loaded)) {
+          return;
+        }
 
         const { target } = targetState;
-        const snoozeAlarmIds = useMorningSessionStore.getState().session?.snoozeAlarmIds ?? [];
+        const snoozeAlarmIds = sessionState.session?.snoozeAlarmIds ?? [];
 
         if (target === null || !target.enabled) {
           // wake-target の無効化は「将来の朝」の設定変更。進行中の起床フローの
