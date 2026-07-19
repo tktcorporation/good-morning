@@ -85,21 +85,8 @@ export interface WakeTarget {
   readonly wakeUpGoalBufferMinutes: number;
 }
 
-/**
- * Resolve the alarm time for a given date.
- * Priority: nextOverride > dayOverride > defaultTime.
- * Returns null if the day is set to OFF.
- *
- * nextOverride は targetDate の当日にのみ適用する。期限切れ override のクリアは
- * 通常起動時（clearExpiredOverride）にしか走らず数日残留しうるため、日付で
- * スコープしないと他の日のセッションウィンドウ・起床記録まで override 時刻に
- * 引きずられる。
- */
-export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
-  if (target.nextOverride !== null && formatLocalDate(date) === target.nextOverride.targetDate) {
-    return target.nextOverride.time;
-  }
-
+/** nextOverride を考慮せず、dayOverrides/defaultTime だけでその日の時刻を解決する。 */
+function resolveRegularTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
   const dayOfWeek = date.getDay() as DayOfWeek;
   const override = target.dayOverrides[dayOfWeek];
 
@@ -111,6 +98,53 @@ export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | 
   }
 
   return target.defaultTime;
+}
+
+/**
+ * Resolve the alarm time for a given date.
+ * Priority: nextOverride > dayOverride > defaultTime.
+ * Returns null if the day is set to OFF.
+ *
+ * nextOverride は targetDate の当日にのみ適用する。期限切れ override のクリアは
+ * 通常起動時（clearExpiredOverride）にしか走らず数日残留しうるため、日付で
+ * スコープしないと他の日のセッションウィンドウ・起床記録まで override 時刻に
+ * 引きずられる。
+ *
+ * override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
+ * のため、この関数は「その日どちらのアラームが実際に発火したか」を区別
+ * できない。dismiss 処理（記録の作成）では resolveTimeForDismiss を使うこと。
+ */
+export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
+  if (target.nextOverride !== null && formatLocalDate(date) === target.nextOverride.targetDate) {
+    return target.nextOverride.time;
+  }
+  return resolveRegularTimeForDate(target, date);
+}
+
+/**
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラーム時刻を解決する。
+ *
+ * override 対象日は通常の繰り返しアラームも鳴り続ける設計のため、
+ * resolveTimeForDate の「対象日なら常に override」という判定では、
+ * 通常アラームが dismiss された場合でも override 時刻を誤って採用し、
+ * WakeRecord の targetTime・diffMinutes・result が不正確になる。
+ * dismissTime の時刻部分に近い方の候補を実際に鳴ったアラームとみなす。
+ */
+export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): AlarmTime | null {
+  const regular = resolveRegularTimeForDate(target, dismissTime);
+  const isOverrideDay =
+    target.nextOverride !== null && formatLocalDate(dismissTime) === target.nextOverride.targetDate;
+  if (!isOverrideDay) return regular;
+
+  // isOverrideDay の判定で nextOverride !== null は保証済み
+  const overrideTime = (target.nextOverride as NextOverride).time;
+  if (regular === null) return overrideTime;
+
+  const toMinutes = (t: AlarmTime) => t.hour * 60 + t.minute;
+  const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
+  const regularDiff = Math.abs(dismissMinutes - toMinutes(regular));
+  const overrideDiff = Math.abs(dismissMinutes - toMinutes(overrideTime));
+  return overrideDiff <= regularDiff ? overrideTime : regular;
 }
 
 /**

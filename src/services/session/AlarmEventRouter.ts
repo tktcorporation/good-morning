@@ -18,7 +18,7 @@ import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTarget } from '../../types/wake-target';
-import { resolveTimeForDate } from '../../types/wake-target';
+import { resolveTimeForDismiss } from '../../types/wake-target';
 import { AlarmKit } from '../AlarmKitService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
@@ -92,9 +92,9 @@ const handleInlineDismiss = (
   Effect.gen(function* () {
     const { target } = useWakeTargetStore.getState();
     if (target === null) return;
-    const resolvedTime = resolveTimeForDate(target, new Date());
-    if (resolvedTime === null) return;
     const now = new Date();
+    const resolvedTime = resolveTimeForDismiss(target, now);
+    if (resolvedTime === null) return;
     yield* handleAlarmDismissEffect({
       target,
       resolvedTime,

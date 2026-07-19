@@ -2,6 +2,7 @@ import {
   computeOverrideTargetDate,
   isNextOverrideExpired,
   resolveTimeForDate,
+  resolveTimeForDismiss,
   type WakeTarget,
 } from '../types/wake-target';
 
@@ -91,6 +92,55 @@ describe('resolveTimeForDate', () => {
     };
     const laterDay = new Date('2026-02-25T00:00:00');
     expect(resolveTimeForDate(target, laterDay)).toEqual({ hour: 7, minute: 0 });
+  });
+});
+
+describe('resolveTimeForDismiss', () => {
+  const baseTarget: WakeTarget = {
+    defaultTime: { hour: 9, minute: 0 },
+    dayOverrides: {},
+    nextOverride: null,
+    todos: [],
+    enabled: true,
+    targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
+  };
+
+  test('override 対象日でなければ resolveTimeForDate と同じ結果を返す', () => {
+    const dismissTime = new Date('2026-02-25T09:02:00');
+    expect(resolveTimeForDismiss(baseTarget, dismissTime)).toEqual({ hour: 9, minute: 0 });
+  });
+
+  test('override 対象日で、dismiss 時刻が override 時刻に近ければ override を採用する', () => {
+    // override(7:00) を通常アラーム(9:00)より早める設定。二重鳴動を許容する
+    // 設計のため、二つの候補のうち dismiss 時刻に近い方を実際に鳴った
+    // アラームとみなす
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-26T07:03:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('override 対象日で、dismiss 時刻が通常アラーム時刻に近ければ通常時刻を採用する', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    // 9:00（通常）の方が 7:00（override）より dismiss 時刻に近い
+    const dismissTime = new Date('2026-02-26T08:58:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 9, minute: 0 });
+  });
+
+  test('override 対象日の当該曜日が OFF でも override 時刻を候補にする', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      dayOverrides: { 4: { type: 'off' } },
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-26T07:01:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 7, minute: 0 });
   });
 });
 

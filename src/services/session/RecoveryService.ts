@@ -16,7 +16,7 @@ import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
-import { resolveTimeForDate, type WakeTarget } from '../../types/wake-target';
+import { resolveTimeForDismiss, type WakeTarget } from '../../types/wake-target';
 import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
@@ -183,7 +183,7 @@ const processPrimaryDismissEvent = (
       return false;
     }
 
-    const resolvedTime = resolveTimeForDate(target, dismissTime);
+    const resolvedTime = resolveTimeForDismiss(target, dismissTime);
     if (resolvedTime === null) {
       yield* reclaimUnmanagedNativeSnoozes;
       return false;
