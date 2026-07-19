@@ -1,31 +1,44 @@
 import { Effect, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
-import { decodeStoredJson, runEffect, Storage } from '../services';
+import { asRecord, decodeFieldOrDefault, decodeStoredJson, runEffect, Storage } from '../services';
 import type { StorageError } from '../services/errors';
 
 const STORAGE_KEY = STORAGE_KEYS.appSettings;
 const DEFAULT_DAY_BOUNDARY_HOUR = 3;
 
-/**
- * 永続化済み settings のスキーマ。欠落フィールドはデフォルト値で補う。
- * 型不一致（例: dayBoundaryHour が文字列）はデコード全体を失敗させ、
- * 呼び出し側で「データ破損」として全体をデフォルト値にフォールバックする。
- */
-const AppSettingsSchema = Schema.Struct({
-  dayBoundaryHour: Schema.optionalWith(Schema.Number, {
-    default: () => DEFAULT_DAY_BOUNDARY_HOUR,
-  }),
-  healthKitEnabled: Schema.optionalWith(Schema.Boolean, { default: () => false }),
-  alarmKitGranted: Schema.optionalWith(Schema.Boolean, { default: () => false }),
-});
-type AppSettings = typeof AppSettingsSchema.Type;
+interface AppSettings {
+  readonly dayBoundaryHour: number;
+  readonly healthKitEnabled: boolean;
+  readonly alarmKitGranted: boolean;
+}
 
 const DEFAULT_SETTINGS: AppSettings = {
   dayBoundaryHour: DEFAULT_DAY_BOUNDARY_HOUR,
   healthKitEnabled: false,
   alarmKitGranted: false,
 };
+
+/**
+ * 永続化済み settings をフィールド単位で寛容にデコードする。
+ *
+ * Schema.Struct による一括デコードは、1フィールドが型不一致なだけで構造体全体を
+ * 失敗させ、他の正常なフィールド（例: alarmKitGranted の権限許可状態）まで
+ * デフォルト値に巻き添えで上書きしてしまう。decodeFieldOrDefault でフィールドごとに
+ * デコードし、破損は該当フィールドのみデフォルト値に倒す。
+ */
+function decodeAppSettings(parsed: unknown): AppSettings {
+  const obj = asRecord(parsed);
+  return {
+    dayBoundaryHour: decodeFieldOrDefault(
+      Schema.Number,
+      obj.dayBoundaryHour,
+      DEFAULT_DAY_BOUNDARY_HOUR,
+    ),
+    healthKitEnabled: decodeFieldOrDefault(Schema.Boolean, obj.healthKitEnabled, false),
+    alarmKitGranted: decodeFieldOrDefault(Schema.Boolean, obj.alarmKitGranted, false),
+  };
+}
 
 interface SettingsState {
   readonly dayBoundaryHour: number;
@@ -47,13 +60,15 @@ function persist(settings: AppSettings): Promise<void> {
 /**
  * settings を読み取ってデコードする Effect。
  * 読み取り自体の失敗（StorageError、リトライ後も解決しない）はそのまま呼び出し元に
- * 伝播させ、データ破損（スキーマ不一致・JSON パース失敗）のみデフォルト値に倒す。
+ * 伝播させる。JSON パース失敗（未設定含む）は全体をデフォルト値に倒すが、
+ * JSON としては読めたがフィールド単位で不整合がある場合は decodeAppSettings が
+ * 個別フィールドのみデフォルト値にフォールバックする。
  */
 function loadSettingsEffect(): Effect.Effect<AppSettings, StorageError, Storage> {
   return Storage.pipe(
     Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
-    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, AppSettingsSchema, raw)),
-    Effect.map((decoded) => decoded ?? DEFAULT_SETTINGS),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, Schema.Unknown, raw)),
+    Effect.map((decoded) => (decoded === null ? DEFAULT_SETTINGS : decodeAppSettings(decoded))),
     Effect.catchTag('StorageDecodeError', () => Effect.succeed(DEFAULT_SETTINGS)),
   );
 }

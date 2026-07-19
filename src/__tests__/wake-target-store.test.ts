@@ -349,6 +349,40 @@ describe('useWakeTargetStore', () => {
     });
   });
 
+  test('AsyncStorage.getItem が一時的に reject してもリトライで復旧し、実際の設定値を失わない', async () => {
+    // 1回目は一時的な失敗、2回目で成功するケース。ここで即座に corrupted/デフォルト値に
+    // 倒すと、実際にはストレージに残っている target を「存在しない」ものとして扱ってしまう
+    let callCount = 0;
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') {
+        callCount += 1;
+        if (callCount === 1) return Promise.reject(new Error('transient storage error'));
+        return Promise.resolve(
+          JSON.stringify({ defaultTime: { hour: 8, minute: 15 }, enabled: true }),
+        );
+      }
+      return Promise.resolve(null);
+    });
+    await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.corrupted).toBe(false);
+    expect(state.target?.defaultTime).toEqual({ hour: 8, minute: 15 });
+  });
+
+  test('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まる', async () => {
+    // 読み取り自体が失敗し続ける場合、実際の target の有無が確認できていない。
+    // loaded=true にすると syncAlarmsEffect が誤ったデフォルト/corrupted状態で
+    // 走ってしまうため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
+    mockGetItem.mockRejectedValue(new Error('storage unavailable'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
   test('loadTarget は破損 JSON では reject せず、target を確定できないため corrupted 状態にする', async () => {
     // raw が存在する（何か保存されていた）のに破損している場合、
     // loaded=true で捏造した DEFAULT_WAKE_TARGET を確定させると、

@@ -11,7 +11,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Context, Effect, Layer, Schedule, Schema } from 'effect';
+import { Context, Effect, Either, Layer, Schedule, Schema } from 'effect';
+import type { TodoType } from '../types/alarm';
 import { StorageDecodeError, StorageError } from './errors';
 
 // ─── サービスインターフェース ────────────────────────────────────
@@ -92,3 +93,56 @@ export function decodeStoredJson<A, I>(
     ),
   );
 }
+
+/**
+ * JSON トップレベルが配列であることだけを検証するゲート。要素単位の形状検証は
+ * 呼び出し元が個別に行う（decodeFieldOrDefault 等）。複数ストアの records/grades
+ * 配列読み込みで共通に使うため、ここを SSOT とする。
+ */
+export const unknownArrayGate: Schema.Schema<readonly unknown[]> = Schema.Array(Schema.Unknown);
+
+/**
+ * 1フィールドを寛容にデコードする: 値が欠落・型不一致・その他デコード失敗の
+ * いずれであっても例外を投げず defaultValue にフォールバックする。
+ *
+ * Schema.Struct によるオブジェクト全体の一括デコードは、1フィールドが型不一致
+ * なだけで構造体全体を失敗させ、他の正常なフィールドまで巻き添えでデフォルト値に
+ * 上書きしてしまう（Schema.optionalWith の default はキー欠落時にしか働かず、
+ * 値が存在するが型が違うケースはカバーしない）。永続化データの1フィールド破損で
+ * 他の正常なユーザーデータ（ストリーク・権限状態等）まで失わないよう、
+ * オブジェクトはフィールドごとにこの関数でデコードすること。
+ */
+export function decodeFieldOrDefault<A, I>(
+  schema: Schema.Schema<A, I>,
+  value: unknown,
+  defaultValue: A,
+): A {
+  const result = Schema.decodeUnknownEither(schema)(value);
+  return Either.isRight(result) ? result.right : defaultValue;
+}
+
+/**
+ * 本来 optional（型に `?`/`| undefined` を含む）なフィールドを寛容にデコードする。
+ * 値が undefined ならそのまま undefined、デコードに失敗した場合も undefined に倒す
+ * （decodeFieldOrDefault と異なり、フォールバック値を呼び出し側で指定する必要がない）。
+ */
+export function decodeOptionalField<A, I>(
+  schema: Schema.Schema<A, I>,
+  value: unknown,
+): A | undefined {
+  if (value === undefined) return undefined;
+  const result = Schema.decodeUnknownEither(schema)(value);
+  return Either.isRight(result) ? result.right : undefined;
+}
+
+/** 永続化データの unknown 値から、フィールド辞書として安全に扱える形を取り出す。オブジェクトでなければ空を返す。 */
+export function asRecord(value: unknown): Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+/**
+ * 永続化データ中の TodoType を検証する共通スキーマ。複数ストア（wake-record,
+ * morning-session）の永続化スキーマから共有する。TodoType（types/alarm.ts）に
+ * 新しい種別を追加したときはここも合わせて更新すること。
+ */
+export const TodoTypeSchema: Schema.Schema<TodoType> = Schema.Literal('checkbox', 'squat');

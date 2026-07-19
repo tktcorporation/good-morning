@@ -2,9 +2,18 @@ import { Effect, Either, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { MS_PER_DAY } from '../constants/time';
-import { decodeStoredJson, runEffect, Storage } from '../services';
+import {
+  asRecord,
+  decodeFieldOrDefault,
+  decodeOptionalField,
+  decodeStoredJson,
+  runEffect,
+  Storage,
+  TodoTypeSchema,
+  unknownArrayGate,
+} from '../services';
 import type { StorageError } from '../services/errors';
-import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
+import type { WakeRecord, WakeResult, WakeStats, WakeTodoRecord } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
 import { formatLocalDate } from '../utils/date';
 
@@ -14,41 +23,79 @@ const AlarmTimeSchema = Schema.Struct({
   hour: Schema.Number,
   minute: Schema.Number,
 });
+const DEFAULT_ALARM_TIME = { hour: 0, minute: 0 };
 
-const WakeTodoRecordSchema = Schema.Struct({
-  id: Schema.String,
-  title: Schema.String,
-  completedAt: Schema.NullOr(Schema.String),
-  orderCompleted: Schema.NullOr(Schema.Number),
-  type: Schema.optional(Schema.Literal('checkbox', 'squat')),
-});
+const WakeResultSchema = Schema.Literal('great', 'ok', 'late', 'missed');
 
 /**
- * WakeRecord のスキーマ。現行の型（src/types/wake-record.ts）の必須/nullable 構造と
- * 一致させる。要素単位で decodeUnknownEither するため、1件が不正な形状でも
- * 配列全体を破棄しない（parseStoredRecords 参照）。
+ * 永続化済み WakeTodoRecord を要素単位で寛容にデコードする。id/title はタスクを
+ * 識別・表示するための最小限のフィールドのため欠落・型不一致なら null を返し、
+ * 呼び出し元（decodeWakeRecord）がその要素だけを読み飛ばす。それ以外は
+ * decodeFieldOrDefault/decodeOptionalField でフィールド単位のデフォルト補完に倒す。
  */
-const WakeRecordSchema = Schema.Struct({
-  id: Schema.String,
-  alarmId: Schema.String,
-  date: Schema.String,
-  targetTime: AlarmTimeSchema,
-  alarmTriggeredAt: Schema.String,
-  dismissedAt: Schema.String,
-  healthKitWakeTime: Schema.NullOr(Schema.String),
-  result: Schema.Literal('great', 'ok', 'late', 'missed'),
-  diffMinutes: Schema.Number,
-  todos: Schema.Array(WakeTodoRecordSchema),
-  todoCompletionSeconds: Schema.Number,
-  alarmLabel: Schema.String,
-  todosCompleted: Schema.Boolean,
-  todosCompletedAt: Schema.NullOr(Schema.String),
-  goalDeadline: Schema.NullOr(Schema.String),
-});
-const decodeWakeRecord = Schema.decodeUnknownEither(WakeRecordSchema);
+function decodeWakeTodoRecord(raw: unknown): WakeTodoRecord | null {
+  const obj = asRecord(raw);
+  const idResult = Schema.decodeUnknownEither(Schema.String)(obj.id);
+  const titleResult = Schema.decodeUnknownEither(Schema.String)(obj.title);
+  if (Either.isLeft(idResult) || Either.isLeft(titleResult)) return null;
 
-/** JSON パースの成否のみを見るゲート。要素単位の形状検証は parseStoredRecords で行う。 */
-const RecordsGateSchema = Schema.Array(Schema.Unknown);
+  return {
+    id: idResult.right,
+    title: titleResult.right,
+    completedAt: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.completedAt, null),
+    orderCompleted: decodeFieldOrDefault(Schema.NullOr(Schema.Number), obj.orderCompleted, null),
+    type: decodeOptionalField(TodoTypeSchema, obj.type),
+  };
+}
+
+/**
+ * 永続化済み WakeRecord を要素単位で寛容にデコードする。id/date/result は
+ * レコードを識別・成立させるための最小限のフィールドのため欠落・型不一致なら
+ * レコードごと破棄する（呼び出し元 parseStoredRecords が配列から除外）。
+ * それ以外のフィールド（todos を含む）は個別にデフォルト補完し、1フィールド・
+ * 1タスクの破損で記録全体やレコード履歴を失わないようにする。
+ */
+function decodeWakeRecord(raw: unknown): WakeRecord | null {
+  const obj = asRecord(raw);
+  const idResult = Schema.decodeUnknownEither(Schema.String)(obj.id);
+  const dateResult = Schema.decodeUnknownEither(Schema.String)(obj.date);
+  const resultResult = Schema.decodeUnknownEither(WakeResultSchema)(obj.result);
+  if (Either.isLeft(idResult) || Either.isLeft(dateResult) || Either.isLeft(resultResult))
+    return null;
+
+  const todosRaw = Array.isArray(obj.todos) ? obj.todos : [];
+  const todos: WakeTodoRecord[] = [];
+  for (const t of todosRaw) {
+    const todo = decodeWakeTodoRecord(t);
+    if (todo !== null) todos.push(todo);
+  }
+
+  return {
+    id: idResult.right,
+    alarmId: decodeFieldOrDefault(Schema.String, obj.alarmId, ''),
+    date: dateResult.right,
+    targetTime: decodeFieldOrDefault(AlarmTimeSchema, obj.targetTime, DEFAULT_ALARM_TIME),
+    alarmTriggeredAt: decodeFieldOrDefault(Schema.String, obj.alarmTriggeredAt, ''),
+    dismissedAt: decodeFieldOrDefault(Schema.String, obj.dismissedAt, ''),
+    healthKitWakeTime: decodeFieldOrDefault(
+      Schema.NullOr(Schema.String),
+      obj.healthKitWakeTime,
+      null,
+    ),
+    result: resultResult.right,
+    diffMinutes: decodeFieldOrDefault(Schema.Number, obj.diffMinutes, 0),
+    todos,
+    todoCompletionSeconds: decodeFieldOrDefault(Schema.Number, obj.todoCompletionSeconds, 0),
+    alarmLabel: decodeFieldOrDefault(Schema.String, obj.alarmLabel, ''),
+    todosCompleted: decodeFieldOrDefault(Schema.Boolean, obj.todosCompleted, false),
+    todosCompletedAt: decodeFieldOrDefault(
+      Schema.NullOr(Schema.String),
+      obj.todosCompletedAt,
+      null,
+    ),
+    goalDeadline: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.goalDeadline, null),
+  };
+}
 
 interface WakeRecordState {
   readonly records: readonly WakeRecord[];
@@ -103,15 +150,12 @@ function persistRecords(records: readonly WakeRecord[]): Promise<void> {
 function parseStoredRecords(decoded: readonly unknown[]): readonly WakeRecord[] {
   const records: WakeRecord[] = [];
   for (const raw of decoded) {
-    const result = decodeWakeRecord(raw);
-    if (Either.isRight(result)) {
-      records.push(result.right);
+    const record = decodeWakeRecord(raw);
+    if (record !== null) {
+      records.push(record);
     } else {
       // biome-ignore lint/suspicious/noConsole: 破損レコードのスキップを可視化する
-      console.warn(
-        '[wake-record-store] 不正な形状の WakeRecord をスキップしました',
-        result.left.message,
-      );
+      console.warn('[wake-record-store] 不正な形状の WakeRecord をスキップしました', raw);
     }
   }
   return records;
@@ -125,7 +169,7 @@ function parseStoredRecords(decoded: readonly unknown[]): readonly WakeRecord[] 
 function loadRecordsEffect(): Effect.Effect<readonly WakeRecord[], StorageError, Storage> {
   return Storage.pipe(
     Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
-    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, RecordsGateSchema, raw)),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, unknownArrayGate, raw)),
     Effect.map((decoded) => (decoded === null ? [] : parseStoredRecords(decoded))),
     Effect.catchTag('StorageDecodeError', () => Effect.succeed<readonly WakeRecord[]>([])),
   );

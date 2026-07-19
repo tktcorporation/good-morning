@@ -1,41 +1,81 @@
-import { Effect, Schema } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
-import { decodeStoredJson, runEffect, runEffectFork, Storage, syncWidgetEffect } from '../services';
+import {
+  asRecord,
+  decodeFieldOrDefault,
+  decodeOptionalField,
+  decodeStoredJson,
+  runEffect,
+  runEffectFork,
+  Storage,
+  syncWidgetEffect,
+  TodoTypeSchema,
+} from '../services';
 import type { StorageError } from '../services/errors';
-import type { MorningSession, SessionTodo } from '../types/morning-session';
+import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
-/** SessionTodo の永続化スキーマ。type/requiredCount/currentCount はレガシーデータで欠落しうる。 */
-const SessionTodoSchema = Schema.Struct({
-  id: Schema.String,
-  title: Schema.String,
-  completed: Schema.Boolean,
-  completedAt: Schema.NullOr(Schema.String),
-  type: Schema.optional(Schema.Literal('checkbox', 'squat')),
-  requiredCount: Schema.optional(Schema.Number),
-  currentCount: Schema.optional(Schema.Number),
-});
+/**
+ * 永続化済み SessionTodo を要素単位で寛容にデコードする。id/title はタスクを
+ * 識別・表示するための最小限のフィールドのため欠落・型不一致なら null を返し、
+ * 呼び出し元がその要素だけを読み飛ばす。
+ */
+function decodeSessionTodo(raw: unknown): SessionTodo | null {
+  const obj = asRecord(raw);
+  const idResult = Schema.decodeUnknownEither(Schema.String)(obj.id);
+  const titleResult = Schema.decodeUnknownEither(Schema.String)(obj.title);
+  if (Either.isLeft(idResult) || Either.isLeft(titleResult)) return null;
+
+  return {
+    id: idResult.right,
+    title: titleResult.right,
+    completed: decodeFieldOrDefault(Schema.Boolean, obj.completed, false),
+    completedAt: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.completedAt, null),
+    type: decodeOptionalField(TodoTypeSchema, obj.type),
+    requiredCount: decodeOptionalField(Schema.Number, obj.requiredCount),
+    currentCount: decodeOptionalField(Schema.Number, obj.currentCount),
+  };
+}
 
 /**
- * 永続化済み MorningSession のスキーマ。StoredMorningSession（types/morning-session.ts）と
- * 同じ「後から追加されたフィールドはレガシーデータで欠落しうる」形状に対応させる。
- * デコード成功後は normalizeStoredSession に渡し、windowEnd 等のクロスフィールドな
- * フォールバック計算（既存ロジック）に委ねる。
+ * 永続化済み MorningSession をフィールド単位で寛容にデコードする。date/startedAt は
+ * セッションを識別・成立させるための最小限のフィールドのため欠落・型不一致・
+ * （startedAt の場合）ISO パース不能なら null を返してセッションごと破棄する。
+ * Schema.Struct の一括デコードだと1フィールド・1タスクの不整合が recordId や
+ * snooze 状態まで巻き添えで失わせてしまうため、フィールドごとに独立してデコードする。
+ * startedAt のパース可否をここで検証することで、normalizeStoredSession の windowEnd
+ * フォールバック計算（`new Date(startedAt).toISOString()`）が RangeError を投げて
+ * StorageDecodeError の捕捉から漏れる事態も防ぐ。
  */
-const StoredMorningSessionSchema = Schema.Struct({
-  recordId: Schema.optional(Schema.NullOr(Schema.String)),
-  date: Schema.String,
-  startedAt: Schema.String,
-  todos: Schema.Array(SessionTodoSchema),
-  windowEnd: Schema.optional(Schema.String),
-  liveActivityId: Schema.optional(Schema.NullOr(Schema.String)),
-  goalDeadline: Schema.optional(Schema.NullOr(Schema.String)),
-  snoozeAlarmIds: Schema.optional(Schema.Array(Schema.String)),
-  snoozeFiresAt: Schema.optional(Schema.NullOr(Schema.String)),
-});
+function decodeStoredMorningSession(parsed: unknown): StoredMorningSession | null {
+  const obj = asRecord(parsed);
+  const dateResult = Schema.decodeUnknownEither(Schema.String)(obj.date);
+  const startedAtResult = Schema.decodeUnknownEither(Schema.String)(obj.startedAt);
+  if (Either.isLeft(dateResult) || Either.isLeft(startedAtResult)) return null;
+  if (Number.isNaN(new Date(startedAtResult.right).getTime())) return null;
+
+  const todosRaw = Array.isArray(obj.todos) ? obj.todos : [];
+  const todos: SessionTodo[] = [];
+  for (const t of todosRaw) {
+    const todo = decodeSessionTodo(t);
+    if (todo !== null) todos.push(todo);
+  }
+
+  return {
+    recordId: decodeOptionalField(Schema.NullOr(Schema.String), obj.recordId),
+    date: dateResult.right,
+    startedAt: startedAtResult.right,
+    todos,
+    windowEnd: decodeOptionalField(Schema.String, obj.windowEnd),
+    liveActivityId: decodeOptionalField(Schema.NullOr(Schema.String), obj.liveActivityId),
+    goalDeadline: decodeOptionalField(Schema.NullOr(Schema.String), obj.goalDeadline),
+    snoozeAlarmIds: decodeOptionalField(Schema.Array(Schema.String), obj.snoozeAlarmIds),
+    snoozeFiresAt: decodeOptionalField(Schema.NullOr(Schema.String), obj.snoozeFiresAt),
+  };
+}
 
 interface MorningSessionState {
   readonly session: MorningSession | null;
@@ -111,8 +151,12 @@ function persistSession(session: MorningSession | null): Promise<void> {
 function loadSessionEffect(): Effect.Effect<MorningSession | null, StorageError, Storage> {
   return Storage.pipe(
     Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
-    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, StoredMorningSessionSchema, raw)),
-    Effect.map((decoded) => (decoded === null ? null : normalizeStoredSession(decoded))),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, Schema.Unknown, raw)),
+    Effect.map((decoded) => {
+      if (decoded === null) return null;
+      const stored = decodeStoredMorningSession(decoded);
+      return stored === null ? null : normalizeStoredSession(stored);
+    }),
     Effect.catchTag('StorageDecodeError', () => Effect.succeed(null)),
   );
 }

@@ -106,6 +106,54 @@ describe('daily-grade-store', () => {
       expect(state.streak).toEqual(INITIAL_STREAK_STATE);
     });
 
+    it('streak の1フィールドの型不一致では、そのフィールドのみデフォルト値に倒し他の正常なフィールドは保持する', async () => {
+      mockGetItem.mockImplementation((key: string) => {
+        if (key === 'daily-grades') return Promise.resolve(null);
+        if (key === 'streak-state') {
+          return Promise.resolve(
+            JSON.stringify({
+              currentStreak: 'not-a-number',
+              longestStreak: 8,
+              freezesAvailable: 2,
+              freezesUsedTotal: 4,
+              lastGradedDate: '2026-02-27',
+            }),
+          );
+        }
+        return Promise.resolve(null);
+      });
+
+      await expect(useDailyGradeStore.getState().loadGrades()).resolves.toBeUndefined();
+
+      const state = useDailyGradeStore.getState();
+      expect(state.loaded).toBe(true);
+      expect(state.streak.currentStreak).toBe(0); // 型不一致だったフィールドのみデフォルトに
+      expect(state.streak.longestStreak).toBe(8); // 正常だった他のフィールドは保持
+      expect(state.streak.freezesAvailable).toBe(2);
+      expect(state.streak.freezesUsedTotal).toBe(4);
+      expect(state.streak.lastGradedDate).toBe('2026-02-27');
+    });
+
+    it('grades 配列内の1件が不正な形状でも、正常なレコードは失わず不正な要素だけをスキップする', async () => {
+      const valid = makeRecord({ date: '2026-02-27', grade: 'good' });
+      const malformed = { date: '2026-02-28' }; // grade 欠落
+      mockGetItem.mockImplementation((key: string) => {
+        if (key === 'daily-grades') return Promise.resolve(JSON.stringify([valid, malformed]));
+        if (key === 'streak-state') return Promise.resolve(null);
+        return Promise.resolve(null);
+      });
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await expect(useDailyGradeStore.getState().loadGrades()).resolves.toBeUndefined();
+
+      const state = useDailyGradeStore.getState();
+      expect(state.loaded).toBe(true);
+      expect(state.grades).toHaveLength(1);
+      expect(state.grades[0]?.date).toBe('2026-02-27');
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      consoleWarnSpy.mockRestore();
+    });
+
     it('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まる', async () => {
       mockGetItem.mockRejectedValue(new Error('storage unavailable'));
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});

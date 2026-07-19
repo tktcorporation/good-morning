@@ -158,6 +158,28 @@ describe('loadRecords', () => {
     expect(state.records).toEqual([]);
   });
 
+  test('id/date/result以外のフィールドが欠落したレコード（レガシーデータ想定）は破棄せずデフォルト値で復元する', async () => {
+    const legacyRecord = {
+      id: 'legacy-1',
+      date: '2026-02-24',
+      result: 'great',
+      // alarmId, targetTime, alarmTriggeredAt, dismissedAt, todos, alarmLabel,
+      // goalDeadline 等、後から追加された/必須ではないフィールドが全て欠落している
+      // 想定（過去バージョンで保存されたデータ）。
+    };
+    mockGetItem.mockResolvedValueOnce(JSON.stringify([legacyRecord]));
+
+    await expect(useWakeRecordStore.getState().loadRecords()).resolves.toBeUndefined();
+
+    const state = useWakeRecordStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.records).toHaveLength(1);
+    expect(state.records[0]?.id).toBe('legacy-1');
+    expect(state.records[0]?.result).toBe('great');
+    expect(state.records[0]?.todos).toEqual([]);
+    expect(state.records[0]?.goalDeadline).toBeNull();
+  });
+
   test('配列内の1件が不正な形状でも、正常なレコードは失わず不正な要素だけをスキップする', async () => {
     const valid = { ...sampleRecord, id: 'valid-1' };
     const malformed = { id: 'broken-1', date: '2026-02-23' }; // 必須フィールド欠落
