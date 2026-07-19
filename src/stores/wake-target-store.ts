@@ -6,14 +6,13 @@ import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { DayOverride, NextOverride, WakeTarget } from '../types/wake-target';
 import {
   buildFixedSquatTodo,
-  computeOverrideTargetDate,
   DEFAULT_WAKE_TARGET,
   DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
   isFixedSquatTodoList,
   isNextOverrideExpired,
+  resolveOverrideSaveDate,
 } from '../types/wake-target';
 import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
-import { useSettingsStore } from './settings-store';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeTarget;
 const ALARM_IDS_KEY = STORAGE_KEYS.alarmIds;
@@ -35,7 +34,12 @@ interface WakeTargetState {
   resetCorruptedTarget: () => Promise<void>;
   setTarget: (target: WakeTarget) => Promise<void>;
   updateDefaultTime: (time: AlarmTime) => Promise<void>;
-  setNextOverride: (time: AlarmTime) => Promise<void>;
+  /**
+   * editDay は target-edit のピッカーが確定した対象日（resolveOverrideEditDay）。
+   * ここで now から独立して対象日を再計算すると、ユーザーがピッカーの初期値
+   * から時刻を変更した場合に、表示されていた対象日とズレることがある。
+   */
+  setNextOverride: (time: AlarmTime, editDay: Date) => Promise<void>;
   clearNextOverride: () => Promise<void>;
   /**
    * 期限切れの nextOverride のみをクリアする。
@@ -248,10 +252,10 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     syncAfterTargetChange();
   },
 
-  setNextOverride: async (time: AlarmTime) => {
+  setNextOverride: async (time: AlarmTime, editDay: Date) => {
     const { target } = get();
     if (target === null) return;
-    const targetDate = computeOverrideTargetDate(time, useSettingsStore.getState().dayBoundaryHour);
+    const targetDate = resolveOverrideSaveDate(editDay, time);
     const updated: WakeTarget = { ...target, nextOverride: { time, targetDate } };
     set({ target: updated });
     await persist(updated);

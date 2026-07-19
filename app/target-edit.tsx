@@ -19,16 +19,22 @@ export default function TargetEditScreen() {
   const updateDefaultTime = useWakeTargetStore((s) => s.updateDefaultTime);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
-  const currentResolvedTime = useMemo(() => {
-    if (target === null) return { hour: 7, minute: 0 };
-    // setNextOverride の対象日（computeOverrideTargetDate）と同じ基準で
-    // 「次に迎える朝」を決める。dayBoundaryHour がアラーム時刻より後だと、
-    // 境界通過前は暦日ベースの +1日だけでは今日に戻ってしまい、その日の
-    // 時刻が既に過ぎていても気づけない（保存時はさらに1日先送りされ、
-    // 表示される dayOverrides の曜日と保存先の曜日がズレる）
-    const tomorrow = resolveOverrideEditDay(target, dayBoundaryHour);
-    return resolveTimeForDate(target, tomorrow) ?? { hour: 7, minute: 0 };
+  // 「明日だけ変更」の対象日。ピッカーの初期値表示（下の currentResolvedTime）と
+  // 保存時（handleSave の setNextOverride）の両方でこの同じ値を使うことで、
+  // ユーザーがピッカーの初期値から時刻を変更した場合でも、表示していた対象日と
+  // 実際に保存される対象日がズレないようにする。dayBoundaryHour がアラーム時刻
+  // より後だと、境界通過前は暦日ベースの +1日だけでは今日に戻ってしまい、その日の
+  // 時刻が既に過ぎていても気づけない（保存時に独立して再計算すると、ここで
+  // 確定した対象日とズレて別日の override になってしまう）
+  const editDay = useMemo(() => {
+    if (target === null) return null;
+    return resolveOverrideEditDay(target, dayBoundaryHour);
   }, [target, dayBoundaryHour]);
+
+  const currentResolvedTime = useMemo(() => {
+    if (target === null || editDay === null) return { hour: 7, minute: 0 };
+    return resolveTimeForDate(target, editDay) ?? { hour: 7, minute: 0 };
+  }, [target, editDay]);
 
   const [hour, setHour] = useState(currentResolvedTime.hour);
   const [minute, setMinute] = useState(currentResolvedTime.minute);
@@ -45,12 +51,13 @@ export default function TargetEditScreen() {
   const handleSave = useCallback(async () => {
     const time: AlarmTime = { hour, minute };
     if (mode === 'tomorrowOnly') {
-      await setNextOverride(time);
+      if (editDay === null) return;
+      await setNextOverride(time, editDay);
     } else {
       await updateDefaultTime(time);
     }
     router.back();
-  }, [hour, minute, mode, setNextOverride, updateDefaultTime, router]);
+  }, [hour, minute, mode, editDay, setNextOverride, updateDefaultTime, router]);
 
   return (
     <View style={styles.container}>

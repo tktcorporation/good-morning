@@ -1,5 +1,4 @@
 import {
-  computeOverrideTargetDate,
   getNextLogicalDay,
   isNextOverrideExpired,
   resolveDismissDateStr,
@@ -7,6 +6,7 @@ import {
   resolveNextAlarmDate,
   resolveNextAlarmTime,
   resolveOverrideEditDay,
+  resolveOverrideSaveDate,
   resolveTimeForDate,
   resolveTimeForDismiss,
   type WakeTarget,
@@ -318,67 +318,53 @@ describe('isNextOverrideExpired', () => {
   });
 });
 
-describe('computeOverrideTargetDate', () => {
-  // UI は「明日だけ変更」(tomorrowOnly)。対象日は「論理的な翌日」:
-  // dayBoundaryHour より前の深夜は「今夜の起床 = 当日」、それ以降は「翌日」。
+describe('getNextLogicalDay', () => {
   const DAY_BOUNDARY_HOUR = 4;
 
-  test('朝（起床後）に設定すると、指定時刻が未到来でも対象日は翌日になる', () => {
-    // 7:30 に「明日だけ 8:00」→ 今日の 8:00 ではなく明日の 8:00
-    const now = new Date('2026-02-25T07:30:00');
-    expect(computeOverrideTargetDate({ hour: 8, minute: 0 }, DAY_BOUNDARY_HOUR, now)).toBe(
-      '2026-02-26',
-    );
-  });
-
-  test('夜に設定すると対象日は翌日になる', () => {
-    const now = new Date('2026-02-25T22:00:00');
-    expect(computeOverrideTargetDate({ hour: 6, minute: 0 }, DAY_BOUNDARY_HOUR, now)).toBe(
-      '2026-02-26',
-    );
-  });
-
-  test('日付変更ライン前の深夜に設定すると対象日は当日（今夜の起床）になる', () => {
+  test('日付変更ライン前の深夜は、暦日の当日を指す', () => {
     // 0:30 はまだ「前日の夜」— このあと迎える朝が「明日」
     const now = new Date('2026-02-25T00:30:00');
-    expect(computeOverrideTargetDate({ hour: 7, minute: 0 }, DAY_BOUNDARY_HOUR, now)).toBe(
-      '2026-02-25',
-    );
+    expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe('2026-02-25');
   });
 
-  test('算出した対象日時が既に過去なら 1 日先送りする', () => {
-    // 0:30 に「明日だけ 0:15」→ 当日 0:15 は過去なので翌日 0:15
-    const now = new Date('2026-02-25T00:30:00');
-    expect(computeOverrideTargetDate({ hour: 0, minute: 15 }, DAY_BOUNDARY_HOUR, now)).toBe(
-      '2026-02-26',
-    );
-  });
-
-  test('日付変更ラインが 0 時なら常に暦日の翌日になる', () => {
-    const now = new Date('2026-02-25T00:30:00');
-    expect(computeOverrideTargetDate({ hour: 7, minute: 0 }, 0, now)).toBe('2026-02-26');
+  test('日付変更ライン後は、暦日の翌日を指す', () => {
+    const now = new Date('2026-02-25T22:00:00');
+    expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe('2026-02-26');
   });
 });
 
-describe('getNextLogicalDay', () => {
-  // target-edit のピッカー初期値が computeOverrideTargetDate と異なる基準
-  // （暦日ベースの new Date() + 1日）で対象日を計算すると、dayBoundaryHour より
-  // 前の深夜に開いた場合、表示される dayOverrides の曜日と実際に保存される
-  // targetDate の曜日が食い違う
-  const DAY_BOUNDARY_HOUR = 4;
-
-  test('日付変更ライン前の深夜は、computeOverrideTargetDate と同じ対象日（暦日の当日）を指す', () => {
-    const now = new Date('2026-02-25T00:30:00');
-    expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe(
-      computeOverrideTargetDate({ hour: 7, minute: 0 }, DAY_BOUNDARY_HOUR, now),
-    );
+describe('resolveOverrideSaveDate', () => {
+  test('editDay と選択時刻の組み合わせがまだ未来なら editDay をそのまま返す', () => {
+    const editDay = new Date('2026-02-26T00:00:00');
+    const now = new Date('2026-02-25T07:30:00');
+    expect(resolveOverrideSaveDate(editDay, { hour: 8, minute: 0 }, now)).toBe('2026-02-26');
   });
 
-  test('日付変更ライン後は、computeOverrideTargetDate と同じ対象日（暦日の翌日）を指す', () => {
-    const now = new Date('2026-02-25T22:00:00');
-    expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe(
-      computeOverrideTargetDate({ hour: 6, minute: 0 }, DAY_BOUNDARY_HOUR, now),
-    );
+  test('editDay と選択時刻の組み合わせが既に過去なら 1 日先送りする', () => {
+    // 0:30 に editDay=当日・選択時刻 0:15 → 当日 0:15 は既に過去なので翌日に先送り
+    const editDay = new Date('2026-02-25T00:00:00');
+    const now = new Date('2026-02-25T00:30:00');
+    expect(resolveOverrideSaveDate(editDay, { hour: 0, minute: 15 }, now)).toBe('2026-02-26');
+  });
+
+  test('ピッカーの初期値から時刻を変更しても、resolveOverrideEditDay が確定した対象日のまま保存される', () => {
+    // dayBoundaryHour=8・アラーム=7:00・now=7:30（境界通過前）で
+    // resolveOverrideEditDay が確定した対象日（翌日）は、選択時刻をピッカーの
+    // 初期値(7:00)から 8:00 に変更しても保たれる必要がある。now 基準で
+    // 独立に対象日を再計算すると、8:00 はまだ今日来ていないため誤って
+    // 当日と判定されてしまい、「明日だけ変更」のはずが当日 30 分後に鳴ってしまう
+    const target: WakeTarget = {
+      defaultTime: { hour: 7, minute: 0 },
+      dayOverrides: {},
+      nextOverride: null,
+      todos: [],
+      enabled: true,
+      targetSleepMinutes: null,
+      wakeUpGoalBufferMinutes: 30,
+    };
+    const now = new Date('2026-02-26T07:30:00');
+    const editDay = resolveOverrideEditDay(target, 8, now);
+    expect(resolveOverrideSaveDate(editDay, { hour: 8, minute: 0 }, now)).toBe('2026-02-27');
   });
 });
 
@@ -398,13 +384,10 @@ describe('resolveOverrideEditDay', () => {
     // まだ境界(8:00)を過ぎていない。getNextLogicalDay(8, 7:30) は論理日が
     // まだ前日のままのため +1日しても「今日」の暦日に戻り、既に過ぎた
     // 7:00 をピッカーの初期値として表示してしまう。実際の保存
-    // （computeOverrideTargetDate）はこの「既に過ぎている」を検知して
+    // （resolveOverrideSaveDate）はこの「既に過ぎている」を検知して
     // さらに1日先送りするため、表示と保存の対象日がズレる
     const now = new Date('2026-02-26T07:30:00');
     const editDay = resolveOverrideEditDay(baseTarget, 8, now);
-    expect(formatLocalDate(editDay)).toBe(
-      computeOverrideTargetDate(baseTarget.defaultTime, 8, now),
-    );
     expect(formatLocalDate(editDay)).toBe('2026-02-27');
   });
 
@@ -412,9 +395,6 @@ describe('resolveOverrideEditDay', () => {
     const now = new Date('2026-02-25T22:00:00');
     const editDay = resolveOverrideEditDay(baseTarget, 4, now);
     expect(formatLocalDate(editDay)).toBe(formatLocalDate(getNextLogicalDay(4, now)));
-    expect(formatLocalDate(editDay)).toBe(
-      computeOverrideTargetDate(baseTarget.defaultTime, 4, now),
-    );
   });
 });
 

@@ -287,9 +287,9 @@ export default function DashboardScreen() {
   const today = useMemo(() => new Date(), []);
   const todaySummary = useDailySummary(today);
 
-  // setNextOverride の保存対象日（computeOverrideTargetDate）と同じ基準で
-  // 「次に迎える朝」を決める。暦日ベースの +1日だと、dayBoundaryHour より前の
-  // 深夜には、保存された override の曜日とズレた表示になる
+  // target-edit のピッカーと同じ基準で「次に迎える朝」を決める。暦日ベースの
+  // +1日だと、dayBoundaryHour より前の深夜には、保存された override の
+  // 曜日とズレた表示になる
   const tomorrow = useMemo(() => getNextLogicalDay(dayBoundaryHour), [dayBoundaryHour]);
   const resolvedTime = useMemo(
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),

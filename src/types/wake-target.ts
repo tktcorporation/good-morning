@@ -285,25 +285,14 @@ export function isNextOverrideExpired(override: NextOverride, now: Date = new Da
 }
 
 /**
- * setNextOverride 用: 「明日だけ変更」の対象日を算出する。
+ * 「明日だけ変更」ピッカーが指す論理的な翌日を返す。
  *
  * UI（target-edit の tomorrowOnly）が指すのは「次に迎える朝 = 論理的な翌日」。
  * 暦日ではなく dayBoundaryHour で判定するのは、日付変更ライン前の深夜
  * （例: 0:30）に設定した場合、ユーザーの言う「明日」はこのあと数時間後に
- * 迎える今夜の起床（暦日では当日）を指すため。
- * 「時刻が未到来なら今日」にすると、朝 7:30 に設定した「明日だけ 8:00」が
- * 30 分後の当日 8:00 に鳴ってしまい、肝心の翌日には何も鳴らない。
- */
-/**
- * 「明日だけ変更」ピッカーが指す論理的な翌日を返す。
- *
- * computeOverrideTargetDate と同じ基準（dayBoundaryHour 考慮の論理日 + 1日）で
- * 対象日を決める。target-edit のピッカー初期値がこの基準からズレると
- * （例えば暦日ベースの `new Date() + 1日` を使うと）、dayBoundaryHour より前の
- * 深夜に開いた場合、画面に表示される dayOverrides の曜日と実際に保存される
- * targetDate の曜日が食い違う。time 依存の先送り判定は含まない —
- * ここはピッカーに「次に迎える朝」の予定値を表示するためのものであり、
- * 実際の targetDate 確定は setNextOverride 側の computeOverrideTargetDate が行う。
+ * 迎える今夜の起床（暦日では当日）を指すため。time 依存の先送り判定は
+ * 含まない — ここはピッカーに「次に迎える朝」の予定値を表示するための
+ * ものであり、実際の targetDate 確定は resolveOverrideSaveDate が行う。
  */
 export function getNextLogicalDay(dayBoundaryHour: number, now: Date = new Date()): Date {
   const nextDay = new Date(getLogicalDate(now, dayBoundaryHour).getTime());
@@ -404,33 +393,16 @@ export function resolveNextAlarmDate(
   return resolveNextAlarmCandidate(target, now, dayBoundaryHour)?.date ?? null;
 }
 
-export function computeOverrideTargetDate(
-  time: AlarmTime,
-  dayBoundaryHour: number,
-  now: Date = new Date(),
-): string {
-  // getLogicalDate は調整不要のとき引数と同一参照を返すため、now を壊さないよう複製する
-  const alarmDate = new Date(getLogicalDate(now, dayBoundaryHour).getTime());
-  alarmDate.setDate(alarmDate.getDate() + 1);
-  alarmDate.setHours(time.hour, time.minute, 0, 0);
-  // 論理翌日でも指定時刻が既に過去（深夜に翌 0 時台を指定等）なら、
-  // 即座に期限切れ扱いになる無効な override を作らないよう 1 日先送りする
-  if (alarmDate.getTime() <= now.getTime()) {
-    alarmDate.setDate(alarmDate.getDate() + 1);
-  }
-  return formatLocalDate(alarmDate);
-}
-
 /**
  * 「明日だけ変更」ピッカーが表示・対象とする論理日を解決する。
  *
  * dayBoundaryHour がアラーム時刻より後で、境界通過前（例: アラーム発火後
  * 〜境界前）に開くと、getNextLogicalDay だけでは論理日がまだ前日のままの
  * ため +1 日しても今日の暦日に戻ってしまう。その日の通常スケジュール時刻が
- * 既に過ぎていると、保存時の computeOverrideTargetDate は「即座に期限切れに
- * なる override を作らない」ためさらに 1 日先送りするが、ピッカーの表示は
- * それを考慮しないため、表示される曜日設定と実際に保存される曜日がズレる。
- * computeOverrideTargetDate と同じ「既に過ぎていれば 1 日先送り」判定を
+ * 既に過ぎていると、保存時に「即座に期限切れになる override を作らない」
+ * ため resolveOverrideSaveDate がさらに 1 日先送りするが、ピッカーの表示は
+ * それを考慮しないと、表示される曜日設定と実際に保存される曜日がズレる。
+ * resolveOverrideSaveDate と同じ「既に過ぎていれば 1 日先送り」判定を
  * ここでも行い、表示と保存の対象日を一致させる。
  */
 export function resolveOverrideEditDay(
@@ -453,6 +425,39 @@ export function resolveOverrideEditDay(
     return new Date(day.getTime() + 24 * 60 * 60 * 1000);
   }
   return day;
+}
+
+/**
+ * resolveOverrideEditDay で確定した対象日とユーザーが選択した時刻から、
+ * 実際に保存する override の対象日（暦日文字列）を解決する。
+ *
+ * 保存時に now と選択時刻だけから対象日を独立して再計算すると、ピッカーが
+ * 表示していた対象日とズレることがある。例えば dayBoundaryHour がアラーム
+ * 時刻より後の設定で、境界通過前にピッカーが翌日を表示していても、
+ * ユーザーが初期値から「今日はまだ来ていない時刻」に変更すると、独立算出は
+ * 当日を返してしまい、「明日だけ変更」のはずが当日 30 分後に鳴ってしまう。
+ * resolveOverrideEditDay が確定した対象日をそのまま使い、選択時刻がその
+ * 対象日で既に過去（例: 深夜に翌 0 時台を選択）の場合のみ、即座に期限切れに
+ * なる無効な override を避けるため 1 日先送りする。
+ */
+export function resolveOverrideSaveDate(
+  editDay: Date,
+  time: AlarmTime,
+  now: Date = new Date(),
+): string {
+  const alarmDate = new Date(
+    editDay.getFullYear(),
+    editDay.getMonth(),
+    editDay.getDate(),
+    time.hour,
+    time.minute,
+    0,
+    0,
+  );
+  if (alarmDate.getTime() <= now.getTime()) {
+    alarmDate.setDate(alarmDate.getDate() + 1);
+  }
+  return formatLocalDate(alarmDate);
 }
 
 /** デフォルトの起床目標バッファ（分）。アラーム後30分以内にTODO完了で成功。 */

@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSettingsStore } from '../stores/settings-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 import {
@@ -58,7 +57,9 @@ describe('useWakeTargetStore', () => {
 
   test('setNextOverride sets with targetDate and clearNextOverride clears', async () => {
     await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-    await useWakeTargetStore.getState().setNextOverride({ hour: 5, minute: 30 });
+    await useWakeTargetStore
+      .getState()
+      .setNextOverride({ hour: 5, minute: 30 }, new Date('2026-02-26'));
     const override = useWakeTargetStore.getState().target?.nextOverride;
     expect(override?.time).toEqual({ hour: 5, minute: 30 });
     expect(override?.targetDate).toBeDefined();
@@ -66,26 +67,30 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.nextOverride).toBeNull();
   });
 
-  test('setNextOverride は「明日だけ」— 朝に設定しても対象日は翌日になる', async () => {
+  test('setNextOverride は editDay の時刻がまだ来ていなければ editDay をそのまま対象日にする', async () => {
     jest.useFakeTimers({ now: new Date('2026-02-25T07:30:00') });
     try {
-      useSettingsStore.setState({ dayBoundaryHour: 4 });
       await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-      // 8:00 は今日まだ来ていないが、「明日だけ 8:00」なので対象は翌日
-      await useWakeTargetStore.getState().setNextOverride({ hour: 8, minute: 0 });
+      // 8:00 は今日まだ来ていないが、editDay（翌日）が対象なので翌日 8:00 になる
+      await useWakeTargetStore
+        .getState()
+        .setNextOverride({ hour: 8, minute: 0 }, new Date('2026-02-26'));
       expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-26');
     } finally {
       jest.useRealTimers();
     }
   });
 
-  test('setNextOverride は日付変更ライン前の深夜なら当日（今夜の起床）を対象日にする', async () => {
+  test('setNextOverride は editDay の時刻が既に過去なら 1 日先送りする', async () => {
+    // ピッカーが確定した editDay（当日）で選択時刻が既に過去（0:15 < now 0:30）の場合、
+    // 即座に期限切れになる無効な override を作らないよう翌日に先送りする
     jest.useFakeTimers({ now: new Date('2026-02-25T00:30:00') });
     try {
-      useSettingsStore.setState({ dayBoundaryHour: 4 });
       await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
-      await useWakeTargetStore.getState().setNextOverride({ hour: 7, minute: 0 });
-      expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-25');
+      await useWakeTargetStore
+        .getState()
+        .setNextOverride({ hour: 0, minute: 15 }, new Date('2026-02-25'));
+      expect(useWakeTargetStore.getState().target?.nextOverride?.targetDate).toBe('2026-02-26');
     } finally {
       jest.useRealTimers();
     }
