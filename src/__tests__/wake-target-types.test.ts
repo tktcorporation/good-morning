@@ -1,10 +1,12 @@
 import {
   computeOverrideTargetDate,
+  getNextLogicalDay,
   isNextOverrideExpired,
   resolveTimeForDate,
   resolveTimeForDismiss,
   type WakeTarget,
 } from '../types/wake-target';
+import { formatLocalDate } from '../utils/date';
 
 describe('resolveTimeForDate', () => {
   const baseTarget: WakeTarget = {
@@ -213,5 +215,27 @@ describe('computeOverrideTargetDate', () => {
   test('日付変更ラインが 0 時なら常に暦日の翌日になる', () => {
     const now = new Date('2026-02-25T00:30:00');
     expect(computeOverrideTargetDate({ hour: 7, minute: 0 }, 0, now)).toBe('2026-02-26');
+  });
+});
+
+describe('getNextLogicalDay', () => {
+  // target-edit のピッカー初期値が computeOverrideTargetDate と異なる基準
+  // （暦日ベースの new Date() + 1日）で対象日を計算すると、dayBoundaryHour より
+  // 前の深夜に開いた場合、表示される dayOverrides の曜日と実際に保存される
+  // targetDate の曜日が食い違う
+  const DAY_BOUNDARY_HOUR = 4;
+
+  test('日付変更ライン前の深夜は、computeOverrideTargetDate と同じ対象日（暦日の当日）を指す', () => {
+    const now = new Date('2026-02-25T00:30:00');
+    expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe(
+      computeOverrideTargetDate({ hour: 7, minute: 0 }, DAY_BOUNDARY_HOUR, now),
+    );
+  });
+
+  test('日付変更ライン後は、computeOverrideTargetDate と同じ対象日（暦日の翌日）を指す', () => {
+    const now = new Date('2026-02-25T22:00:00');
+    expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe(
+      computeOverrideTargetDate({ hour: 6, minute: 0 }, DAY_BOUNDARY_HOUR, now),
+    );
   });
 });

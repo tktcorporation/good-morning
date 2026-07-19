@@ -3,9 +3,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
+import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
-import { resolveTimeForDate } from '../src/types/wake-target';
+import { getNextLogicalDay, resolveTimeForDate } from '../src/types/wake-target';
 
 type EditMode = 'tomorrowOnly' | 'changeDefault';
 
@@ -16,13 +17,16 @@ export default function TargetEditScreen() {
   const target = useWakeTargetStore((s) => s.target);
   const setNextOverride = useWakeTargetStore((s) => s.setNextOverride);
   const updateDefaultTime = useWakeTargetStore((s) => s.updateDefaultTime);
+  const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const currentResolvedTime = useMemo(() => {
     if (target === null) return { hour: 7, minute: 0 };
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // setNextOverride の対象日（computeOverrideTargetDate）と同じ基準で
+    // 「次に迎える朝」を決める。暦日ベースの +1日だと、dayBoundaryHour より前の
+    // 深夜に開いた場合、表示される dayOverrides の曜日と保存先の曜日がズレる
+    const tomorrow = getNextLogicalDay(dayBoundaryHour);
     return resolveTimeForDate(target, tomorrow) ?? { hour: 7, minute: 0 };
-  }, [target]);
+  }, [target, dayBoundaryHour]);
 
   const [hour, setHour] = useState(currentResolvedTime.hour);
   const [minute, setMinute] = useState(currentResolvedTime.minute);

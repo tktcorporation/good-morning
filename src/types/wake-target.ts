@@ -183,6 +183,23 @@ export function isNextOverrideExpired(override: NextOverride, now: Date = new Da
  * 「時刻が未到来なら今日」にすると、朝 7:30 に設定した「明日だけ 8:00」が
  * 30 分後の当日 8:00 に鳴ってしまい、肝心の翌日には何も鳴らない。
  */
+/**
+ * 「明日だけ変更」ピッカーが指す論理的な翌日を返す。
+ *
+ * computeOverrideTargetDate と同じ基準（dayBoundaryHour 考慮の論理日 + 1日）で
+ * 対象日を決める。target-edit のピッカー初期値がこの基準からズレると
+ * （例えば暦日ベースの `new Date() + 1日` を使うと）、dayBoundaryHour より前の
+ * 深夜に開いた場合、画面に表示される dayOverrides の曜日と実際に保存される
+ * targetDate の曜日が食い違う。time 依存の先送り判定は含まない —
+ * ここはピッカーに「次に迎える朝」の予定値を表示するためのものであり、
+ * 実際の targetDate 確定は setNextOverride 側の computeOverrideTargetDate が行う。
+ */
+export function getNextLogicalDay(dayBoundaryHour: number, now: Date = new Date()): Date {
+  const nextDay = new Date(getLogicalDate(now, dayBoundaryHour).getTime());
+  nextDay.setDate(nextDay.getDate() + 1);
+  return nextDay;
+}
+
 export function computeOverrideTargetDate(
   time: AlarmTime,
   dayBoundaryHour: number,
