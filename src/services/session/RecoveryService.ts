@@ -34,6 +34,14 @@ import { isSnoozeEvent, resolveOverrideAwareDateStr, type SessionError } from '.
 /**
  * 別日の stale セッションを破棄する（Live Activity も終了）か、
  * 当日の完了済みセッションの dangling Live Activity を回収する。
+ *
+ * 「別日」判定は resolveOverrideAwareDateStr（override 考慮の今日）との
+ * 暦日不一致だけで行うと、二重鳴動を許容する設計のため、override 対象日と
+ * 暦日が一致しただけで前夜の通常アラームセッション（windowEnd 前でまだ
+ * 有効中）を誤って stale と判定してしまう。呼び出し元（restoreSessionOnLaunch）
+ * は既に expireSessionIfNeeded で windowEnd 超過を確認済みだが、records 未
+ * ロード等でその処理がスキップされた場合はここまで到達しうるため、
+ * 暦日不一致に加えて windowEnd 超過（isExpired）も満たす場合のみ破棄する。
  */
 const cleanupStaleOrDanglingSession = (
   state: ReturnType<typeof useMorningSessionStore.getState>,
@@ -43,7 +51,7 @@ const cleanupStaleOrDanglingSession = (
     if (state.session === null) return;
     const kit = yield* AlarmKit;
 
-    if (state.session.date !== today) {
+    if (state.session.date !== today && state.isExpired()) {
       if (state.session.liveActivityId !== null) {
         yield* kit
           .endLiveActivity(state.session.liveActivityId)

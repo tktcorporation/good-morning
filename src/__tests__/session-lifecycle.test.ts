@@ -580,17 +580,53 @@ describe('onAllTodosCompletedEffect', () => {
 });
 
 describe('restoreSessionOnLaunch', () => {
-  test('cleans up stale session (different day) and ends Live Activity', async () => {
+  test('cleans up stale session (different day, windowEnd も超過済み) and ends Live Activity', async () => {
+    // 別日判定だけでなく windowEnd 超過も満たす、実際に放置されたセッションを再現する
     setActiveSession({
       date: '2026-01-01',
       liveActivityId: 'activity-stale',
-      windowEnd: '2099-12-31T23:59:59.000Z',
+      windowEnd: '2026-01-01T08:00:00.000Z',
     });
 
     await runEffect(restoreSessionOnLaunch(4));
 
     expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-stale');
     expect(useMorningSessionStore.getState().session).toBeNull();
+  });
+
+  test('override 対象日の暦日一致だけで、まだ windowEnd 前の前夜の通常アラームセッションを stale 破棄しない', async () => {
+    // 通常 23:50(前日) のセッション（windowEnd 翌日 00:20）が有効中に、
+    // nextOverride の targetDate（翌暦日）と暦日が一致しただけで
+    // resolveOverrideAwareDateStr が「今日」を override 対象日と判定すると、
+    // まだ windowEnd 前の有効なセッションを別日の stale セッションと
+    // 誤判定して TODO 進捗ごと破棄してしまう
+    jest.useFakeTimers({ now: new Date('2026-02-26T00:05:00') });
+    try {
+      useWakeTargetStore.setState({
+        target: {
+          defaultTime: { hour: 23, minute: 50 },
+          dayOverrides: {},
+          nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+          todos: [],
+          enabled: true,
+          targetSleepMinutes: null,
+          wakeUpGoalBufferMinutes: 30,
+        },
+        alarmIds: [],
+        loaded: true,
+      });
+      setActiveSession({
+        date: '2026-02-25',
+        windowEnd: '2026-02-26T00:20:00.000Z',
+      });
+
+      await runEffect(restoreSessionOnLaunch(4));
+
+      expect(useMorningSessionStore.getState().session).not.toBeNull();
+      expect(mockEndLiveActivity).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('does nothing for active session (snoozeFiresAt already persisted)', async () => {
