@@ -181,11 +181,14 @@ jobs:
       # 返すリスクがある。これは本ジョブの目的（起動直後クラッシュの検出）を
       # 無意味にする偽陽性を生みかねないため避ける。
       #
-      # 代わりに ModuleCache.noindex（Clang の pcm モジュールキャッシュ）だけを
-      # キャッシュする。これはヘッダー内容とコンパイラフラグのハッシュでキー化
-      # されており、mtime に依存しない。ロード時に Clang 自身が内容の整合性を
-      # 検証して不整合なら再生成するため、古いキャッシュが誤って使われることはない。
-      # 多数の native pod のヘッダーをモジュール化する一回限りのコストを削減できる。
+      # 代わりに ModuleCache.noindex（Clang の pcm モジュールキャッシュ、
+      # -derivedDataPath 配下に作られる）だけをキャッシュする。
+      # pcm 自体の再利用可否は入力ヘッダーの mtime+size で Clang が検証しており
+      # （-fmodules-validate-input-files-content 未指定時のデフォルト挙動）、
+      # 不一致なら黙って再生成するだけなので、古い pcm が誤って使われることはない。
+      # CocoaPods 由来のヘッダーは pod install のたびに再生成され mtime が
+      # 変わるためキャッシュが効きにくいが、runner image に固定されている
+      # SDK/システムフレームワークのモジュール化コストは実行間で再利用できる。
       - name: Cache Clang module cache
         if: steps.sdk.outputs.available == 'true'
         uses: actions/cache@v6

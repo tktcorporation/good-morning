@@ -58,12 +58,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 変更検出に origin/${{ base_ref }} との diff が要るため PR では全履歴を取得する。
-      # main への push では変更検出自体を行わないので、無駄な full clone を避け
-      # デフォルトの shallow clone (depth=1) のままにする。
+      # 変更検出に origin/${{ base_ref }} との diff が要るため常に全履歴を取得する。
+      # (native-target-guard.yml と同じ理由。push イベント用に条件分岐で depth を
+      # 変える最適化は GitHub Actions 式の `&&`/`||` が 0 を falsy 扱いするため
+      # 意図通りに働かず、事故ると required check が全滅する。単純さを優先する)
       - uses: actions/checkout@v7
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          fetch-depth: 0
 
       # PR で test に影響しうるファイルが変更されていなければスキップする。
       # `paths:` トリガーでジョブごと止めると required status check が
@@ -78,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- \
-            app src package.json pnpm-lock.yaml patches \
+            app src package.json pnpm-lock.yaml patches .npmrc \
             jest.config.js jest.setup.js babel.config.js tsconfig.json \
             .github/workflows/ci.yml .github/actions/setup-pnpm)
           if [ -z "$CHANGED" ]; then
@@ -117,12 +118,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 変更検出に origin/${{ base_ref }} との diff が要るため PR では全履歴を取得する。
-      # main への push では変更検出自体を行わないので、無駄な full clone を避け
-      # デフォルトの shallow clone (depth=1) のままにする。
+      # 変更検出に origin/${{ base_ref }} との diff が要るため常に全履歴を取得する。
+      # (depth を条件分岐しない理由は test ジョブの同名 step のコメントを参照)
       - uses: actions/checkout@v7
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          fetch-depth: 0
 
       # PR でバンドルに影響しうるファイルが変更されていなければスキップする。
       # スキップの安全性については test ジョブの同名 step のコメントを参照。
@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- \
-            app src assets package.json pnpm-lock.yaml patches \
+            app src assets package.json pnpm-lock.yaml patches .npmrc \
             app.config.ts babel.config.js tsconfig.json \
             .github/workflows/ci.yml .github/actions/setup-pnpm)
           if [ -z "$CHANGED" ]; then
