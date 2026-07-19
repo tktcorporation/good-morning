@@ -68,6 +68,10 @@
     "save": "保存"
   },
   "alarmKitUnavailable": "アラーム機能が利用できません。Development Buildを再ビルドしてください。",
+  "corrupted": {
+    "message": "起床設定データが読み込めませんでした。リセットすると新しい設定を作成できます。",
+    "resetButton": "設定をリセット"
+  },
   "sleep": {
     "title": "目標睡眠時間",
     "setup": "目標睡眠時間を設定",

@@ -21,8 +21,18 @@ const ALARM_IDS_KEY = STORAGE_KEYS.alarmIds;
 interface WakeTargetState {
   readonly target: WakeTarget | null;
   readonly loaded: boolean;
+  /**
+   * 永続化データがパース不能で target を確定できない状態。
+   * loaded は true にしてダッシュボードをローディング表示から解放しつつ、
+   * このフラグで「編集不可・要リセット」を伝える。syncAlarmsEffect は
+   * corrupted 中は同期をスキップし、実在するネイティブアラームを
+   * 誤ってキャンセルしない。
+   */
+  readonly corrupted: boolean;
   readonly alarmIds: readonly string[];
   loadTarget: () => Promise<void>;
+  /** corrupted 状態を解除し、無効化した DEFAULT_WAKE_TARGET で復旧する。 */
+  resetCorruptedTarget: () => Promise<void>;
   setTarget: (target: WakeTarget) => Promise<void>;
   updateDefaultTime: (time: AlarmTime) => Promise<void>;
   setNextOverride: (time: AlarmTime) => Promise<void>;
@@ -178,6 +188,7 @@ function parseStoredTarget(raw: string | null): WakeTarget | null {
 export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   target: null,
   loaded: false,
+  corrupted: false,
   alarmIds: [],
 
   loadTarget: async () => {
@@ -193,19 +204,33 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     const migrated = parseStoredTarget(raw);
 
     if (migrated !== null) {
-      set({ target: migrated, loaded: true, alarmIds });
+      set({ target: migrated, loaded: true, corrupted: false, alarmIds });
     } else if (raw === null) {
       // 未設定（初回起動・オンボーディング未完了）→ OFF が正しい初期値
-      set({ target: { ...DEFAULT_WAKE_TARGET, enabled: false }, loaded: true, alarmIds });
+      set({
+        target: { ...DEFAULT_WAKE_TARGET, enabled: false },
+        loaded: true,
+        corrupted: false,
+        alarmIds,
+      });
     } else {
-      // raw はあったがパースに失敗（一時的なストレージ破損）。
-      // loaded を true にすると、次の syncAlarmsEffect が alarmIds（実在する
-      // ネイティブアラーム ID）を previousIds として使い、捏造した
-      // DEFAULT_WAKE_TARGET（7:00・enabled:true）で新規スケジュールした上で
+      // raw はあったがパースに失敗（一時的なストレージ破損）。target を
+      // 確定できないため null のまま維持し、syncAlarmsEffect 側の corrupted
+      // ガードで同期をスキップさせる。捏造した DEFAULT_WAKE_TARGET
+      // （7:00・enabled:true）で同期させると、alarmIds（実在するネイティブ
+      // アラーム ID）を previousIds として使い新規スケジュールした上で、
       // ユーザーの実際の設定に基づく旧アラームをキャンセルしてしまう。
-      // target を確定できない間は同期させず、次回起動時の再読み込みに委ねる
-      set({ alarmIds });
+      // loaded は true にする — false のままだとダッシュボードがローディング
+      // 画面に固まり続け、resetCorruptedTarget による復旧導線にも到達できない
+      set({ loaded: true, corrupted: true, alarmIds });
     }
+  },
+
+  resetCorruptedTarget: async () => {
+    const target: WakeTarget = { ...DEFAULT_WAKE_TARGET, enabled: false };
+    set({ target, corrupted: false });
+    await persist(target);
+    syncAfterTargetChange();
   },
 
   setTarget: async (target: WakeTarget) => {

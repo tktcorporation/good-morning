@@ -521,6 +521,22 @@ describe('restoreSessionOnLaunch', () => {
     }
   });
 
+  test('settings ストア未ロード時は stale セッション判定をスキップする（誤った dayBoundaryHour でのクリア防止）', async () => {
+    // settings 未ロードだと、呼び出し元（_layout.tsx）が渡す dayBoundaryHour は
+    // デフォルト値のままの可能性があり、有効な永続化済みセッションを誤って
+    // 別日の stale セッションと判定して TODO 進捗ごと破棄してしまう
+    useSettingsStore.setState({ loaded: false });
+    setActiveSession({
+      date: '2026-01-01',
+      windowEnd: '2099-12-31T23:59:59.000Z',
+    });
+
+    await runEffect(restoreSessionOnLaunch(4));
+
+    expect(useMorningSessionStore.getState().session).not.toBeNull();
+    expect(mockEndLiveActivity).not.toHaveBeenCalled();
+  });
+
   test('ends dangling Live Activity for completed session', async () => {
     const now = new Date();
     const hour = now.getHours();

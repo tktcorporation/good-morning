@@ -28,34 +28,16 @@ import { handleAlarmDismissEffect } from './DismissService';
 import { isSnoozeEvent, resolveOverrideAwareDateStr, type SessionError } from './types';
 
 /**
- * アプリ起動時にセッション状態を復元・クリーンアップする Effect。
- *
- * - 期限切れセッション → expireSessionIfNeeded に委譲
- * - 別日のセッション → stale として破棄（Live Activity も終了）
- * - 当日の完了済みセッション → dangling Live Activity を回収
+ * 別日の stale セッションを破棄する（Live Activity も終了）か、
+ * 当日の完了済みセッションの dangling Live Activity を回収する。
  */
-export const restoreSessionOnLaunch = (
-  dayBoundaryHour: number,
+const cleanupStaleOrDanglingSession = (
+  state: ReturnType<typeof useMorningSessionStore.getState>,
+  today: string,
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
-    const expired = yield* expireSessionIfNeeded;
-    if (expired) return;
-
-    const state = useMorningSessionStore.getState();
     if (state.session === null) return;
-
     const kit = yield* AlarmKit;
-    const now = new Date();
-    // tryAutoStartSession は checkSessionWindow（override 考慮の日付解決）で
-    // session.date を決めている。ここで単純な論理日付だけを使うと、
-    // dayBoundaryHour がアラーム時刻より後の設定では、override 由来の
-    // 自動開始セッションを「別日の stale セッション」と誤判定して
-    // TODO 進捗ごと破棄してしまう
-    const { target } = useWakeTargetStore.getState();
-    const today =
-      target !== null
-        ? resolveOverrideAwareDateStr(now, target, dayBoundaryHour)
-        : getLogicalDateString(now, dayBoundaryHour);
 
     if (state.session.date !== today) {
       if (state.session.liveActivityId !== null) {
@@ -72,6 +54,44 @@ export const restoreSessionOnLaunch = (
         .endLiveActivity(state.session.liveActivityId)
         .pipe(Effect.catchAll(() => Effect.void));
     }
+  });
+
+/**
+ * アプリ起動時にセッション状態を復元・クリーンアップする Effect。
+ *
+ * - 期限切れセッション → expireSessionIfNeeded に委譲
+ * - 別日のセッション → stale として破棄（Live Activity も終了）
+ * - 当日の完了済みセッション → dangling Live Activity を回収
+ */
+export const restoreSessionOnLaunch = (
+  dayBoundaryHour: number,
+): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
+  Effect.gen(function* () {
+    const expired = yield* expireSessionIfNeeded;
+    if (expired) return;
+
+    const state = useMorningSessionStore.getState();
+    if (state.session === null) return;
+
+    // settings 未ロードだと、呼び出し元（_layout.tsx）が渡す dayBoundaryHour は
+    // デフォルト値のままの可能性があり、下の stale 判定が誤った論理日付で
+    // 有効な永続化済みセッションを別日と誤判定して TODO 進捗ごと破棄してしまう。
+    // stale 判定だけを見送り、期限切れ（windowEnd 超過）チェックのみ有効に保つ
+    if (!useSettingsStore.getState().loaded) return;
+
+    const now = new Date();
+    // tryAutoStartSession は checkSessionWindow（override 考慮の日付解決）で
+    // session.date を決めている。ここで単純な論理日付だけを使うと、
+    // dayBoundaryHour がアラーム時刻より後の設定では、override 由来の
+    // 自動開始セッションを「別日の stale セッション」と誤判定して
+    // TODO 進捗ごと破棄してしまう
+    const { target } = useWakeTargetStore.getState();
+    const today =
+      target !== null
+        ? resolveOverrideAwareDateStr(now, target, dayBoundaryHour)
+        : getLogicalDateString(now, dayBoundaryHour);
+
+    yield* cleanupStaleOrDanglingSession(state, today);
   });
 
 /**

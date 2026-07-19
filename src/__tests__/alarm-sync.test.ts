@@ -38,7 +38,7 @@ beforeEach(() => {
   mockCancelAlarm.mockResolvedValue(true);
   useMorningSessionStore.setState({ session: null, loaded: true });
   useWakeRecordStore.setState({ records: [], loaded: true });
-  useWakeTargetStore.setState({ target: null, loaded: false, alarmIds: [] });
+  useWakeTargetStore.setState({ target: null, loaded: false, corrupted: false, alarmIds: [] });
 });
 
 describe('syncAlarmsEffect', () => {
@@ -108,6 +108,19 @@ describe('syncAlarmsEffect', () => {
 
   test('does nothing when store is not loaded yet', async () => {
     useWakeTargetStore.setState({ target: null, loaded: false });
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('target が corrupted 状態のときは何もしない（実際の設定に基づく旧アラームを誤ってキャンセルしない）', async () => {
+    // corrupted 中は target を確定できていない。同期させると捏造した
+    // DEFAULT_WAKE_TARGET でユーザーの実際の設定に基づく旧アラームを
+    // キャンセルしてしまう
+    useWakeTargetStore.setState({ target: null, loaded: true, corrupted: true, alarmIds: [] });
+    mockGetAllAlarms.mockReturnValue(['native-alarm-1']);
 
     await runEffect(syncAlarmsEffect);
 

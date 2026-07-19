@@ -60,7 +60,14 @@ export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Ef
 
         const targetState = useWakeTargetStore.getState();
         const sessionState = useMorningSessionStore.getState();
-        if (!(targetState.loaded && useWakeRecordStore.getState().loaded && sessionState.loaded)) {
+        if (
+          !(targetState.loaded && useWakeRecordStore.getState().loaded && sessionState.loaded) ||
+          targetState.corrupted
+        ) {
+          // corrupted 中は target が確定できていない。同期させると
+          // 捏造した DEFAULT_WAKE_TARGET でユーザーの実際の設定に基づく
+          // 旧アラームをキャンセルしてしまうため、復旧（resetCorruptedTarget）
+          // まで同期を見送る
           return;
         }
 

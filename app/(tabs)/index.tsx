@@ -267,6 +267,8 @@ export default function DashboardScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const loaded = useWakeTargetStore((s) => s.loaded);
+  const corrupted = useWakeTargetStore((s) => s.corrupted);
+  const resetCorruptedTarget = useWakeTargetStore((s) => s.resetCorruptedTarget);
 
   const getWeekStats = useWakeRecordStore((s) => s.getWeekStats);
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
@@ -393,6 +395,22 @@ export default function DashboardScreen() {
     );
   }
 
+  if (corrupted) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadingText}>{t('corrupted.message')}</Text>
+        <Pressable
+          style={styles.corruptedResetButton}
+          onPress={() => {
+            void resetCorruptedTarget();
+          }}
+        >
+          <Text style={styles.corruptedResetButtonText}>{t('corrupted.resetButton')}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   const sessionActive = session !== null;
   const progress = sessionActive ? getProgress() : null;
 
@@ -490,6 +508,20 @@ const styles = StyleSheet.create({
   loadingText: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
+    textAlign: 'center',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  corruptedResetButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  corruptedResetButtonText: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
   errorBanner: {
     backgroundColor: 'rgba(233, 69, 96, 0.15)',

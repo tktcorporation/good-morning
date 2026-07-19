@@ -344,25 +344,30 @@ describe('useWakeTargetStore', () => {
     });
   });
 
-  test('loadTarget は破損 JSON では reject せず、target を確定できないため loaded を true にしない', async () => {
+  test('loadTarget は破損 JSON では reject せず、target を確定できないため corrupted 状態にする', async () => {
     // raw が存在する（何か保存されていた）のに破損している場合、
     // loaded=true で捏造した DEFAULT_WAKE_TARGET を確定させると、
     // 次の syncAlarmsEffect が alarmIds（実在するネイティブアラーム）を
     // previousIds として使い、7:00 のデフォルトアラームを新規登録した上で
     // ユーザーの実際の設定に基づく旧アラームをキャンセルしてしまう。
-    // target が確定するまで同期させないほうが安全
+    // target が確定するまで同期させないほうが安全。
+    // 一方で loaded=false のまま放置すると、ダッシュボードがローディング画面に
+    // 固まり続け、resetCorruptedTarget によるユーザーの復旧手段にも到達できない。
+    // loaded=true・corrupted=true にして、画面遷移と復旧導線の両方を確保する
     stubStoredTarget('not-json{{{');
     await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
     const state = useWakeTargetStore.getState();
-    expect(state.loaded).toBe(false);
+    expect(state.loaded).toBe(true);
+    expect(state.corrupted).toBe(true);
     expect(state.target).toBeNull();
   });
 
-  test('loadTarget は文字列 "null" が保存されていても loaded を true にしない', async () => {
+  test('loadTarget は文字列 "null" が保存されていても corrupted 状態にする', async () => {
     stubStoredTarget('null');
     await useWakeTargetStore.getState().loadTarget();
     const state = useWakeTargetStore.getState();
-    expect(state.loaded).toBe(false);
+    expect(state.loaded).toBe(true);
+    expect(state.corrupted).toBe(true);
     expect(state.target).toBeNull();
   });
 
@@ -374,8 +379,24 @@ describe('useWakeTargetStore', () => {
     });
     await useWakeTargetStore.getState().loadTarget();
     const state = useWakeTargetStore.getState();
-    expect(state.loaded).toBe(false);
+    expect(state.corrupted).toBe(true);
     expect(state.alarmIds).toEqual(['native-1', 'native-2']);
+  });
+
+  test('resetCorruptedTarget は corrupted を解除し、無効化した DEFAULT_WAKE_TARGET を保存する', async () => {
+    stubStoredTarget('not-json{{{');
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().corrupted).toBe(true);
+
+    await useWakeTargetStore.getState().resetCorruptedTarget();
+
+    const state = useWakeTargetStore.getState();
+    expect(state.corrupted).toBe(false);
+    expect(state.target).toEqual({ ...DEFAULT_WAKE_TARGET, enabled: false });
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      JSON.stringify({ ...DEFAULT_WAKE_TARGET, enabled: false }),
+    );
   });
 
   test('loadTarget は未設定（初回起動）のみ enabled: false にフォールバックする', async () => {
