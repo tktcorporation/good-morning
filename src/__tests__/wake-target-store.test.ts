@@ -344,25 +344,38 @@ describe('useWakeTargetStore', () => {
     });
   });
 
-  test('loadTarget は破損 JSON でも reject せず loaded=true になり、enabled は維持される', async () => {
-    // raw が存在する（何か保存されていた）のに破損している場合は
-    // 「未設定」ではなく「利用中ユーザーの一時的な読み取り失敗」の可能性が高い。
-    // enabled: false に倒すと、次の syncAlarmsEffect が登録済みの
-    // ネイティブアラームを本人の意図なく全キャンセルしてしまう
+  test('loadTarget は破損 JSON では reject せず、target を確定できないため loaded を true にしない', async () => {
+    // raw が存在する（何か保存されていた）のに破損している場合、
+    // loaded=true で捏造した DEFAULT_WAKE_TARGET を確定させると、
+    // 次の syncAlarmsEffect が alarmIds（実在するネイティブアラーム）を
+    // previousIds として使い、7:00 のデフォルトアラームを新規登録した上で
+    // ユーザーの実際の設定に基づく旧アラームをキャンセルしてしまう。
+    // target が確定するまで同期させないほうが安全
     stubStoredTarget('not-json{{{');
     await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
     const state = useWakeTargetStore.getState();
-    expect(state.loaded).toBe(true);
-    expect(state.target).toEqual(DEFAULT_WAKE_TARGET);
-    expect(state.target?.enabled).toBe(true);
+    expect(state.loaded).toBe(false);
+    expect(state.target).toBeNull();
   });
 
-  test('loadTarget は文字列 "null" が保存されていても enabled を維持してフォールバックする', async () => {
+  test('loadTarget は文字列 "null" が保存されていても loaded を true にしない', async () => {
     stubStoredTarget('null');
     await useWakeTargetStore.getState().loadTarget();
     const state = useWakeTargetStore.getState();
-    expect(state.loaded).toBe(true);
-    expect(state.target).toEqual(DEFAULT_WAKE_TARGET);
+    expect(state.loaded).toBe(false);
+    expect(state.target).toBeNull();
+  });
+
+  test('loadTarget は破損 JSON でも alarmIds が読めていればストアに反映する（次回再試行時のため）', async () => {
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve('not-json{{{');
+      if (key === 'alarm-ids') return Promise.resolve(JSON.stringify(['native-1', 'native-2']));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(false);
+    expect(state.alarmIds).toEqual(['native-1', 'native-2']);
   });
 
   test('loadTarget は未設定（初回起動）のみ enabled: false にフォールバックする', async () => {

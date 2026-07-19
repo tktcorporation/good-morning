@@ -67,13 +67,15 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
 }
 
 /**
- * セッションウィンドウ判定用の対象日（暦日文字列）を解決する。
+ * nextOverride を考慮した「今日」の対象日（暦日文字列）を解決する。
  *
  * dayBoundaryHour をアラーム時刻より後に設定している場合（UI は 0〜23 時を
- * 許可する）、アラーム前の時間帯では論理日付が前日に倒れ、
+ * 許可する）、アラーム前後の時間帯では論理日付が前日に倒れ、
  * nextOverride.targetDate（暦日）と噛み合わなくなり override を見失う。
- * now の暦日が targetDate と一致する＝まさに override 対象日を迎えている
- * 場合は、論理日付計算を経由せず targetDate を直接使う。
+ * セッションウィンドウ判定（checkSessionWindow）だけでなく、セッションの
+ * stale 判定（restoreSessionOnLaunch）でも同じズレが起きるため、両方から
+ * 共有する。now の暦日が targetDate と一致する＝まさに override 対象日を
+ * 迎えている場合は、論理日付計算を経由せず targetDate を直接使う。
  *
  * 期限切れ判定（isNextOverrideExpired）はここでは行わない。override は
  * アラーム時刻ちょうどに期限切れとなるため、それを条件に含めると
@@ -81,7 +83,11 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
  * defaultTime 基準の判定に落ちてセッション自動開始に失敗する。
  * 暦日一致の条件だけで「日をまたいだ古い override」は除外できている。
  */
-function resolveSessionDateStr(now: Date, target: WakeTarget, dayBoundaryHour: number): string {
+export function resolveOverrideAwareDateStr(
+  now: Date,
+  target: WakeTarget,
+  dayBoundaryHour: number,
+): string {
   if (target.nextOverride !== null && formatLocalDate(now) === target.nextOverride.targetDate) {
     return target.nextOverride.targetDate;
   }
@@ -101,7 +107,7 @@ export function checkSessionWindow(
 ): { resolvedTime: AlarmTime; windowEnd: Date; dateStr: string } | null {
   if (!target.enabled || target.todos.length === 0) return null;
 
-  const dateStr = resolveSessionDateStr(now, target, dayBoundaryHour);
+  const dateStr = resolveOverrideAwareDateStr(now, target, dayBoundaryHour);
   const logicalDate = new Date(`${dateStr}T12:00:00`);
   const resolvedTime = resolveTimeForDate(target, logicalDate);
   if (resolvedTime === null) return null;

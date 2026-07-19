@@ -24,7 +24,7 @@ import { cancelAlarmsByIds, SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerSer
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
 import { handleAlarmDismissEffect } from './DismissService';
-import { isSnoozeEvent, type SessionError } from './types';
+import { isSnoozeEvent, resolveOverrideAwareDateStr, type SessionError } from './types';
 
 /**
  * アプリ起動時にセッション状態を復元・クリーンアップする Effect。
@@ -44,7 +44,17 @@ export const restoreSessionOnLaunch = (
     if (state.session === null) return;
 
     const kit = yield* AlarmKit;
-    const today = getLogicalDateString(new Date(), dayBoundaryHour);
+    const now = new Date();
+    // tryAutoStartSession は checkSessionWindow（override 考慮の日付解決）で
+    // session.date を決めている。ここで単純な論理日付だけを使うと、
+    // dayBoundaryHour がアラーム時刻より後の設定では、override 由来の
+    // 自動開始セッションを「別日の stale セッション」と誤判定して
+    // TODO 進捗ごと破棄してしまう
+    const { target } = useWakeTargetStore.getState();
+    const today =
+      target !== null
+        ? resolveOverrideAwareDateStr(now, target, dayBoundaryHour)
+        : getLogicalDateString(now, dayBoundaryHour);
 
     if (state.session.date !== today) {
       if (state.session.liveActivityId !== null) {
@@ -98,7 +108,19 @@ export const recoverMissedDismiss = (
 
     const targetState = useWakeTargetStore.getState();
     const recordState = useWakeRecordStore.getState();
-    if (!targetState.loaded || targetState.target === null || !recordState.loaded) {
+    const sessionState = useMorningSessionStore.getState();
+    if (
+      !targetState.loaded ||
+      targetState.target === null ||
+      !recordState.loaded ||
+      !sessionState.loaded
+    ) {
+      // session 未ロードのまま進むと isActive()（session !== null）が
+      // 常に false になり、実際には dismiss 未処理の可能性があるのに
+      // processPrimaryDismissEvent の戻り値だけを見て
+      // clearDismissEvents してしまう（handleAlarmDismissEffect 側の
+      // session 未ロードガードで record/session 作成自体は行われないため、
+      // イベントだけが失われる）
       return false;
     }
     const target = targetState.target;
@@ -109,7 +131,6 @@ export const recoverMissedDismiss = (
     // このとき App Groups に残る ID はセッション取り込み済み分ではなく
     // （取り込み時に clearSnoozeAlarmIds 済み）、二重 dismiss で新たに積まれた
     // 管理外スヌーズなので、イベントと一緒に回収する
-    const sessionState = useMorningSessionStore.getState();
     if (sessionState.isActive() && sessionState.session?.recordId != null) {
       yield* reclaimUnmanagedNativeSnoozes;
       yield* kit.clearDismissEvents;

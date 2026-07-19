@@ -436,6 +436,40 @@ describe('restoreSessionOnLaunch', () => {
     );
   });
 
+  test('dayBoundaryHour がアラーム時刻より後でも、override 由来の自動開始セッションを stale 破棄しない', async () => {
+    // tryAutoStartSession は checkSessionWindow（override 考慮の日付解決）で
+    // session.date を決める。restoreSessionOnLaunch 側が単純な論理日付
+    // （このケースでは前日に倒れる）で比較すると、始まったばかりの
+    // セッションを別日の stale セッションと誤判定して TODO 進捗ごと破棄する
+    jest.useFakeTimers({ now: new Date('2026-02-26T07:15:00') });
+    try {
+      useWakeTargetStore.setState({
+        target: {
+          defaultTime: { hour: 22, minute: 0 },
+          dayOverrides: {},
+          nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+          todos: [],
+          enabled: true,
+          targetSleepMinutes: null,
+          wakeUpGoalBufferMinutes: 30,
+        },
+        alarmIds: [],
+        loaded: true,
+      });
+      setActiveSession({
+        date: '2026-02-26',
+        windowEnd: '2026-02-26T07:45:00.000Z',
+      });
+
+      await runEffect(restoreSessionOnLaunch(8));
+
+      expect(useMorningSessionStore.getState().session).not.toBeNull();
+      expect(mockEndLiveActivity).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('ends dangling Live Activity for completed session', async () => {
     const now = new Date();
     const hour = now.getHours();
@@ -624,6 +658,25 @@ describe('recoverMissedDismiss', () => {
     const target = createTargetWithTodos();
     useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
     useWakeRecordStore.setState({ records: [], loaded: false });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: new Date().toISOString(), payload: '' },
+    ]);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(false);
+    expect(useWakeRecordStore.getState().records).toHaveLength(0);
+    expect(mockClearDismissEvents).not.toHaveBeenCalled();
+  });
+
+  test('session 未ロード時は重複ガードを素通りせず、イベントも破棄しない', async () => {
+    // session 未ロードだと isActive()（session !== null）が常に false になり、
+    // handleAlarmDismissEffect 側の session 未ロードガードで record/session
+    // 作成自体は行われないのに、processPrimaryDismissEvent の戻り値だけを見て
+    // clearDismissEvents してしまうと、イベントだけが失われる
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    useMorningSessionStore.setState({ session: null, loaded: false });
     mockGetDismissEvents.mockReturnValue([
       { alarmId: 'alarm-1', dismissedAt: new Date().toISOString(), payload: '' },
     ]);

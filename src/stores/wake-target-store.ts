@@ -199,10 +199,12 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
       set({ target: { ...DEFAULT_WAKE_TARGET, enabled: false }, loaded: true, alarmIds });
     } else {
       // raw はあったがパースに失敗（一時的なストレージ破損）。
-      // 利用中ユーザーの可能性が高いため enabled: false に倒さない。
-      // false にすると、次の syncAlarmsEffect が本人の意図しないまま
-      // 登録済みのネイティブアラームを全キャンセルしてしまう
-      set({ target: DEFAULT_WAKE_TARGET, loaded: true, alarmIds });
+      // loaded を true にすると、次の syncAlarmsEffect が alarmIds（実在する
+      // ネイティブアラーム ID）を previousIds として使い、捏造した
+      // DEFAULT_WAKE_TARGET（7:00・enabled:true）で新規スケジュールした上で
+      // ユーザーの実際の設定に基づく旧アラームをキャンセルしてしまう。
+      // target を確定できない間は同期させず、次回起動時の再読み込みに委ねる
+      set({ alarmIds });
     }
   },
 
