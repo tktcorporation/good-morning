@@ -167,9 +167,12 @@ export const handleAlarmDismissEffect = (
       }
       if (snoozeIds.length === 0) {
         snoozeIds = yield* scheduleSnoozeAlarms(dismissTime);
-        firstFireAt = nextSnoozeFireTime(dismissTime);
+        // 遅延リカバリで全 20 本が過去時刻になっていた等、実際には
+        // 1 本も登録できなかった場合は null のままにする。理論上の未来値を
+        // 入れると、実在しないスヌーズへ Live Activity がカウントダウンする
+        firstFireAt = snoozeIds.length > 0 ? nextSnoozeFireTime(dismissTime) : null;
       }
-      const snoozeFiresAt = (firstFireAt ?? nextSnoozeFireTime(dismissTime)).toISOString();
+      const snoozeFiresAt = firstFireAt?.toISOString() ?? null;
       yield* Effect.promise(() =>
         useMorningSessionStore.getState().setSnoozeState(snoozeIds, snoozeFiresAt),
       );

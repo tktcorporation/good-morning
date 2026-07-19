@@ -300,6 +300,23 @@ describe('handleAlarmDismissEffect', () => {
     expect(session?.snoozeFiresAt).toBe(expectedFiresAt);
   });
 
+  test('遅延リカバリで全スヌーズ枠が過去時刻の場合、snoozeFiresAt は null のままになる', async () => {
+    // scheduleSnoozeAlarms は過去 epoch のスヌーズを登録しないため、
+    // dismissTime が 3 時間以上前だと 1 本も登録されず snoozeIds は空になる。
+    // ここで理論上の未来値を snoozeFiresAt に入れると、実在しないスヌーズへ
+    // Live Activity がカウントダウンしてしまう
+    const params = createStartParams({
+      dismissTime: new Date(Date.now() - 200 * 60 * 1000),
+    });
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.snoozeAlarmIds).toEqual([]);
+    expect(session?.snoozeFiresAt).toBeNull();
+  });
+
   test('falls back to JS snooze scheduling when native IDs empty', async () => {
     let uuidCounter = 0;
     mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
