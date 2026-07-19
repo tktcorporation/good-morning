@@ -28,7 +28,11 @@ import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
 import type { WakeTarget } from '../../src/types/wake-target';
-import { getNextLogicalDay, resolveTimeForDate } from '../../src/types/wake-target';
+import {
+  getNextLogicalDay,
+  resolveOverrideEditDay,
+  resolveTimeForDate,
+} from '../../src/types/wake-target';
 import { getLogicalDateString, getRecentDates } from '../../src/utils/date';
 import { getLocalizedTodoTitle } from '../../src/utils/todo-display';
 
@@ -287,10 +291,18 @@ export default function DashboardScreen() {
   const today = useMemo(() => new Date(), []);
   const todaySummary = useDailySummary(today);
 
-  // target-edit のピッカーと同じ基準で「次に迎える朝」を決める。暦日ベースの
-  // +1日だと、dayBoundaryHour より前の深夜には、保存された override の
-  // 曜日とズレた表示になる
-  const tomorrow = useMemo(() => getNextLogicalDay(dayBoundaryHour), [dayBoundaryHour]);
+  // target-edit のピッカー（resolveOverrideEditDay）と同じ対象日を表示する。
+  // getNextLogicalDay だけだと、dayBoundaryHour がアラーム時刻より後の設定で
+  // 境界通過前（アラーム発火後〜境界前）に開いた場合、論理日がまだ前日のまま
+  // なので今日の暦日に戻ってしまい、既に過ぎた当日の予定を「明日」として
+  // 表示してしまう（編集画面を開くと実際は翌日の予定になっている）
+  const tomorrow = useMemo(
+    () =>
+      target !== null
+        ? resolveOverrideEditDay(target, dayBoundaryHour)
+        : getNextLogicalDay(dayBoundaryHour),
+    [target, dayBoundaryHour],
+  );
   const resolvedTime = useMemo(
     () => (target !== null ? resolveTimeForDate(target, tomorrow) : null),
     [target, tomorrow],
