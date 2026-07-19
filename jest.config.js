@@ -7,9 +7,10 @@ const expoPreset = require('jest-expo/jest-preset');
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
-  // CI の test ジョブは早期skip判定で app/ と src/ の変更有無しか見ていないため、
-  // Jest がテストを探す範囲をこの2つに揃えておく。ここを広げる場合は
-  // .github/workflows/ci.yml の test ジョブの判定対象パスも合わせて広げること。
+  // Jest がテストを探す範囲を app/ と src/ に限定する。CI の test ジョブは
+  // 早期skip判定でこの2つのディレクトリを監視対象に含めているので、
+  // ここを広げる場合は .github/workflows/ci.yml の test ジョブの
+  // 判定対象パスにも新しいディレクトリを追加すること。
   roots: ['<rootDir>/app', '<rootDir>/src'],
   moduleNameMapper: {
     ...(expoPreset.moduleNameMapper ?? {}),
