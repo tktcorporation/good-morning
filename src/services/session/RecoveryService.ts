@@ -14,6 +14,7 @@
 
 import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import { resolveTimeForDismiss, type WakeTarget } from '../../types/wake-target';
@@ -113,8 +114,11 @@ export const recoverMissedDismiss = (
       !targetState.loaded ||
       targetState.target === null ||
       !recordState.loaded ||
-      !sessionState.loaded
+      !sessionState.loaded ||
+      !useSettingsStore.getState().loaded
     ) {
+      // dayBoundaryHour（設定未ロード時はデフォルト値のまま）で論理日付が
+      // ズレると、record/session の重複判定・作成が誤った日付で行われる。
       // session 未ロードのまま進むと isActive()（session !== null）が
       // 常に false になり、実際には dismiss 未処理の可能性があるのに
       // processPrimaryDismissEvent の戻り値だけを見て
@@ -176,7 +180,11 @@ const processPrimaryDismissEvent = (
     const parsedDismissTime = new Date(event.dismissedAt);
     // dismissedAt が壊れていても回収自体は続行する（時刻は現在で代替）
     const dismissTime = Number.isNaN(parsedDismissTime.getTime()) ? new Date() : parsedDismissTime;
-    const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
+    // tryAutoStartSession は checkSessionWindow（override 考慮）で session.date を
+    // 決めている。ここを単純な論理日付のままにすると、override 対象日の dismiss で
+    // 既存セッション・レコードとの重複判定がズレ、DismissService 側の
+    // resolveOverrideAwareDateStr とも食い違って別日として記録されてしまう
+    const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
 
     if (records.some((r) => r.date === dateStr)) {
       yield* reclaimUnmanagedNativeSnoozes;

@@ -11,17 +11,22 @@
 
 import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../../types/wake-record';
-import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit } from '../AlarmKitService';
 import { SNOOZE_DURATION_SECONDS, scheduleSnoozeAlarms } from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
 import { scheduleReminderNotifications } from '../TodoReminderService';
-import { type AlarmDismissParams, SESSION_WINDOW_AFTER_MINUTES, type SessionError } from './types';
+import {
+  type AlarmDismissParams,
+  resolveOverrideAwareDateStr,
+  SESSION_WINDOW_AFTER_MINUTES,
+  type SessionError,
+} from './types';
 
 /**
  * アラーム dismiss 時の処理 Effect。
@@ -43,16 +48,24 @@ export const handleAlarmDismissEffect = (
     // 既存の起床履歴全体が新規レコード 1 件で上書きされる。
     // session も同様: 未ロードだと isActive()（session !== null）が false
     // になり、実際には進行中セッションが永続化されているのに startSession
-    // が新規セッションで上書き保存してしまう。
+    // が新規セッションで上書き保存してしまう。settings も同様: 未ロードだと
+    // dayBoundaryHour がデフォルト値のままになり、誤った論理日付で
+    // record/session が作成・紐づけされる。
     // ロードが完了していない場合は履歴・セッションを壊すより処理を諦める方が安全。
-    if (!(useWakeRecordStore.getState().loaded && useMorningSessionStore.getState().loaded)) {
+    if (
+      !(
+        useWakeRecordStore.getState().loaded &&
+        useMorningSessionStore.getState().loaded &&
+        useSettingsStore.getState().loaded
+      )
+    ) {
       return;
     }
 
     const kit = yield* AlarmKit;
 
     const hasTodos = target.todos.length > 0;
-    const dateStr = getLogicalDateString(dismissTime, dayBoundaryHour);
+    const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
     const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
     const result = calculateWakeResult(diffMinutes);
 

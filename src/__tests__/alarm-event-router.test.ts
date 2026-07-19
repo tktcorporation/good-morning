@@ -11,6 +11,7 @@
 
 import { handleAlarmEventEffect, runEffect } from '../services';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
@@ -107,6 +108,7 @@ beforeEach(() => {
   useMorningSessionStore.setState({ session: null, loaded: true });
   useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: true, alarmIds: [] });
+  useSettingsStore.setState({ loaded: true, dayBoundaryHour: 4 });
 });
 
 describe('handleAlarmEventEffect: cold-start + payload あり（非スヌーズ）', () => {

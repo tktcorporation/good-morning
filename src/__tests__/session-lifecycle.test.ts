@@ -14,6 +14,7 @@ import {
 } from '../services';
 import { recoverMissedDismiss, restoreSessionOnLaunch } from '../services/session';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
@@ -118,6 +119,7 @@ beforeEach(() => {
   useMorningSessionStore.setState({ session: null, loaded: true });
   useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: true, alarmIds: [] });
+  useSettingsStore.setState({ loaded: true, dayBoundaryHour: 4 });
 });
 
 describe('handleAlarmDismissEffect', () => {
@@ -160,6 +162,19 @@ describe('handleAlarmDismissEffect', () => {
     // 実際には永続化されている進行中セッションを新規セッションで上書きしてしまう
     useWakeRecordStore.setState({ records: [], loaded: true });
     useMorningSessionStore.setState({ session: null, loaded: false });
+    const params = createStartParams();
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    expect(useWakeRecordStore.getState().records).toHaveLength(0);
+    expect(useMorningSessionStore.getState().session).toBeNull();
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+  });
+
+  test('settings ストア未ロード時は dayBoundaryHour がデフォルト値のまま処理されるのを防ぐため何もしない', async () => {
+    // settings 未ロードだと dayBoundaryHour は初期値のままになり、
+    // 誤った論理日付で record/session が作成・紐づけされてしまう
+    useSettingsStore.setState({ loaded: false });
     const params = createStartParams();
 
     await runEffect(handleAlarmDismissEffect(params));
@@ -688,6 +703,23 @@ describe('recoverMissedDismiss', () => {
     expect(mockClearDismissEvents).not.toHaveBeenCalled();
   });
 
+  test('settings 未ロード時は重複ガードを素通りせず、イベントも破棄しない', async () => {
+    // settings 未ロードだと dayBoundaryHour がデフォルト値のままになり、
+    // 誤った論理日付で重複判定・record 作成が行われる
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    useSettingsStore.setState({ loaded: false });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: new Date().toISOString(), payload: '' },
+    ]);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    expect(result).toBe(false);
+    expect(useWakeRecordStore.getState().records).toHaveLength(0);
+    expect(mockClearDismissEvents).not.toHaveBeenCalled();
+  });
+
   test('recordId 確定済みセッションがアクティブなら重複 dismiss としてイベントを破棄する', async () => {
     setActiveSession({ recordId: 'rec-1' });
     const target = createTargetWithTodos();
@@ -732,6 +764,59 @@ describe('recoverMissedDismiss', () => {
     expect(session?.recordId).not.toBeNull();
     expect(session?.snoozeAlarmIds).toEqual(['ns-1']);
     expect(mockClearDismissEvents).toHaveBeenCalled();
+  });
+
+  test('dayBoundaryHour がアラーム時刻より後でも、override 対象日の重複判定が当日レコードと一致する', async () => {
+    // tryAutoStartSession は checkSessionWindow（override 考慮）で当日レコードの
+    // 有無を "2026-02-26" 基準にチェックしている。recoverMissedDismiss 側の
+    // 重複判定が単純な論理日付（前日に倒れる）のままだと、既に記録済みの
+    // override 対象日を見逃し、record を重複作成してしまう
+    jest.useFakeTimers({ now: new Date('2026-02-26T07:15:00') });
+    try {
+      const target: WakeTarget = {
+        defaultTime: { hour: 22, minute: 0 },
+        dayOverrides: {},
+        nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+        todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+        enabled: true,
+        targetSleepMinutes: null,
+        wakeUpGoalBufferMinutes: 30,
+      };
+      useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+      useWakeRecordStore.setState({
+        records: [
+          {
+            id: 'existing-1',
+            alarmId: 'wake-target',
+            date: '2026-02-26',
+            targetTime: { hour: 7, minute: 0 },
+            alarmTriggeredAt: '2026-02-26T07:00:00.000Z',
+            dismissedAt: '2026-02-26T07:01:00.000Z',
+            healthKitWakeTime: null,
+            result: 'great',
+            diffMinutes: 1,
+            todos: [],
+            todoCompletionSeconds: 0,
+            alarmLabel: '',
+            todosCompleted: true,
+            todosCompletedAt: '2026-02-26T07:01:00.000Z',
+            goalDeadline: null,
+          },
+        ],
+        loaded: true,
+      });
+      mockGetDismissEvents.mockReturnValue([
+        { alarmId: 'alarm-2', dismissedAt: '2026-02-26T07:10:00.000Z', payload: '' },
+      ]);
+
+      const result = await runEffect(recoverMissedDismiss(8));
+
+      expect(result).toBe(false);
+      expect(useWakeRecordStore.getState().records).toHaveLength(1);
+      expect(mockClearDismissEvents).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('当日レコード既存で離脱する場合、管理外のネイティブスヌーズを回収してからイベントを破棄する', async () => {
