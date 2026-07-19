@@ -24,7 +24,7 @@ import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
 import { cancelAlarmsByIds, SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
-import { handleAlarmDismissEffect } from './DismissService';
+import { handleAlarmDismissEffect, recordWakeDismiss } from './DismissService';
 import { isSnoozeEvent, resolveOverrideAwareDateStr, type SessionError } from './types';
 
 /**
@@ -188,18 +188,25 @@ export const recoverMissedDismiss = (
     // キューに複数件たまることがある。最後の1件だけ処理してキュー全体を
     // クリアすると、それ以前の日の起床記録が永久に失われる。古い順に
     // 全件処理し、各回で最新の records を見て重複判定する（前の回で
-    // 追加された record を次の回の重複判定に反映させるため）
+    // 追加された record を次の回の重複判定に反映させるため）。
+    // ライブセッション・スヌーズの取り込みは最新（最後）のイベントだけに
+    // 限定する: ネイティブの App Groups スヌーズ ID は最新イベントのものに
+    // 上書きされているため、古いイベントでセッションを開始すると、
+    // 古い日付のセッションに最新のスヌーズが誤って紐づいてしまう
     const sortedEvents = [...primaryEvents].sort((a, b) =>
       a.dismissedAt.localeCompare(b.dismissedAt),
     );
     let recovered = false;
-    for (const event of sortedEvents) {
+    for (let i = 0; i < sortedEvents.length; i++) {
+      const event = sortedEvents[i] as (typeof sortedEvents)[number];
+      const isLatest = i === sortedEvents.length - 1;
       const currentRecords = useWakeRecordStore.getState().records;
       const result = yield* processPrimaryDismissEvent(
         target,
         event,
         dayBoundaryHour,
         currentRecords,
+        isLatest,
       );
       recovered = recovered || result;
     }
@@ -209,17 +216,22 @@ export const recoverMissedDismiss = (
   });
 
 /**
- * primary dismiss イベント 1 件を起床フローとして処理する。
- * 当日レコード既存・当日 OFF で処理しない場合も、管理外のネイティブ
- * 先行スヌーズは回収してから離脱する。
+ * primary dismiss イベント 1 件を処理する。当日レコード既存・当日 OFF で
+ * 処理しない場合も、管理外のネイティブ先行スヌーズは回収してから離脱する。
  *
- * @returns true if the dismiss was processed into a session
+ * isLatest=false（キュー内の古いイベント）は履歴レコードのみ作成し、
+ * セッション・スヌーズには触れない（recordWakeDismiss に委譲）。
+ * isLatest=true（最新イベント）のみセッション開始・スヌーズ取り込みまで
+ * 行うフル処理（handleAlarmDismissEffect）を実行する。
+ *
+ * @returns true if the dismiss was recorded (record created or session updated)
  */
 const processPrimaryDismissEvent = (
   target: WakeTarget,
   event: { readonly dismissedAt: string },
   dayBoundaryHour: number,
   records: readonly { readonly date: string }[],
+  isLatest: boolean,
 ): Effect.Effect<boolean, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
     const parsedDismissTime = new Date(event.dismissedAt);
@@ -242,13 +254,17 @@ const processPrimaryDismissEvent = (
       return false;
     }
 
-    yield* handleAlarmDismissEffect({
-      target,
-      alarmInstant,
-      dismissTime,
-      mountedAt: dismissTime,
-      dayBoundaryHour,
-    });
+    if (isLatest) {
+      yield* handleAlarmDismissEffect({
+        target,
+        alarmInstant,
+        dismissTime,
+        mountedAt: dismissTime,
+        dayBoundaryHour,
+      });
+    } else {
+      yield* recordWakeDismiss(target, alarmInstant, dismissTime, dismissTime, dateStr);
+    }
 
     return true;
   });

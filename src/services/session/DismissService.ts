@@ -15,8 +15,9 @@ import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
-import type { WakeTodoRecord } from '../../types/wake-record';
+import type { WakeRecord, WakeTodoRecord } from '../../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../../types/wake-record';
+import type { WakeTarget } from '../../types/wake-target';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit } from '../AlarmKitService';
 import {
@@ -33,48 +34,36 @@ import {
   type SessionError,
 } from './types';
 
+/** recordWakeDismiss の戻り値。呼び出し元がセッション紐づけの要否を判断するための情報を含む。 */
+interface WakeDismissRecord {
+  readonly record: WakeRecord;
+  readonly goalDeadline: string | null;
+  readonly hasTodos: boolean;
+}
+
 /**
- * アラーム dismiss 時の処理 Effect。
+ * dismiss を WakeRecord として記録する Effect（セッション・スヌーズには触れない）。
  *
- * WakeRecord を作成し、セッションにアラーム関連情報を付与。
- * スヌーズ、リマインド通知、Live Activity を開始する。
- *
- * 設計: スヌーズ/LA/リマインドの各ステップは失敗してもセッション自体は有効に保つ。
- * これにより、ネイティブモジュールの部分的な障害が朝ルーティン全体を壊さない。
+ * 複数の未処理 dismiss イベントを遡って処理する場面（recoverMissedDismiss）で、
+ * 古い日のイベントにもセッション開始・スヌーズ取り込みを行うと、ライブセッション
+ * の日付が古いイベントのものになり、ネイティブ App Groups のスヌーズ（最新
+ * イベントのものに上書きされている）が古い日付のセッションに誤って紐づく。
+ * この関数は履歴レコードの作成だけを行い、セッション/スヌーズは呼び出し元
+ * （最新イベントの処理）に一任する。
  */
-export const handleAlarmDismissEffect = (
-  params: AlarmDismissParams,
-): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
+export const recordWakeDismiss = (
+  target: WakeTarget,
+  alarmInstant: Date,
+  dismissTime: Date,
+  mountedAt: Date,
+  dateStr: string,
+): Effect.Effect<WakeDismissRecord, never> =>
   Effect.gen(function* () {
-    const { target, alarmInstant, dismissTime, mountedAt, dayBoundaryHour } = params;
     const resolvedTime: AlarmTime = {
       hour: alarmInstant.getHours(),
       minute: alarmInstant.getMinutes(),
     };
-
-    // WakeRecord の永続化はメモリ上の records 配列全体を書き戻す実装のため、
-    // records が未ロード（空配列のまま）の状態で addRecord すると、
-    // 既存の起床履歴全体が新規レコード 1 件で上書きされる。
-    // session も同様: 未ロードだと isActive()（session !== null）が false
-    // になり、実際には進行中セッションが永続化されているのに startSession
-    // が新規セッションで上書き保存してしまう。settings も同様: 未ロードだと
-    // dayBoundaryHour がデフォルト値のままになり、誤った論理日付で
-    // record/session が作成・紐づけされる。
-    // ロードが完了していない場合は履歴・セッションを壊すより処理を諦める方が安全。
-    if (
-      !(
-        useWakeRecordStore.getState().loaded &&
-        useMorningSessionStore.getState().loaded &&
-        useSettingsStore.getState().loaded
-      )
-    ) {
-      return;
-    }
-
-    const kit = yield* AlarmKit;
-
     const hasTodos = target.todos.length > 0;
-    const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
     const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
     const result = calculateWakeResult(diffMinutes);
 
@@ -100,7 +89,6 @@ export const handleAlarmDismissEffect = (
         ).toISOString()
       : null;
 
-    // 1. WakeRecord 作成
     const record = yield* Effect.promise(() =>
       useWakeRecordStore.getState().addRecord({
         alarmId: 'wake-target',
@@ -118,6 +106,55 @@ export const handleAlarmDismissEffect = (
         todosCompletedAt: hasTodos ? null : dismissTime.toISOString(),
         goalDeadline,
       }),
+    );
+
+    return { record, goalDeadline, hasTodos };
+  });
+
+/**
+ * アラーム dismiss 時の処理 Effect。
+ *
+ * WakeRecord を作成し、セッションにアラーム関連情報を付与。
+ * スヌーズ、リマインド通知、Live Activity を開始する。
+ *
+ * 設計: スヌーズ/LA/リマインドの各ステップは失敗してもセッション自体は有効に保つ。
+ * これにより、ネイティブモジュールの部分的な障害が朝ルーティン全体を壊さない。
+ */
+export const handleAlarmDismissEffect = (
+  params: AlarmDismissParams,
+): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
+  Effect.gen(function* () {
+    const { target, alarmInstant, dismissTime, mountedAt, dayBoundaryHour } = params;
+
+    // WakeRecord の永続化はメモリ上の records 配列全体を書き戻す実装のため、
+    // records が未ロード（空配列のまま）の状態で addRecord すると、
+    // 既存の起床履歴全体が新規レコード 1 件で上書きされる。
+    // session も同様: 未ロードだと isActive()（session !== null）が false
+    // になり、実際には進行中セッションが永続化されているのに startSession
+    // が新規セッションで上書き保存してしまう。settings も同様: 未ロードだと
+    // dayBoundaryHour がデフォルト値のままになり、誤った論理日付で
+    // record/session が作成・紐づけされる。
+    // ロードが完了していない場合は履歴・セッションを壊すより処理を諦める方が安全。
+    if (
+      !(
+        useWakeRecordStore.getState().loaded &&
+        useMorningSessionStore.getState().loaded &&
+        useSettingsStore.getState().loaded
+      )
+    ) {
+      return;
+    }
+
+    const kit = yield* AlarmKit;
+    const dateStr = resolveOverrideAwareDateStr(dismissTime, target, dayBoundaryHour);
+
+    // 1. WakeRecord 作成
+    const { record, goalDeadline, hasTodos } = yield* recordWakeDismiss(
+      target,
+      alarmInstant,
+      dismissTime,
+      mountedAt,
+      dateStr,
     );
 
     if (!hasTodos) return;

@@ -1056,4 +1056,26 @@ describe('recoverMissedDismiss', () => {
     expect(mockClearDismissEvents).toHaveBeenCalled();
     expect(result).toBe(true);
   });
+
+  test('複数の未処理 primary dismiss イベントがあっても、セッションは最新イベントの日付・スヌーズになる', async () => {
+    // 古いイベントにもセッション開始・スヌーズ取り込みを行うと、セッションの
+    // 日付が古いイベントのものになり、ネイティブ App Groups のスヌーズ（最新
+    // イベントのものに上書きされている）が古い日付のセッションに誤って紐づく
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: '2026-02-25T07:01:00.000Z', payload: '' },
+      { alarmId: 'alarm-1', dismissedAt: '2026-02-26T07:01:00.000Z', payload: '' },
+    ]);
+    mockGetSnoozeAlarmIds.mockReturnValue(['ns-1']);
+    mockGetAllAlarms.mockReturnValue(['ns-1']);
+
+    await runEffect(recoverMissedDismiss(4));
+
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.date).toBe('2026-02-26');
+    expect(session?.snoozeAlarmIds).toEqual(['ns-1']);
+  });
 });
