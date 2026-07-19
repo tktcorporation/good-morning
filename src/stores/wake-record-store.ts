@@ -5,6 +5,7 @@ import { MS_PER_DAY } from '../constants/time';
 import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
 import { formatLocalDate } from '../utils/date';
+import { readStorageItemWithRetry } from '../utils/storage-read';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
 
@@ -66,11 +67,19 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   loaded: false,
 
   loadRecords: async () => {
-    // 読み取り・パースいずれの失敗も reject させない: loadRecords が失敗すると
-    // loaded=false のまま固まり、syncAlarmsEffect 等の「records ロード待ち」
-    // ガードが永久に解除されず、target 変更などの明示的な操作をしても
-    // アラーム同期が二度と走らなくなる（wake-target-store の loadTarget と同じ理由）
-    const raw = await AsyncStorage.getItem(STORAGE_KEY).catch(() => null);
+    // パース失敗（データは読めたが壊れている）は空扱いで確定してよいが、
+    // 読み取り自体の失敗（リトライしても解決しない）はストレージ上の実データの
+    // 有無が確認できていない。loaded=true・records=[] にすると、次の
+    // addRecord/updateRecord が空配列を実データの上に永続化し既存の起床履歴を
+    // 消してしまうため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
+    let raw: string | null;
+    try {
+      raw = await readStorageItemWithRetry(STORAGE_KEY);
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
+      console.error('[wake-record-store] loadRecords failed after retries', error);
+      return;
+    }
     set({ records: parseStoredRecords(raw), loaded: true });
   },
 

@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from '../constants/storage-keys';
 import { runEffectFork, syncWidgetEffect } from '../services';
 import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
+import { readStorageItemWithRetry } from '../utils/storage-read';
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
@@ -84,11 +85,21 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   loaded: false,
 
   loadSession: async () => {
-    // 読み取り・パースいずれの失敗も reject させない: loadSession が失敗すると
-    // loaded=false のまま固まり、syncAlarmsEffect 等の「session ロード待ち」
-    // ガードが永久に解除されず、target 変更などの明示的な操作をしても
-    // アラーム同期が二度と走らなくなる（wake-target-store の loadTarget と同じ理由）
-    const raw = await AsyncStorage.getItem(STORAGE_KEY).catch(() => null);
+    // パース失敗（データは読めたが壊れている）は未設定扱いで確定してよいが、
+    // 読み取り自体の失敗（リトライしても解決しない）はストレージ上に永続化済みの
+    // 進行中セッションの有無が確認できていない。loaded=true・session=null にすると、
+    // syncAlarmsEffect が生存中のスヌーズを孤立とみなしてキャンセルしたり、
+    // 自動開始/dismiss 処理が新規セッションを永続化済みセッションの上に
+    // 上書きしてしまうため、loaded=false のまま留めて以降の再試行
+    // （アプリ再起動等）に委ねる
+    let raw: string | null;
+    try {
+      raw = await readStorageItemWithRetry(STORAGE_KEY);
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
+      console.error('[morning-session-store] loadSession failed after retries', error);
+      return;
+    }
     set({ session: parseStoredSession(raw), loaded: true });
   },
 
