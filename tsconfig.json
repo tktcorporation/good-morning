@@ -1,6 +1,11 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    // CI の typecheck ジョブで .tsbuildinfo をキャッシュし、変更のないファイルの
+    // 再チェックをスキップして高速化するために有効化。--noEmit と併用しても
+    // 型エラー検出結果には影響しない (incremental は再チェック要否の判定にのみ効く)。
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
