@@ -371,9 +371,22 @@ describe('resolveNextAlarmTime', () => {
     expect(resolveNextAlarmTime(baseTarget, now, 4)).toEqual({ hour: 7, minute: 0 });
   });
 
-  test('今日のアラームが既に発火済みなら翌日の時刻を返す', () => {
-    const target: WakeTarget = { ...baseTarget, dayOverrides: { 5: { type: 'off' } } };
-    // 2026-02-26 は木曜(4)、翌日 2026-02-27 は金曜(5) で OFF に設定
+  test('全曜日 OFF なら次のアラームは無い', () => {
+    // 翌日だけ OFF にしても、週内の他の曜日にまだ有効なアラームがあれば
+    // それが次のアラームになる（下の「翌日が OFF でも...」テストを参照）。
+    // 本当に「次のアラームなし」になるのは全曜日 OFF の場合のみ
+    const target: WakeTarget = {
+      ...baseTarget,
+      dayOverrides: {
+        0: { type: 'off' },
+        1: { type: 'off' },
+        2: { type: 'off' },
+        3: { type: 'off' },
+        4: { type: 'off' },
+        5: { type: 'off' },
+        6: { type: 'off' },
+      },
+    };
     const now = new Date('2026-02-26T08:00:00');
     expect(resolveNextAlarmTime(target, now, 4)).toBeNull();
   });
@@ -436,6 +449,22 @@ describe('resolveNextAlarmTime', () => {
     };
     const now = new Date('2026-02-26T07:05:00');
     expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 9, minute: 0 });
+  });
+
+  test('翌日が OFF でも、その後の有効な曜日まで探索して次のアラームを返す', () => {
+    // 翌日だけを候補にすると OFF で候補が尽きてしまい、実際にはまだ
+    // アクティブな繰り返しアラームがあるのに「次のアラームなし」と
+    // 誤って報告してしまう
+    const target: WakeTarget = {
+      ...baseTarget,
+      dayOverrides: { 5: { type: 'off' } }, // 金曜 OFF
+    };
+    // 2026-02-26 は木曜、2026-02-27 は金曜(OFF)、2026-02-28 は土曜
+    const now = new Date('2026-02-26T08:00:00'); // 今日の 7:00 は発火済み
+    expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 7, minute: 0 });
+    const resolvedDate = resolveNextAlarmDate(target, now, 4);
+    expect(resolvedDate).not.toBeNull();
+    expect(formatLocalDate(resolvedDate as Date)).toBe('2026-02-28');
   });
 });
 

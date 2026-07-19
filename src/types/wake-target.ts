@@ -303,6 +303,11 @@ interface NextAlarmCandidate {
  * 〜境界通過前の時間帯は論理日がまだ前日のままのため、getNextLogicalDay
  * （論理日 + 1日）が「今日」に戻ってしまう。候補日が now の暦日と同じままなら
  * 実際に翌日になるまでさらに 1 日ずつ進める。
+ *
+ * dayOverrides は曜日（7種）単位の設定のため、翌日が OFF でもその次の曜日が
+ * 有効なことがある。翌日だけを候補にすると、翌日が OFF の場合に候補が尽きて
+ * 実際にはまだアクティブな繰り返しアラームを「次のアラームなし」と誤って
+ * 報告してしまう。翌日以降 7 日分（週内の全曜日パターン）を候補にする。
  */
 function resolveNextAlarmCandidate(
   target: WakeTarget,
@@ -314,7 +319,12 @@ function resolveNextAlarmCandidate(
     nextDay = new Date(nextDay.getTime() + 24 * 60 * 60 * 1000);
   }
 
-  const dates = [now, nextDay];
+  const dates = [now];
+  let cursor = nextDay;
+  for (let i = 0; i < 7; i++) {
+    dates.push(cursor);
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+  }
   const override = target.nextOverride;
   const options: NextAlarmCandidate[] = [];
   for (const date of dates) {
