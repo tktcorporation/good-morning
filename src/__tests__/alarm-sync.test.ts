@@ -9,6 +9,7 @@
 import * as AlarmKit from 'expo-alarm-kit';
 import { runEffect, syncAlarmsEffect } from '../services';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
@@ -39,6 +40,7 @@ beforeEach(() => {
   useMorningSessionStore.setState({ session: null, loaded: true });
   useWakeRecordStore.setState({ records: [], loaded: true });
   useWakeTargetStore.setState({ target: null, loaded: false, corrupted: false, alarmIds: [] });
+  useSettingsStore.setState({ loaded: true });
 });
 
 describe('syncAlarmsEffect', () => {
@@ -150,6 +152,22 @@ describe('syncAlarmsEffect', () => {
     const target = createTarget();
     useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
     useMorningSessionStore.setState({ session: null, loaded: false });
+    mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
+
+    await runEffect(syncAlarmsEffect);
+
+    expect(mockCancelAlarm).not.toHaveBeenCalled();
+    expect(mockScheduleRepeatingAlarm).not.toHaveBeenCalled();
+  });
+
+  test('settings ストア未ロード時は何もしない（未回収の dismiss が確保するはずのネイティブ先行スヌーズを孤立キャンセルしない）', async () => {
+    // recoverMissedDismiss/handleAlarmDismissEffect は settings 未ロード時に
+    // dismiss イベントを未処理のまま保持する（再試行に委ねる）。この状態で
+    // sync を実行すると、これから回収されるはずのネイティブ先行スヌーズが
+    // まだセッションに取り込まれておらず、孤立扱いで消えてしまう
+    const target = createTarget();
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useSettingsStore.setState({ loaded: false });
     mockGetAllAlarms.mockReturnValue(['native-snooze-1']);
 
     await runEffect(syncAlarmsEffect);

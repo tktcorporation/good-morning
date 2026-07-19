@@ -6,6 +6,7 @@
 
 import { Effect, Ref } from 'effect';
 import { useMorningSessionStore } from '../stores/morning-session-store';
+import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmKit, AlarmKitError } from './AlarmKitService';
@@ -40,14 +41,18 @@ const generationRef = Ref.unsafeMake(0);
  * scheduleWakeTargetAlarm が旧アラームをネイティブに温存するため、
  * 旧 ID を保持し続けるのが実態と一致する。
  *
- * records / session 未ロードでもスキップする: 孤立掃除の keep 対象は
+ * records / session / settings 未ロードでもスキップする: 孤立掃除の keep 対象は
  * session.snoozeAlarmIds だが、これはストアが未ロードだと必ず null
  * （＝空扱い）になる。records は dismiss 処理側が未ロード時に
  * WakeRecord・セッション作成を諦める（履歴上書き防止のため）ので、
  * その状態のまま sync するとセッションに取り込まれていないネイティブ
  * 先行スヌーズを孤立として消す。session 自体が未ロードの場合も同様に、
  * 永続化済みの進行中セッションが持つスヌーズを「存在しない」ものとして
- * 扱ってしまい、同じく孤立キャンセルの対象にしてしまう。
+ * 扱ってしまい、同じく孤立キャンセルの対象にしてしまう。settings 未ロード
+ * も同様: recoverMissedDismiss/handleAlarmDismissEffect は settings 未ロード時に
+ * dismiss イベントを未処理のまま保持する（再試行に委ねる）ため、その
+ * dismiss がまだセッションに取り込まれていない状態で sync すると、
+ * これから回収されるはずのネイティブ先行スヌーズを孤立として消してしまう。
  */
 export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Effect.gen(
   function* () {
@@ -61,7 +66,12 @@ export const syncAlarmsEffect: Effect.Effect<void, AlarmKitError, AlarmKit> = Ef
         const targetState = useWakeTargetStore.getState();
         const sessionState = useMorningSessionStore.getState();
         if (
-          !(targetState.loaded && useWakeRecordStore.getState().loaded && sessionState.loaded) ||
+          !(
+            targetState.loaded &&
+            useWakeRecordStore.getState().loaded &&
+            sessionState.loaded &&
+            useSettingsStore.getState().loaded
+          ) ||
           targetState.corrupted
         ) {
           // corrupted 中は target が確定できていない。同期させると

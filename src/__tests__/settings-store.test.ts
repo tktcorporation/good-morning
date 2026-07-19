@@ -28,6 +28,44 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().dayBoundaryHour).toBe(4);
   });
 
+  test('AsyncStorage.getItem が一時的に reject してもリトライで復旧し、実際の設定値を失わない', async () => {
+    // 1回目は一時的な失敗、2回目で成功するケース。ここで即座にデフォルト値に
+    // 倒すと、ユーザーが実際に設定した dayBoundaryHour 等が失われ、
+    // loaded=true のまま誤った設定でセッション判定・アラーム同期が走ってしまう
+    mockGetItem
+      .mockRejectedValueOnce(new Error('transient storage error'))
+      .mockResolvedValueOnce(JSON.stringify({ dayBoundaryHour: 8 }));
+    await expect(useSettingsStore.getState().loadSettings()).resolves.toBeUndefined();
+    const state = useSettingsStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.dayBoundaryHour).toBe(8);
+  });
+
+  test('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まる', async () => {
+    // 読み取り自体が失敗し続ける場合、実際の設定値が確認できていない。
+    // loaded=true にすると dayBoundaryHour がデフォルト値のまま syncAlarmsEffect
+    // 等の「settings ロード待ち」ガードが誤って解除され、誤った設定で
+    // アラーム同期・セッション判定が走ってしまうため、loaded=false のまま留める
+    mockGetItem
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockRejectedValueOnce(new Error('storage unavailable'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(useSettingsStore.getState().loadSettings()).resolves.toBeUndefined();
+    const state = useSettingsStore.getState();
+    expect(state.loaded).toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('破損 JSON では reject せず loaded=true・デフォルト値で確定する（データは読めたが復元不能なため）', async () => {
+    mockGetItem.mockResolvedValueOnce('not-json{{{');
+    await expect(useSettingsStore.getState().loadSettings()).resolves.toBeUndefined();
+    const state = useSettingsStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.dayBoundaryHour).toBe(3);
+  });
+
   test('setDayBoundaryHour persists to AsyncStorage', async () => {
     await useSettingsStore.getState().loadSettings();
     await useSettingsStore.getState().setDayBoundaryHour(5);
