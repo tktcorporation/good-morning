@@ -6,7 +6,7 @@ import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme'
 import { useSettingsStore } from '../src/stores/settings-store';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
-import { getNextLogicalDay, resolveTimeForDate } from '../src/types/wake-target';
+import { resolveOverrideEditDay, resolveTimeForDate } from '../src/types/wake-target';
 
 type EditMode = 'tomorrowOnly' | 'changeDefault';
 
@@ -22,9 +22,11 @@ export default function TargetEditScreen() {
   const currentResolvedTime = useMemo(() => {
     if (target === null) return { hour: 7, minute: 0 };
     // setNextOverride の対象日（computeOverrideTargetDate）と同じ基準で
-    // 「次に迎える朝」を決める。暦日ベースの +1日だと、dayBoundaryHour より前の
-    // 深夜に開いた場合、表示される dayOverrides の曜日と保存先の曜日がズレる
-    const tomorrow = getNextLogicalDay(dayBoundaryHour);
+    // 「次に迎える朝」を決める。dayBoundaryHour がアラーム時刻より後だと、
+    // 境界通過前は暦日ベースの +1日だけでは今日に戻ってしまい、その日の
+    // 時刻が既に過ぎていても気づけない（保存時はさらに1日先送りされ、
+    // 表示される dayOverrides の曜日と保存先の曜日がズレる）
+    const tomorrow = resolveOverrideEditDay(target, dayBoundaryHour);
     return resolveTimeForDate(target, tomorrow) ?? { hour: 7, minute: 0 };
   }, [target, dayBoundaryHour]);
 

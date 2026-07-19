@@ -6,6 +6,7 @@ import {
   resolveDismissInstant,
   resolveNextAlarmDate,
   resolveNextAlarmTime,
+  resolveOverrideEditDay,
   resolveTimeForDate,
   resolveTimeForDismiss,
   type WakeTarget,
@@ -377,6 +378,42 @@ describe('getNextLogicalDay', () => {
     const now = new Date('2026-02-25T22:00:00');
     expect(formatLocalDate(getNextLogicalDay(DAY_BOUNDARY_HOUR, now))).toBe(
       computeOverrideTargetDate({ hour: 6, minute: 0 }, DAY_BOUNDARY_HOUR, now),
+    );
+  });
+});
+
+describe('resolveOverrideEditDay', () => {
+  const baseTarget: WakeTarget = {
+    defaultTime: { hour: 7, minute: 0 },
+    dayOverrides: {},
+    nextOverride: null,
+    todos: [],
+    enabled: true,
+    targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
+  };
+
+  test('dayBoundaryHour がアラーム時刻より後だと、getNextLogicalDay だけでは今日の暦日に戻り、その時刻が既に過ぎていることを見落とす', () => {
+    // dayBoundaryHour=8, アラーム=7:00。now=7:30 はアラーム発火後だが、
+    // まだ境界(8:00)を過ぎていない。getNextLogicalDay(8, 7:30) は論理日が
+    // まだ前日のままのため +1日しても「今日」の暦日に戻り、既に過ぎた
+    // 7:00 をピッカーの初期値として表示してしまう。実際の保存
+    // （computeOverrideTargetDate）はこの「既に過ぎている」を検知して
+    // さらに1日先送りするため、表示と保存の対象日がズレる
+    const now = new Date('2026-02-26T07:30:00');
+    const editDay = resolveOverrideEditDay(baseTarget, 8, now);
+    expect(formatLocalDate(editDay)).toBe(
+      computeOverrideTargetDate(baseTarget.defaultTime, 8, now),
+    );
+    expect(formatLocalDate(editDay)).toBe('2026-02-27');
+  });
+
+  test('通常時（境界通過前の深夜等ではない）は getNextLogicalDay と同じ対象日を返す', () => {
+    const now = new Date('2026-02-25T22:00:00');
+    const editDay = resolveOverrideEditDay(baseTarget, 4, now);
+    expect(formatLocalDate(editDay)).toBe(formatLocalDate(getNextLogicalDay(4, now)));
+    expect(formatLocalDate(editDay)).toBe(
+      computeOverrideTargetDate(baseTarget.defaultTime, 4, now),
     );
   });
 });

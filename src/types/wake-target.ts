@@ -421,6 +421,40 @@ export function computeOverrideTargetDate(
   return formatLocalDate(alarmDate);
 }
 
+/**
+ * 「明日だけ変更」ピッカーが表示・対象とする論理日を解決する。
+ *
+ * dayBoundaryHour がアラーム時刻より後で、境界通過前（例: アラーム発火後
+ * 〜境界前）に開くと、getNextLogicalDay だけでは論理日がまだ前日のままの
+ * ため +1 日しても今日の暦日に戻ってしまう。その日の通常スケジュール時刻が
+ * 既に過ぎていると、保存時の computeOverrideTargetDate は「即座に期限切れに
+ * なる override を作らない」ためさらに 1 日先送りするが、ピッカーの表示は
+ * それを考慮しないため、表示される曜日設定と実際に保存される曜日がズレる。
+ * computeOverrideTargetDate と同じ「既に過ぎていれば 1 日先送り」判定を
+ * ここでも行い、表示と保存の対象日を一致させる。
+ */
+export function resolveOverrideEditDay(
+  target: WakeTarget,
+  dayBoundaryHour: number,
+  now: Date = new Date(),
+): Date {
+  const day = getNextLogicalDay(dayBoundaryHour, now);
+  const time = resolveTimeForDate(target, day) ?? target.defaultTime;
+  const candidate = new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    time.hour,
+    time.minute,
+    0,
+    0,
+  );
+  if (candidate.getTime() <= now.getTime()) {
+    return new Date(day.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return day;
+}
+
 /** デフォルトの起床目標バッファ（分）。アラーム後30分以内にTODO完了で成功。 */
 export const DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES = 30;
 
