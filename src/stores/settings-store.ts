@@ -1,16 +1,31 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
-import { readStorageItemWithRetry } from '../utils/storage-read';
+import { decodeStoredJson, runEffect, Storage } from '../services';
+import type { StorageError } from '../services/errors';
 
 const STORAGE_KEY = STORAGE_KEYS.appSettings;
 const DEFAULT_DAY_BOUNDARY_HOUR = 3;
 
-interface AppSettings {
-  readonly dayBoundaryHour: number;
-  readonly healthKitEnabled: boolean;
-  readonly alarmKitGranted: boolean;
-}
+/**
+ * 永続化済み settings のスキーマ。欠落フィールドはデフォルト値で補う。
+ * 型不一致（例: dayBoundaryHour が文字列）はデコード全体を失敗させ、
+ * 呼び出し側で「データ破損」として全体をデフォルト値にフォールバックする。
+ */
+const AppSettingsSchema = Schema.Struct({
+  dayBoundaryHour: Schema.optionalWith(Schema.Number, {
+    default: () => DEFAULT_DAY_BOUNDARY_HOUR,
+  }),
+  healthKitEnabled: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+  alarmKitGranted: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+});
+type AppSettings = typeof AppSettingsSchema.Type;
+
+const DEFAULT_SETTINGS: AppSettings = {
+  dayBoundaryHour: DEFAULT_DAY_BOUNDARY_HOUR,
+  healthKitEnabled: false,
+  alarmKitGranted: false,
+};
 
 interface SettingsState {
   readonly dayBoundaryHour: number;
@@ -23,28 +38,24 @@ interface SettingsState {
   setAlarmKitGranted: (granted: boolean) => Promise<void>;
 }
 
-async function persist(settings: AppSettings): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+function persist(settings: AppSettings): Promise<void> {
+  return runEffect(
+    Storage.pipe(Effect.flatMap((storage) => storage.set(STORAGE_KEY, JSON.stringify(settings)))),
+  );
 }
 
-/** 永続化済み settings のパース。破損はデフォルト値扱い（loaded=false のまま固まるのを防ぐ）。 */
-function parseStoredSettings(raw: string | null): AppSettings {
-  const defaults: AppSettings = {
-    dayBoundaryHour: DEFAULT_DAY_BOUNDARY_HOUR,
-    healthKitEnabled: false,
-    alarmKitGranted: false,
-  };
-  if (raw === null) return defaults;
-  try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return {
-      dayBoundaryHour: parsed.dayBoundaryHour ?? DEFAULT_DAY_BOUNDARY_HOUR,
-      healthKitEnabled: parsed.healthKitEnabled ?? false,
-      alarmKitGranted: parsed.alarmKitGranted ?? false,
-    };
-  } catch {
-    return defaults;
-  }
+/**
+ * settings を読み取ってデコードする Effect。
+ * 読み取り自体の失敗（StorageError、リトライ後も解決しない）はそのまま呼び出し元に
+ * 伝播させ、データ破損（スキーマ不一致・JSON パース失敗）のみデフォルト値に倒す。
+ */
+function loadSettingsEffect(): Effect.Effect<AppSettings, StorageError, Storage> {
+  return Storage.pipe(
+    Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, AppSettingsSchema, raw)),
+    Effect.map((decoded) => decoded ?? DEFAULT_SETTINGS),
+    Effect.catchTag('StorageDecodeError', () => Effect.succeed(DEFAULT_SETTINGS)),
+  );
 }
 
 /** 現在の永続化対象フィールドをまとめて返す。persist() に渡す用途。 */
@@ -63,21 +74,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loaded: false,
 
   loadSettings: async () => {
-    // パース失敗（データは読めたが壊れている）はデフォルト値扱いで確定して
-    // よいが、読み取り自体の失敗（リトライしても解決しない）は実際の設定値の
+    // 読み取り自体の失敗（StorageError、リトライしても解決しない）は実際の設定値の
     // 有無が確認できていない。loaded=true にすると dayBoundaryHour 等が
     // デフォルト値のまま syncAlarmsEffect 等の「settings ロード待ち」ガードが
     // 誤って解除され、誤った設定でアラーム同期・セッション判定が走ってしまう
     // ため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
-    let raw: string | null;
     try {
-      raw = await readStorageItemWithRetry(STORAGE_KEY);
+      const settings = await runEffect(loadSettingsEffect());
+      set({ ...settings, loaded: true });
     } catch (error) {
       // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
       console.error('[settings-store] loadSettings failed after retries', error);
-      return;
     }
-    set({ ...parseStoredSettings(raw), loaded: true });
   },
 
   setDayBoundaryHour: async (hour: number) => {

@@ -1,12 +1,41 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
-import { runEffectFork, syncWidgetEffect } from '../services';
-import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
+import { decodeStoredJson, runEffect, runEffectFork, Storage, syncWidgetEffect } from '../services';
+import type { StorageError } from '../services/errors';
+import type { MorningSession, SessionTodo } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
-import { readStorageItemWithRetry } from '../utils/storage-read';
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
+
+/** SessionTodo の永続化スキーマ。type/requiredCount/currentCount はレガシーデータで欠落しうる。 */
+const SessionTodoSchema = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  completed: Schema.Boolean,
+  completedAt: Schema.NullOr(Schema.String),
+  type: Schema.optional(Schema.Literal('checkbox', 'squat')),
+  requiredCount: Schema.optional(Schema.Number),
+  currentCount: Schema.optional(Schema.Number),
+});
+
+/**
+ * 永続化済み MorningSession のスキーマ。StoredMorningSession（types/morning-session.ts）と
+ * 同じ「後から追加されたフィールドはレガシーデータで欠落しうる」形状に対応させる。
+ * デコード成功後は normalizeStoredSession に渡し、windowEnd 等のクロスフィールドな
+ * フォールバック計算（既存ロジック）に委ねる。
+ */
+const StoredMorningSessionSchema = Schema.Struct({
+  recordId: Schema.optional(Schema.NullOr(Schema.String)),
+  date: Schema.String,
+  startedAt: Schema.String,
+  todos: Schema.Array(SessionTodoSchema),
+  windowEnd: Schema.optional(Schema.String),
+  liveActivityId: Schema.optional(Schema.NullOr(Schema.String)),
+  goalDeadline: Schema.optional(Schema.NullOr(Schema.String)),
+  snoozeAlarmIds: Schema.optional(Schema.Array(Schema.String)),
+  snoozeFiresAt: Schema.optional(Schema.NullOr(Schema.String)),
+});
 
 interface MorningSessionState {
   readonly session: MorningSession | null;
@@ -60,24 +89,32 @@ interface MorningSessionState {
   getProgress: () => { completed: number; total: number };
 }
 
-async function persistSession(session: MorningSession | null): Promise<void> {
-  if (session === null) {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-  } else {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  }
+function persistSession(session: MorningSession | null): Promise<void> {
+  return runEffect(
+    Storage.pipe(
+      Effect.flatMap((storage) =>
+        session === null
+          ? storage.remove(STORAGE_KEY)
+          : storage.set(STORAGE_KEY, JSON.stringify(session)),
+      ),
+    ),
+  );
 }
 
-/** 永続化済み session のパース。破損は未設定（null）扱い（loaded=false のまま固まるのを防ぐ）。 */
-function parseStoredSession(raw: string | null): MorningSession | null {
-  if (raw === null) return null;
-  try {
-    // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
-    const parsed = JSON.parse(raw) as StoredMorningSession;
-    return normalizeStoredSession(parsed);
-  } catch {
-    return null;
-  }
+/**
+ * session を読み取ってデコードする Effect。
+ * 読み取り自体の失敗（StorageError）はそのまま呼び出し元に伝播させ、データ破損
+ * （スキーマ不一致・JSON パース失敗）は未設定（null）扱いにする。デコード成功後は
+ * normalizeStoredSession で「後から追加されたフィールドが欠落するレガシーデータ」を
+ * 既定値で補って正規化する。
+ */
+function loadSessionEffect(): Effect.Effect<MorningSession | null, StorageError, Storage> {
+  return Storage.pipe(
+    Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, StoredMorningSessionSchema, raw)),
+    Effect.map((decoded) => (decoded === null ? null : normalizeStoredSession(decoded))),
+    Effect.catchTag('StorageDecodeError', () => Effect.succeed(null)),
+  );
 }
 
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
@@ -92,15 +129,13 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     // 自動開始/dismiss 処理が新規セッションを永続化済みセッションの上に
     // 上書きしてしまうため、loaded=false のまま留めて以降の再試行
     // （アプリ再起動等）に委ねる
-    let raw: string | null;
     try {
-      raw = await readStorageItemWithRetry(STORAGE_KEY);
+      const session = await runEffect(loadSessionEffect());
+      set({ session, loaded: true });
     } catch (error) {
       // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
       console.error('[morning-session-store] loadSession failed after retries', error);
-      return;
     }
-    set({ session: parseStoredSession(raw), loaded: true });
   },
 
   startSession: async (

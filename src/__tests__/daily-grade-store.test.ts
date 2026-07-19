@@ -67,6 +67,56 @@ describe('daily-grade-store', () => {
       expect(state.streak).toEqual(storedStreak);
       expect(state.loaded).toBe(true);
     });
+
+    it('破損した grades JSON では reject せず loaded=true・空配列で確定する（streak は正常値を保持）', async () => {
+      const storedStreak: StreakState = {
+        currentStreak: 2,
+        longestStreak: 5,
+        freezesAvailable: 1,
+        freezesUsedTotal: 3,
+        lastGradedDate: '2026-02-26',
+      };
+      mockGetItem.mockImplementation((key: string) => {
+        if (key === 'daily-grades') return Promise.resolve('not-json{{{');
+        if (key === 'streak-state') return Promise.resolve(JSON.stringify(storedStreak));
+        return Promise.resolve(null);
+      });
+
+      await expect(useDailyGradeStore.getState().loadGrades()).resolves.toBeUndefined();
+
+      const state = useDailyGradeStore.getState();
+      expect(state.loaded).toBe(true);
+      expect(state.grades).toEqual([]);
+      expect(state.streak).toEqual(storedStreak);
+    });
+
+    it('破損した streak JSON では reject せず loaded=true・INITIAL_STREAK_STATE で確定する（grades は正常値を保持）', async () => {
+      const storedGrades: DailyGradeRecord[] = [makeRecord({ date: '2026-02-27' })];
+      mockGetItem.mockImplementation((key: string) => {
+        if (key === 'daily-grades') return Promise.resolve(JSON.stringify(storedGrades));
+        if (key === 'streak-state') return Promise.resolve('not-json{{{');
+        return Promise.resolve(null);
+      });
+
+      await expect(useDailyGradeStore.getState().loadGrades()).resolves.toBeUndefined();
+
+      const state = useDailyGradeStore.getState();
+      expect(state.loaded).toBe(true);
+      expect(state.grades).toEqual(storedGrades);
+      expect(state.streak).toEqual(INITIAL_STREAK_STATE);
+    });
+
+    it('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まる', async () => {
+      mockGetItem.mockRejectedValue(new Error('storage unavailable'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(useDailyGradeStore.getState().loadGrades()).resolves.toBeUndefined();
+
+      const state = useDailyGradeStore.getState();
+      expect(state.loaded).toBe(false);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('addGrade', () => {

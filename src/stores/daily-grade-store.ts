@@ -9,11 +9,12 @@
  * DailyGradeRecord は夜の就寝データが揃ってから（翌朝に）確定する。
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { applyGradeToStreak } from '../domain/grade-calculator';
-import { runEffectFork, syncWidgetEffect } from '../services';
+import { decodeStoredJson, runEffect, runEffectFork, Storage, syncWidgetEffect } from '../services';
+import type { StorageError } from '../services/errors';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
 
@@ -31,6 +32,33 @@ export const INITIAL_STREAK_STATE: StreakState = {
   freezesUsedTotal: 0,
   lastGradedDate: null,
 };
+
+/**
+ * grades（DailyGradeRecord[]）は「トップレベルが配列であること」のみ検証する
+ * ゲートに留める。要素ごとの厳密なスキーマ検証を導入すると、過去に保存された
+ * レコードが将来のフィールド追加で弾かれ、月単位の実データを一括で失うリスクが
+ * ある（wake-record と同じ判断）。
+ */
+const GradesGateSchema = Schema.Array(Schema.Unknown);
+
+/** StreakState は全フィールドが単純なプリミティブで安定しているため、フィールド単位で検証・デフォルト補完する。 */
+const StreakStateSchema = Schema.Struct({
+  currentStreak: Schema.optionalWith(Schema.Number, {
+    default: () => INITIAL_STREAK_STATE.currentStreak,
+  }),
+  longestStreak: Schema.optionalWith(Schema.Number, {
+    default: () => INITIAL_STREAK_STATE.longestStreak,
+  }),
+  freezesAvailable: Schema.optionalWith(Schema.Number, {
+    default: () => INITIAL_STREAK_STATE.freezesAvailable,
+  }),
+  freezesUsedTotal: Schema.optionalWith(Schema.Number, {
+    default: () => INITIAL_STREAK_STATE.freezesUsedTotal,
+  }),
+  lastGradedDate: Schema.optionalWith(Schema.NullOr(Schema.String), {
+    default: () => INITIAL_STREAK_STATE.lastGradedDate,
+  }),
+});
 
 interface DailyGradeState {
   readonly grades: readonly DailyGradeRecord[];
@@ -63,9 +91,53 @@ interface DailyGradeState {
  * grades と streak の両方を AsyncStorage に永続化するヘルパー。
  * addGrade のたびに2つのキーを書き込む必要があるため共通化。
  */
-async function persistAll(grades: readonly DailyGradeRecord[], streak: StreakState): Promise<void> {
-  await AsyncStorage.setItem(GRADES_STORAGE_KEY, JSON.stringify(grades));
-  await AsyncStorage.setItem(STREAK_STORAGE_KEY, JSON.stringify(streak));
+function persistAll(grades: readonly DailyGradeRecord[], streak: StreakState): Promise<void> {
+  return runEffect(
+    Storage.pipe(
+      Effect.flatMap((storage) =>
+        Effect.all([
+          storage.set(GRADES_STORAGE_KEY, JSON.stringify(grades)),
+          storage.set(STREAK_STORAGE_KEY, JSON.stringify(streak)),
+        ]),
+      ),
+      Effect.asVoid,
+    ),
+  );
+}
+
+/**
+ * grades と streak を並行して読み取り、デコードする Effect。
+ * 読み取り自体の失敗（StorageError）はそのまま呼び出し元に伝播させる。
+ * データ破損（スキーマ不一致・JSON パース失敗）は grades を空配列、streak を
+ * INITIAL_STREAK_STATE にフォールバックする（従来は try/catch が無く、
+ * 破損データで loadGrades 全体が例外を投げていた）。
+ */
+function loadGradesEffect(): Effect.Effect<
+  { grades: readonly DailyGradeRecord[]; streak: StreakState },
+  StorageError,
+  Storage
+> {
+  return Storage.pipe(
+    Effect.flatMap((storage) =>
+      Effect.all(
+        {
+          grades: storage.get(GRADES_STORAGE_KEY).pipe(
+            Effect.flatMap((raw) => decodeStoredJson(GRADES_STORAGE_KEY, GradesGateSchema, raw)),
+            Effect.map((decoded) => (decoded ?? []) as readonly DailyGradeRecord[]),
+            Effect.catchTag('StorageDecodeError', () =>
+              Effect.succeed<readonly DailyGradeRecord[]>([]),
+            ),
+          ),
+          streak: storage.get(STREAK_STORAGE_KEY).pipe(
+            Effect.flatMap((raw) => decodeStoredJson(STREAK_STORAGE_KEY, StreakStateSchema, raw)),
+            Effect.map((decoded) => decoded ?? INITIAL_STREAK_STATE),
+            Effect.catchTag('StorageDecodeError', () => Effect.succeed(INITIAL_STREAK_STATE)),
+          ),
+        },
+        { concurrency: 'unbounded' },
+      ),
+    ),
+  );
 }
 
 export const useDailyGradeStore = create<DailyGradeState>((set, get) => ({
@@ -74,18 +146,16 @@ export const useDailyGradeStore = create<DailyGradeState>((set, get) => ({
   loaded: false,
 
   loadGrades: async () => {
-    const [rawGrades, rawStreak] = await Promise.all([
-      AsyncStorage.getItem(GRADES_STORAGE_KEY),
-      AsyncStorage.getItem(STREAK_STORAGE_KEY),
-    ]);
-
-    const grades: readonly DailyGradeRecord[] =
-      rawGrades !== null ? (JSON.parse(rawGrades) as DailyGradeRecord[]) : [];
-
-    const streak: StreakState =
-      rawStreak !== null ? (JSON.parse(rawStreak) as StreakState) : INITIAL_STREAK_STATE;
-
-    set({ grades, streak, loaded: true });
+    // 読み取り自体の失敗（StorageError、リトライしても解決しない）は grades/streak
+    // どちらの実データも確認できていない。loaded=false のまま留めて再試行
+    // （アプリ再起動等）に委ねる — 他ストアと同じ方針。
+    try {
+      const { grades, streak } = await runEffect(loadGradesEffect());
+      set({ grades, streak, loaded: true });
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
+      console.error('[daily-grade-store] loadGrades failed after retries', error);
+    }
   },
 
   addGrade: async (record: DailyGradeRecord) => {

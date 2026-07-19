@@ -7,12 +7,12 @@
  * - テスト時に InMemory 実装に差し替え可能
  * - JSON パース失敗も適切にハンドリングされる
  *
- * 呼び出し元: 全 Zustand ストア（将来的にストアの persist を Effect 経由に移行する際に使用）
+ * 呼び出し元: 全 Zustand ストア（persist を Effect 経由に統一）
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Context, Effect, Layer } from 'effect';
-import { StorageError } from './errors';
+import { Context, Effect, Layer, Schedule, Schema } from 'effect';
+import { StorageDecodeError, StorageError } from './errors';
 
 // ─── サービスインターフェース ────────────────────────────────────
 
@@ -27,6 +27,16 @@ export interface StorageService {
 
 export class Storage extends Context.Tag('Storage')<Storage, StorageService>() {}
 
+/**
+ * 読み取りのリトライ回数（初回 + 2 リトライ = 最大 3 回試行）。
+ *
+ * cold-start 直後はネイティブブリッジの初期化競合などで AsyncStorage.getItem が
+ * 一時的に reject することがある。1 回の失敗だけで「読み取れない」と確定させると、
+ * 実際にはストレージ上に残っている記録・設定を「存在しない」ものとして扱ってしまい、
+ * その状態で永続化処理を進めると空データで実データを上書き消失させる。
+ */
+const READ_RETRY_SCHEDULE = Schedule.recurs(2);
+
 // ─── AsyncStorage 実装 Layer ────────────────────────────────────
 
 export const StorageLive = Layer.succeed(
@@ -36,7 +46,7 @@ export const StorageLive = Layer.succeed(
       Effect.tryPromise({
         try: () => AsyncStorage.getItem(key),
         catch: (cause) => new StorageError({ operation: 'read', key, cause }),
-      }),
+      }).pipe(Effect.retry(READ_RETRY_SCHEDULE)),
 
     set: (key, value) =>
       Effect.tryPromise({
@@ -51,3 +61,34 @@ export const StorageLive = Layer.succeed(
       }),
   }),
 );
+
+// ─── JSON デコードヘルパー ────────────────────────────────────
+
+/**
+ * Storage.get で読み取った JSON 文字列を Schema でデコードする。
+ *
+ * StorageError（読み取り自体の失敗）とは異なるエラーチャンネル（StorageDecodeError）
+ * で「読み取りには成功したが中身が壊れている/期待した形状でない」ケースを表現する。
+ * 呼び出し元はこの2つを区別して復旧戦略を選べる: StorageError は再試行に委ねて
+ * loaded=false を維持すべきだが、StorageDecodeError はデータ破損が確定しているため
+ * デフォルト値へのフォールバックが安全（=それ以上リトライしても解決しない）。
+ *
+ * raw が null（未設定）の場合は成功として null を返す。
+ */
+export function decodeStoredJson<A, I>(
+  key: string,
+  schema: Schema.Schema<A, I>,
+  raw: string | null,
+): Effect.Effect<A | null, StorageDecodeError> {
+  if (raw === null) return Effect.succeed(null);
+  return Effect.try({
+    try: () => JSON.parse(raw) as unknown,
+    catch: (cause) => new StorageDecodeError({ key, cause }),
+  }).pipe(
+    Effect.flatMap((parsed) =>
+      Schema.decodeUnknown(schema)(parsed).pipe(
+        Effect.mapError((cause) => new StorageDecodeError({ key, cause })),
+      ),
+    ),
+  );
+}

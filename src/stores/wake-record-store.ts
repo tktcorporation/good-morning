@@ -1,11 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { MS_PER_DAY } from '../constants/time';
+import { runEffect, Storage } from '../services';
 import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
 import { formatLocalDate } from '../utils/date';
-import { readStorageItemWithRetry } from '../utils/storage-read';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
 
@@ -48,8 +48,10 @@ interface WakeRecordState {
   getCurrentStreak: () => number;
 }
 
-async function persistRecords(records: readonly WakeRecord[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+function persistRecords(records: readonly WakeRecord[]): Promise<void> {
+  return runEffect(
+    Storage.pipe(Effect.flatMap((storage) => storage.set(STORAGE_KEY, JSON.stringify(records)))),
+  );
 }
 
 /** 永続化済み records のパース。破損は空扱い（loaded=false のまま固まるのを防ぐ）。 */
@@ -74,7 +76,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     // 消してしまうため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
     let raw: string | null;
     try {
-      raw = await readStorageItemWithRetry(STORAGE_KEY);
+      raw = await runEffect(Storage.pipe(Effect.flatMap((storage) => storage.get(STORAGE_KEY))));
     } catch (error) {
       // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
       console.error('[wake-record-store] loadRecords failed after retries', error);

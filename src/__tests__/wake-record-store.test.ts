@@ -127,7 +127,7 @@ describe('loadRecords', () => {
     // 確認できていない。loaded=true・records=[] にすると、次の addRecord が
     // 空配列を実データの上に永続化し既存の起床履歴を消してしまうため、
     // loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
-    // readStorageItemWithRetry のリトライ回数（3回）分だけ reject を積む。
+    // StorageService の読み取りリトライ回数（3回）分だけ reject を積む。
     // mockRejectedValue（永続）だと以降のテストにもモックが漏れ出すため使わない
     mockGetItem
       .mockRejectedValueOnce(new Error('storage unavailable'))
