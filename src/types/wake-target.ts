@@ -86,7 +86,7 @@ export interface WakeTarget {
 }
 
 /** nextOverride を考慮せず、dayOverrides/defaultTime だけでその日の時刻を解決する。 */
-function resolveRegularTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
+export function resolveRegularTimeForDate(target: WakeTarget, date: Date): AlarmTime | null {
   const dayOfWeek = date.getDay() as DayOfWeek;
   const override = target.dayOverrides[dayOfWeek];
 

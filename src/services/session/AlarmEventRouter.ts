@@ -14,6 +14,7 @@
 
 import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import type { SessionTodo } from '../../types/morning-session';
@@ -49,8 +50,13 @@ const tryAutoStartSession = (
     // session/records が未ロードのまま進むと、isActive()（session !== null）が
     // 常に false になり、実際には永続化されている進行中セッションがあっても
     // startSession が新規セッションで上書きしてしまう。records 未ロードでも
-    // 同様に、完了済みレコードを見逃して同日にセッションを再度自動開始してしまう
-    if (!(sessionStore.loaded && recordState.loaded)) return false;
+    // 同様に、完了済みレコードを見逃して同日にセッションを再度自動開始してしまう。
+    // settings 未ロード時は dayBoundaryHour が呼び出し元のデフォルト値のまま
+    // 渡されている可能性があり、checkSessionWindow が誤った論理日付・
+    // ウィンドウでセッションを自動開始・永続化してしまう
+    if (!(sessionStore.loaded && recordState.loaded && useSettingsStore.getState().loaded)) {
+      return false;
+    }
 
     if (sessionStore.isActive()) return false;
 

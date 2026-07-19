@@ -136,4 +136,23 @@ describe('checkSessionWindow', () => {
     expect(result?.resolvedTime).toEqual({ hour: 23, minute: 0 });
     expect(result?.dateStr).toBe('2026-02-25');
   });
+
+  test('nextOverride の前夜ウィンドウに通常アラームが近接する場合、regular に近ければ通常アラームの日のまま扱う', () => {
+    // resolveTimeForDismiss は暦日不一致（23:50 の暦日は override の targetDate
+    // と異なる）のため regular（23:50）と判定する。resolveOverrideAwareDateStr
+    // がこれと矛盾して override 対象日を返すと、通常アラームの dismiss 記録が
+    // override 対象日に紐づいてしまい、後続の実際の override dismiss が
+    // 同日重複と誤判定されて記録されなくなる
+    const target = targetWithTodos({
+      defaultTime: { hour: 23, minute: 50 },
+      nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-25T23:50:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 23, minute: 50 });
+    expect(result?.dateStr).toBe('2026-02-25');
+  });
 });

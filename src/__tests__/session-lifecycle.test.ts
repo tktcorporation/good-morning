@@ -19,7 +19,7 @@ import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
-import type { WakeTarget } from '../types/wake-target';
+import { resolveTimeForDismiss, type WakeTarget } from '../types/wake-target';
 
 // expo-alarm-kit はグローバルモック済み。型にない拡張関数は requireMock で取得。
 // biome-ignore lint/suspicious/noExplicitAny: jest mock access
@@ -344,6 +344,52 @@ describe('handleAlarmDismissEffect', () => {
     expect(session?.snoozeAlarmIds.length).toBeGreaterThan(0);
     expect(session?.snoozeFiresAt).not.toBeNull();
     expect(session?.liveActivityId).toBeNull();
+  });
+
+  test('前夜の通常アラーム dismiss と翌暦日の override dismiss が別日として記録される', async () => {
+    // resolveTimeForDismiss は暦日不一致（23:50 の暦日は override の targetDate
+    // と異なる）を常に regular と判定するため、resolveOverrideAwareDateStr
+    // （dateStr 算出）がこれと矛盾して override 対象日を返すと、通常アラームの
+    // dismiss 記録が override 対象日に紐づき、後続の実際の override dismiss が
+    // 同日重複と誤判定されて記録されなくなる
+    const target: WakeTarget = {
+      defaultTime: { hour: 23, minute: 50 },
+      dayOverrides: {},
+      nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+      todos: [],
+      enabled: true,
+      targetSleepMinutes: null,
+      wakeUpGoalBufferMinutes: 30,
+    };
+
+    const regularDismissTime = new Date('2026-02-25T23:50:00');
+    const regularResolvedTime = resolveTimeForDismiss(target, regularDismissTime);
+    if (regularResolvedTime === null) throw new Error('regularResolvedTime should not be null');
+    await runEffect(
+      handleAlarmDismissEffect({
+        target,
+        resolvedTime: regularResolvedTime,
+        dismissTime: regularDismissTime,
+        mountedAt: regularDismissTime,
+        dayBoundaryHour: 4,
+      }),
+    );
+
+    const overrideDismissTime = new Date('2026-02-26T00:10:00');
+    const overrideResolvedTime = resolveTimeForDismiss(target, overrideDismissTime);
+    if (overrideResolvedTime === null) throw new Error('overrideResolvedTime should not be null');
+    await runEffect(
+      handleAlarmDismissEffect({
+        target,
+        resolvedTime: overrideResolvedTime,
+        dismissTime: overrideDismissTime,
+        mountedAt: overrideDismissTime,
+        dayBoundaryHour: 4,
+      }),
+    );
+
+    const records = useWakeRecordStore.getState().records;
+    expect(records.map((r) => r.date).sort()).toEqual(['2026-02-25', '2026-02-26']);
   });
 });
 

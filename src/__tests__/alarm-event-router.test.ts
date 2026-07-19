@@ -242,6 +242,24 @@ describe('handleAlarmEventEffect: tryAutoStartSession のロードガード', ()
 
     expect(useMorningSessionStore.getState().session).toBeNull();
   });
+
+  test('settings ストア未ロード時は自動開始をスキップする（誤った dayBoundaryHour での自動開始防止）', async () => {
+    // loadSettings() が失敗した場合、_layout.tsx は allSettled 後にデフォルトの
+    // dayBoundaryHour で cold-start ハンドラを呼びうる。checkSessionWindow が
+    // その値でウィンドウ・日付を誤って算出し、非デフォルト境界のユーザーの
+    // セッションを誤った論理日付で自動開始・永続化してしまう
+    const target = createTarget({ defaultTime: { hour: 7, minute: 0 } });
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useMorningSessionStore.setState({ session: null, loaded: true });
+    useWakeRecordStore.setState({ records: [], loaded: true });
+    useSettingsStore.setState({ loaded: false });
+
+    const { opts } = routerOpts({ launchPayload: null });
+
+    await runEffect(handleAlarmEventEffect('cold-start', opts));
+
+    expect(useMorningSessionStore.getState().session).toBeNull();
+  });
 });
 
 describe('handleAlarmEventEffect: cold-start + payload なし', () => {

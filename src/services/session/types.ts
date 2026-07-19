@@ -10,8 +10,8 @@
 import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
-import type { WakeTarget } from '../../types/wake-target';
-import { resolveTimeForDate } from '../../types/wake-target';
+import type { NextOverride, WakeTarget } from '../../types/wake-target';
+import { resolveRegularTimeForDate, resolveTimeForDate } from '../../types/wake-target';
 import { formatLocalDate, getLogicalDateString } from '../../utils/date';
 import type { AlarmKitError } from '../AlarmKitService';
 import type { NotificationError } from '../errors';
@@ -67,6 +67,41 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
 }
 
 /**
+ * override 時刻が 0 時台前半など深夜帯の場合、now が「その前夜のセッション
+ * ウィンドウ前半」（今日 override.targetDate を迎える前夜）に入っているかを
+ * 判定する。
+ *
+ * override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
+ * のため、この前夜ウィンドウに通常アラームが近接して存在しうる
+ * （例: 通常 23:50・override 翌日 00:10）。resolveTimeForDismiss は暦日不一致の
+ * 場合を常に regular と判定するため、ここで無条件に true を返すと、通常
+ * アラームの dismiss 記録が override 対象日に紐づき、後続の実際の override
+ * dismiss が同日重複と誤判定されて記録されなくなる。resolveTimeForDismiss と
+ * 同じ基準（絶対時刻差）で regular より override に近い場合のみ true を返し、
+ * 判定を一致させる。
+ */
+function isPreMidnightOverrideWindow(
+  now: Date,
+  target: WakeTarget,
+  override: NextOverride,
+): boolean {
+  const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  if (formatLocalDate(nextDay) !== override.targetDate) return false;
+
+  const minutesUntilMidnight = 24 * 60 - (now.getHours() * 60 + now.getMinutes());
+  const overrideMinutesFromMidnight = override.time.hour * 60 + override.time.minute;
+  const overrideDiff = minutesUntilMidnight + overrideMinutesFromMidnight;
+  if (overrideDiff > SESSION_WINDOW_BEFORE_MINUTES) return false;
+
+  const regular = resolveRegularTimeForDate(target, now);
+  if (regular === null) return true;
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const regularDiff = Math.abs(nowMinutes - (regular.hour * 60 + regular.minute));
+  return overrideDiff <= regularDiff;
+}
+
+/**
  * nextOverride を考慮した「今日」の対象日（暦日文字列）を解決する。
  *
  * dayBoundaryHour をアラーム時刻より後に設定している場合（UI は 0〜23 時を
@@ -85,8 +120,9 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
  *
  * override 時刻が 0 時台前半など深夜帯の場合、セッションウィンドウの前半
  * （アラーム時刻の SESSION_WINDOW_BEFORE_MINUTES 分前 〜 0時）は now の暦日が
- * まだ前日のまま。この場合は「翌日が targetDate かつ now がその前夜のウィンドウ
- * 前半内」を追加で判定し、暦日一致と同様に targetDate を採用する。
+ * まだ前日のまま。この場合は isPreMidnightOverrideWindow で「翌日が
+ * targetDate かつ now がその前夜のウィンドウ前半内」を追加判定し、暦日一致と
+ * 同様に targetDate を採用する。
  */
 export function resolveOverrideAwareDateStr(
   now: Date,
@@ -98,13 +134,8 @@ export function resolveOverrideAwareDateStr(
     if (formatLocalDate(now) === override.targetDate) {
       return override.targetDate;
     }
-    const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    if (formatLocalDate(nextDay) === override.targetDate) {
-      const minutesUntilMidnight = 24 * 60 - (now.getHours() * 60 + now.getMinutes());
-      const overrideMinutesFromMidnight = override.time.hour * 60 + override.time.minute;
-      if (minutesUntilMidnight + overrideMinutesFromMidnight <= SESSION_WINDOW_BEFORE_MINUTES) {
-        return override.targetDate;
-      }
+    if (isPreMidnightOverrideWindow(now, target, override)) {
+      return override.targetDate;
     }
   }
   return getLogicalDateString(now, dayBoundaryHour);
