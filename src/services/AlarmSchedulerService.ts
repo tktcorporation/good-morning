@@ -54,17 +54,15 @@ function resolveNextOverrideDate(target: WakeTarget): Date | null {
 /**
  * 曜日ごとのアラーム時刻を解決し、OFF の曜日は null を返す。
  *
- * nextOverride の対象日の曜日は繰り返しアラームの対象から除外する。
- * override はワンショットとして別途スケジュールされるため、除外しないと
- * 同じ曜日にデフォルト/dayOverride 時刻の繰り返しアラームも残り、
- * override 日に 2 回鳴ってしまう。
+ * nextOverride 対象日の曜日も繰り返しアラームの対象から除外しない
+ * （= override 日はデフォルト/dayOverride 時刻と override 時刻の両方が鳴りうる）。
+ * 除外すると、iOS が dismiss 時にアプリを起動せず次回のアプリ起動まで
+ * syncAlarmsEffect が走らないケース（RecoveryService が前提とする状況）で、
+ * 次にアプリが起動されるまでその曜日の繰り返しアラームが丸ごと消える
+ * リスクを負う。「鳴らない」方が「余計に鳴る」より実害が大きいため、
+ * 繰り返し側は常に維持する。
  */
-function resolveTimeForDay(
-  target: WakeTarget,
-  day: DayOfWeek,
-  overrideDate: Date | null,
-): AlarmTime | null {
-  if (overrideDate !== null && (overrideDate.getDay() as DayOfWeek) === day) return null;
+function resolveTimeForDay(target: WakeTarget, day: DayOfWeek): AlarmTime | null {
   const override = target.dayOverrides[day];
   if (override !== undefined) {
     if (override.type === 'off') return null;
@@ -80,11 +78,10 @@ function resolveTimeForDay(
 function groupDaysByTime(
   target: WakeTarget,
 ): ReadonlyMap<string, { time: AlarmTime; weekdays: number[] }> {
-  const overrideDate = resolveNextOverrideDate(target);
   const groups = new Map<string, { time: AlarmTime; weekdays: number[] }>();
   for (let d = 0; d < 7; d++) {
     const day = d as DayOfWeek;
-    const time = resolveTimeForDay(target, day, overrideDate);
+    const time = resolveTimeForDay(target, day);
     if (time === null) continue;
     const key = `${time.hour}:${time.minute}`;
     const existing = groups.get(key);

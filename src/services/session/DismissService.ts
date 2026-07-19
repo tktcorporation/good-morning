@@ -37,6 +37,13 @@ export const handleAlarmDismissEffect = (
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
     const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
+
+    // WakeRecord の永続化はメモリ上の records 配列全体を書き戻す実装のため、
+    // records が未ロード（空配列のまま）の状態で addRecord すると、
+    // 既存の起床履歴全体が新規レコード 1 件で上書きされる。
+    // ロードが完了していない場合は履歴を壊すより処理を諦める方が安全。
+    if (!useWakeRecordStore.getState().loaded) return;
+
     const kit = yield* AlarmKit;
 
     const hasTodos = target.todos.length > 0;

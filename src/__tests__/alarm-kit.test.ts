@@ -132,10 +132,12 @@ describe('alarm-kit service', () => {
       expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(2);
     });
 
-    test('nextOverride 対象日の曜日は繰り返しアラームの対象から除外される（二重鳴動防止）', async () => {
-      // override はその日の時刻を「置き換える」ものとして UI に表示される。
-      // 対象曜日の繰り返しアラームを残すと、override 日にデフォルト時刻と
-      // override 時刻の両方が鳴ってしまう
+    test('nextOverride 対象日の曜日も繰り返しアラームの対象から除外しない（iOS がdismiss時にアプリを起動しないケースでの消失防止）', async () => {
+      // 対象曜日を除外すると、次にアプリが起動され syncAlarmsEffect が
+      // 走るまでその曜日の繰り返しアラームが丸ごと消える。iOS は dismiss 時に
+      // アプリを起動しないことがあるため（RecoveryService 参照）、
+      // 除外は「次にアプリを開くまで鳴らない」リスクを負う。
+      // override 日の二重鳴動は許容し、繰り返し側は常に維持する。
       jest.useFakeTimers({ now: new Date('2026-02-25T06:00:00') });
       try {
         mockGetAllAlarms.mockReturnValue([]);
@@ -156,38 +158,8 @@ describe('alarm-kit service', () => {
         const repeatingCall = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as {
           weekdays: number[];
         };
-        expect(repeatingCall.weekdays).not.toContain(5);
-        expect(repeatingCall.weekdays).toHaveLength(6);
-        expect(mockScheduleAlarm).toHaveBeenCalledTimes(1);
-      } finally {
-        jest.useRealTimers();
-      }
-    });
-
-    test('override 対象日が dayOverride で OFF の場合も、override 除外後の除外判定は変わらない', async () => {
-      // dayOverrides の OFF 判定より override 除外を先に行うため、
-      // 「OFF の曜日に override を設定する」組み合わせでも重複登録しない
-      jest.useFakeTimers({ now: new Date('2026-02-25T06:00:00') });
-      try {
-        mockGetAllAlarms.mockReturnValue([]);
-        let uuidCounter = 0;
-        mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
-
-        const target: WakeTarget = {
-          ...DEFAULT_WAKE_TARGET,
-          defaultTime: { hour: 7, minute: 0 },
-          dayOverrides: { 4: { type: 'off' } },
-          nextOverride: { time: { hour: 8, minute: 0 }, targetDate: '2026-02-26' },
-          enabled: true,
-        };
-
-        await runEffect(scheduleWakeTargetAlarm(target, [], []));
-
-        expect(mockScheduleRepeatingAlarm).toHaveBeenCalledTimes(1);
-        const repeatingCall = mockScheduleRepeatingAlarm.mock.calls[0]?.[0] as {
-          weekdays: number[];
-        };
-        expect(repeatingCall.weekdays).not.toContain(5);
+        expect(repeatingCall.weekdays).toContain(5);
+        expect(repeatingCall.weekdays).toHaveLength(7);
         expect(mockScheduleAlarm).toHaveBeenCalledTimes(1);
       } finally {
         jest.useRealTimers();

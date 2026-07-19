@@ -121,6 +121,39 @@ beforeEach(() => {
 });
 
 describe('handleAlarmDismissEffect', () => {
+  test('records ストア未ロード時は既存履歴を破壊せず何もしない', async () => {
+    // addRecord はメモリ上の records 配列全体を書き戻す実装のため、
+    // records が未ロード（空配列のまま）の状態で呼ぶと、既存の起床履歴
+    // 全体が新規レコード 1 件で上書きされてしまう
+    const existingRecordsSnapshot = [
+      {
+        id: 'existing-1',
+        alarmId: 'wake-target',
+        date: '2026-02-27',
+        targetTime: { hour: 7, minute: 0 },
+        alarmTriggeredAt: '2026-02-27T07:00:00.000Z',
+        dismissedAt: '2026-02-27T07:01:00.000Z',
+        healthKitWakeTime: null,
+        result: 'great' as const,
+        diffMinutes: 1,
+        todos: [],
+        todoCompletionSeconds: 0,
+        alarmLabel: '',
+        todosCompleted: true,
+        todosCompletedAt: '2026-02-27T07:01:00.000Z',
+        goalDeadline: null,
+      },
+    ];
+    useWakeRecordStore.setState({ records: existingRecordsSnapshot, loaded: false });
+    const params = createStartParams();
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    expect(useWakeRecordStore.getState().records).toEqual(existingRecordsSnapshot);
+    expect(useMorningSessionStore.getState().session).toBeNull();
+    expect(mockScheduleAlarm).not.toHaveBeenCalled();
+  });
+
   test('creates record + session + snooze + LA for target with todos', async () => {
     let uuidCounter = 0;
     mockGenerateUUID.mockImplementation(() => `snooze-uuid-${++uuidCounter}`);
