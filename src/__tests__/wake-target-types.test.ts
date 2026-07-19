@@ -144,6 +144,28 @@ describe('resolveTimeForDismiss', () => {
     const dismissTime = new Date('2026-02-26T07:01:00');
     expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 7, minute: 0 });
   });
+
+  test('override 時刻が深夜に近く、日をまたいで dismiss された場合は override を採用する', () => {
+    // override は前日 23:50 に設定。実際に鳴って dismiss されたのはそのアラーム
+    // だが、dismiss が日付をまたいだ直後（00:05）だと暦日一致だけの判定では
+    // 翌日（targetDate の翌日）の通常アラームに誤って解決してしまう
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-27T00:05:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 23, minute: 50 });
+  });
+
+  test('override が深夜に近くても、日をまたいだ dismiss が翌日の通常アラームに近ければ通常時刻を採用する', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
+    };
+    // 08:58 は 2026-02-27（targetDate の翌日）の通常アラーム(9:00)に近い
+    const dismissTime = new Date('2026-02-27T08:58:00');
+    expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 9, minute: 0 });
+  });
 });
 
 describe('isNextOverrideExpired', () => {

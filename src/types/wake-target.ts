@@ -121,6 +121,29 @@ export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | 
   return resolveRegularTimeForDate(target, date);
 }
 
+const toMinutes = (t: AlarmTime): number => t.hour * 60 + t.minute;
+
+/**
+ * override が前日深夜に設定されており、dismissTime が日付をまたいだ直後の
+ * ケースを扱う。override 発火（前日 override.time）から dismissTime までの
+ * 実経過時間と、dismissTime 側の通常アラームとの時刻差を比較し、近い方を返す。
+ * 前日が override 対象日でなければ null（呼び出し元で regular にフォールバック）。
+ */
+function resolveTimeForDismissAcrossMidnight(
+  dismissTime: Date,
+  override: NextOverride,
+  regular: AlarmTime | null,
+): AlarmTime | null {
+  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
+  if (formatLocalDate(prevDay) !== override.targetDate) return null;
+
+  const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
+  const overrideMinutesUntilMidnight = 24 * 60 - toMinutes(override.time);
+  const overrideDiff = dismissMinutes + overrideMinutesUntilMidnight;
+  const regularDiff = regular === null ? null : Math.abs(dismissMinutes - toMinutes(regular));
+  return regularDiff === null || overrideDiff <= regularDiff ? override.time : null;
+}
+
 /**
  * dismiss 時刻に基づいて、実際に発火したと思われるアラーム時刻を解決する。
  *
@@ -129,22 +152,26 @@ export function resolveTimeForDate(target: WakeTarget, date: Date): AlarmTime | 
  * 通常アラームが dismiss された場合でも override 時刻を誤って採用し、
  * WakeRecord の targetTime・diffMinutes・result が不正確になる。
  * dismissTime の時刻部分に近い方の候補を実際に鳴ったアラームとみなす。
+ *
+ * override が前日深夜（例: 23:50）に設定されている場合、実際に鳴った直後でも
+ * dismiss が日付をまたいでから行われることがある。暦日一致だけで判定すると
+ * 翌日（targetDate の翌日）の通常アラームに誤って解決してしまうため、
+ * resolveTimeForDismissAcrossMidnight で前日 override との実経過時間も候補にする。
  */
 export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): AlarmTime | null {
   const regular = resolveRegularTimeForDate(target, dismissTime);
-  const isOverrideDay =
-    target.nextOverride !== null && formatLocalDate(dismissTime) === target.nextOverride.targetDate;
-  if (!isOverrideDay) return regular;
+  const override = target.nextOverride;
+  if (override === null) return regular;
 
-  // isOverrideDay の判定で nextOverride !== null は保証済み
-  const overrideTime = (target.nextOverride as NextOverride).time;
-  if (regular === null) return overrideTime;
+  if (formatLocalDate(dismissTime) === override.targetDate) {
+    if (regular === null) return override.time;
+    const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
+    const regularDiff = Math.abs(dismissMinutes - toMinutes(regular));
+    const overrideDiff = Math.abs(dismissMinutes - toMinutes(override.time));
+    return overrideDiff <= regularDiff ? override.time : regular;
+  }
 
-  const toMinutes = (t: AlarmTime) => t.hour * 60 + t.minute;
-  const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
-  const regularDiff = Math.abs(dismissMinutes - toMinutes(regular));
-  const overrideDiff = Math.abs(dismissMinutes - toMinutes(overrideTime));
-  return overrideDiff <= regularDiff ? overrideTime : regular;
+  return resolveTimeForDismissAcrossMidnight(dismissTime, override, regular) ?? regular;
 }
 
 /**
