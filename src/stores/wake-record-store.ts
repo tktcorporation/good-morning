@@ -1,13 +1,54 @@
-import { Effect } from 'effect';
+import { Effect, Either, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { MS_PER_DAY } from '../constants/time';
-import { runEffect, Storage } from '../services';
+import { decodeStoredJson, runEffect, Storage } from '../services';
+import type { StorageError } from '../services/errors';
 import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
 import { formatLocalDate } from '../utils/date';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
+
+const AlarmTimeSchema = Schema.Struct({
+  hour: Schema.Number,
+  minute: Schema.Number,
+});
+
+const WakeTodoRecordSchema = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  completedAt: Schema.NullOr(Schema.String),
+  orderCompleted: Schema.NullOr(Schema.Number),
+  type: Schema.optional(Schema.Literal('checkbox', 'squat')),
+});
+
+/**
+ * WakeRecord のスキーマ。現行の型（src/types/wake-record.ts）の必須/nullable 構造と
+ * 一致させる。要素単位で decodeUnknownEither するため、1件が不正な形状でも
+ * 配列全体を破棄しない（parseStoredRecords 参照）。
+ */
+const WakeRecordSchema = Schema.Struct({
+  id: Schema.String,
+  alarmId: Schema.String,
+  date: Schema.String,
+  targetTime: AlarmTimeSchema,
+  alarmTriggeredAt: Schema.String,
+  dismissedAt: Schema.String,
+  healthKitWakeTime: Schema.NullOr(Schema.String),
+  result: Schema.Literal('great', 'ok', 'late', 'missed'),
+  diffMinutes: Schema.Number,
+  todos: Schema.Array(WakeTodoRecordSchema),
+  todoCompletionSeconds: Schema.Number,
+  alarmLabel: Schema.String,
+  todosCompleted: Schema.Boolean,
+  todosCompletedAt: Schema.NullOr(Schema.String),
+  goalDeadline: Schema.NullOr(Schema.String),
+});
+const decodeWakeRecord = Schema.decodeUnknownEither(WakeRecordSchema);
+
+/** JSON パースの成否のみを見るゲート。要素単位の形状検証は parseStoredRecords で行う。 */
+const RecordsGateSchema = Schema.Array(Schema.Unknown);
 
 interface WakeRecordState {
   readonly records: readonly WakeRecord[];
@@ -54,14 +95,40 @@ function persistRecords(records: readonly WakeRecord[]): Promise<void> {
   );
 }
 
-/** 永続化済み records のパース。破損は空扱い（loaded=false のまま固まるのを防ぐ）。 */
-function parseStoredRecords(raw: string | null): readonly WakeRecord[] {
-  if (raw === null) return [];
-  try {
-    return JSON.parse(raw) as readonly WakeRecord[];
-  } catch {
-    return [];
+/**
+ * decodeStoredJson でゲート済みの配列から WakeRecord を要素単位で検証・復元する。
+ * 1件が不正な形状でも配列全体を空にはしない（1件の破損で起床履歴全体を失うのを防ぐ） —
+ * 不正な要素だけを読み飛ばして warn ログに残す。
+ */
+function parseStoredRecords(decoded: readonly unknown[]): readonly WakeRecord[] {
+  const records: WakeRecord[] = [];
+  for (const raw of decoded) {
+    const result = decodeWakeRecord(raw);
+    if (Either.isRight(result)) {
+      records.push(result.right);
+    } else {
+      // biome-ignore lint/suspicious/noConsole: 破損レコードのスキップを可視化する
+      console.warn(
+        '[wake-record-store] 不正な形状の WakeRecord をスキップしました',
+        result.left.message,
+      );
+    }
   }
+  return records;
+}
+
+/**
+ * records を読み取ってデコードする Effect。
+ * 読み取り自体の失敗（StorageError）はそのまま呼び出し元に伝播させ、データ破損
+ * （JSON パース失敗・配列でない）は空配列にフォールバックする。
+ */
+function loadRecordsEffect(): Effect.Effect<readonly WakeRecord[], StorageError, Storage> {
+  return Storage.pipe(
+    Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, RecordsGateSchema, raw)),
+    Effect.map((decoded) => (decoded === null ? [] : parseStoredRecords(decoded))),
+    Effect.catchTag('StorageDecodeError', () => Effect.succeed<readonly WakeRecord[]>([])),
+  );
 }
 
 export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
@@ -69,20 +136,17 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   loaded: false,
 
   loadRecords: async () => {
-    // パース失敗（データは読めたが壊れている）は空扱いで確定してよいが、
-    // 読み取り自体の失敗（リトライしても解決しない）はストレージ上の実データの
-    // 有無が確認できていない。loaded=true・records=[] にすると、次の
+    // 読み取り自体の失敗（StorageError、リトライしても解決しない）はストレージ上の
+    // 実データの有無が確認できていない。loaded=true・records=[] にすると、次の
     // addRecord/updateRecord が空配列を実データの上に永続化し既存の起床履歴を
     // 消してしまうため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
-    let raw: string | null;
     try {
-      raw = await runEffect(Storage.pipe(Effect.flatMap((storage) => storage.get(STORAGE_KEY))));
+      const records = await runEffect(loadRecordsEffect());
+      set({ records, loaded: true });
     } catch (error) {
       // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
       console.error('[wake-record-store] loadRecords failed after retries', error);
-      return;
     }
-    set({ records: parseStoredRecords(raw), loaded: true });
   },
 
   addRecord: async (data: Omit<WakeRecord, 'id'>): Promise<WakeRecord> => {
