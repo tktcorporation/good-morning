@@ -203,6 +203,47 @@ describe('handleAlarmEventEffect: スヌーズ payload', () => {
   });
 });
 
+describe('handleAlarmEventEffect: tryAutoStartSession のロードガード', () => {
+  // dayBoundaryHour の境界をまたぐ実行時刻だとウィンドウ判定が実時刻に左右されるため、
+  // セッションウィンドウ内であることが確実な時刻に固定する
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-02-26T07:00:00'));
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('session ストア未ロード時は自動開始をスキップする（既存セッション上書き防止）', async () => {
+    // allSettled により他ストアのロードが完了しても session だけロード失敗のまま
+    // handleAlarmEventEffect が呼ばれうる。isActive() は session !== null で
+    // 判定するため、loaded=false のまま進むと「セッション無し」と誤認して
+    // startSession が実行され、実際に永続化されている進行中セッションを
+    // 上書きしてしまう
+    const target = createTarget({ defaultTime: { hour: 7, minute: 0 } });
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useMorningSessionStore.setState({ session: null, loaded: false });
+
+    const { opts } = routerOpts({ launchPayload: null });
+
+    await runEffect(handleAlarmEventEffect('cold-start', opts));
+
+    expect(useMorningSessionStore.getState().session).toBeNull();
+  });
+
+  test('records ストア未ロード時は自動開始をスキップする（完了済みレコード見逃し防止）', async () => {
+    const target = createTarget({ defaultTime: { hour: 7, minute: 0 } });
+    useWakeTargetStore.setState({ target, loaded: true, alarmIds: [] });
+    useMorningSessionStore.setState({ session: null, loaded: true });
+    useWakeRecordStore.setState({ records: [], loaded: false });
+
+    const { opts } = routerOpts({ launchPayload: null });
+
+    await runEffect(handleAlarmEventEffect('cold-start', opts));
+
+    expect(useMorningSessionStore.getState().session).toBeNull();
+  });
+});
+
 describe('handleAlarmEventEffect: cold-start + payload なし', () => {
   test('期限切れ override のクリアと dismiss 復元が実行される', async () => {
     let uuidCounter = 0;

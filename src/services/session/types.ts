@@ -82,14 +82,30 @@ export function getSessionWindow(resolvedTime: AlarmTime, date: Date): { start: 
  * アラーム後 〜 セッションウィンドウ終了（+30分）までの後半が
  * defaultTime 基準の判定に落ちてセッション自動開始に失敗する。
  * 暦日一致の条件だけで「日をまたいだ古い override」は除外できている。
+ *
+ * override 時刻が 0 時台前半など深夜帯の場合、セッションウィンドウの前半
+ * （アラーム時刻の SESSION_WINDOW_BEFORE_MINUTES 分前 〜 0時）は now の暦日が
+ * まだ前日のまま。この場合は「翌日が targetDate かつ now がその前夜のウィンドウ
+ * 前半内」を追加で判定し、暦日一致と同様に targetDate を採用する。
  */
 export function resolveOverrideAwareDateStr(
   now: Date,
   target: WakeTarget,
   dayBoundaryHour: number,
 ): string {
-  if (target.nextOverride !== null && formatLocalDate(now) === target.nextOverride.targetDate) {
-    return target.nextOverride.targetDate;
+  const override = target.nextOverride;
+  if (override !== null) {
+    if (formatLocalDate(now) === override.targetDate) {
+      return override.targetDate;
+    }
+    const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    if (formatLocalDate(nextDay) === override.targetDate) {
+      const minutesUntilMidnight = 24 * 60 - (now.getHours() * 60 + now.getMinutes());
+      const overrideMinutesFromMidnight = override.time.hour * 60 + override.time.minute;
+      if (minutesUntilMidnight + overrideMinutesFromMidnight <= SESSION_WINDOW_BEFORE_MINUTES) {
+        return override.targetDate;
+      }
+    }
   }
   return getLogicalDateString(now, dayBoundaryHour);
 }

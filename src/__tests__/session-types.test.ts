@@ -106,4 +106,34 @@ describe('checkSessionWindow', () => {
     expect(result).not.toBeNull();
     expect(result?.resolvedTime).toEqual({ hour: 9, minute: 0 });
   });
+
+  test('nextOverride が深夜0時台前半でも、その前夜のセッションウィンドウ前半で認識される', () => {
+    // アラーム 00:10 のセッションウィンドウは 23:40(前日)〜00:40(targetDate)。
+    // now の暦日はまだ前日のままだが、targetDate の override として扱われるべき
+    const target = targetWithTodos({
+      nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-25T23:50:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 0, minute: 10 });
+    expect(result?.dateStr).toBe('2026-02-26');
+  });
+
+  test('nextOverride が深夜0時台前半でも、ウィンドウ外の前夜早い時間帯では適用しない', () => {
+    // 23:00 は 00:10 のセッションウィンドウ（23:40〜00:40）より前
+    const target = targetWithTodos({
+      defaultTime: { hour: 23, minute: 0 },
+      nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-25T23:00:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 23, minute: 0 });
+    expect(result?.dateStr).toBe('2026-02-25');
+  });
 });

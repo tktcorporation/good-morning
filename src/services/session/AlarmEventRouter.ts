@@ -44,6 +44,13 @@ const tryAutoStartSession = (
 ): Effect.Effect<boolean, never> =>
   Effect.gen(function* () {
     const sessionStore = useMorningSessionStore.getState();
+    const recordState = useWakeRecordStore.getState();
+
+    // session/records が未ロードのまま進むと、isActive()（session !== null）が
+    // 常に false になり、実際には永続化されている進行中セッションがあっても
+    // startSession が新規セッションで上書きしてしまう。records 未ロードでも
+    // 同様に、完了済みレコードを見逃して同日にセッションを再度自動開始してしまう
+    if (!(sessionStore.loaded && recordState.loaded)) return false;
 
     if (sessionStore.isActive()) return false;
 
@@ -51,7 +58,7 @@ const tryAutoStartSession = (
     const windowInfo = checkSessionWindow(now, target, dayBoundaryHour);
     if (windowInfo === null) return false;
 
-    const { records } = useWakeRecordStore.getState();
+    const { records } = recordState;
     const todayRecord = records.find((r) => r.date === windowInfo.dateStr);
     if (todayRecord?.todosCompleted) return false;
 
