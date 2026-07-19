@@ -148,69 +148,97 @@ function pickFiredDismissCandidate(
   return aDiff <= bDiff ? a : b;
 }
 
-/**
- * override が前日深夜に設定されており、dismissTime が日付をまたいだ直後の
- * ケースを扱う。override（前日）は常に発火済みとみなせるが、通常アラームは
- * dismissTime の当日基準のためまだ未来の可能性があり、その場合は候補から除外する。
- * 両方発火済みなら override 発火からの実経過時間と通常アラームとの時刻差を
- * 比較し、近い方を返す。前日が override 対象日でなければ null（呼び出し元で
- * regular にフォールバック）。
- */
-function resolveTimeForDismissAcrossMidnight(
-  dismissTime: Date,
-  override: NextOverride,
-  regular: AlarmTime | null,
-): AlarmTime | null {
-  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
-  if (formatLocalDate(prevDay) !== override.targetDate) return null;
-  if (regular === null) return override.time;
-
-  const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
-  const regularMinutes = toMinutes(regular);
-  if (regularMinutes > dismissMinutes) return override.time;
-
-  const overrideMinutesUntilMidnight = 24 * 60 - toMinutes(override.time);
-  const overrideElapsed = dismissMinutes + overrideMinutesUntilMidnight;
-  const regularElapsed = dismissMinutes - regularMinutes;
-  return overrideElapsed <= regularElapsed ? override.time : regular;
+/** resolveDismissCandidate の戻り値。dayOffset は dismissTime の暦日からの相対日数（0 か -1）。 */
+interface DismissCandidate {
+  readonly time: AlarmTime;
+  readonly dayOffset: number;
 }
 
 /**
- * dismiss 時刻に基づいて、実際に発火したと思われるアラーム時刻を解決する。
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラーム候補（時刻 + 発火日）を解決する。
  *
  * override 対象日は通常の繰り返しアラームも鳴り続ける設計のため、
- * resolveTimeForDate の「対象日なら常に override」という判定では、
- * 通常アラームが dismiss された場合でも override 時刻を誤って採用し、
- * WakeRecord の targetTime・diffMinutes・result が不正確になる。
- * dismissTime の時刻部分に近い方の候補を実際に鳴ったアラームとみなす。
+ * 「対象日なら常に override」という単純な判定では、通常アラームが dismiss
+ * された場合でも override 時刻を誤って採用し、WakeRecord の targetTime・
+ * diffMinutes・result が不正確になる。dismissTime の時刻部分に近い方の候補を
+ * 実際に鳴ったアラームとみなす。
  *
  * override が前日深夜（例: 23:50）に設定されている場合、実際に鳴った直後でも
  * dismiss が日付をまたいでから行われることがある。暦日一致だけで判定すると
- * 翌日（targetDate の翌日）の通常アラームに誤って解決してしまうため、
- * resolveTimeForDismissAcrossMidnight で前日 override との実経過時間も候補にする。
+ * 翌日（targetDate の翌日）の通常アラームに誤って解決してしまうため、前日
+ * override との実経過時間も候補にする（この場合 dayOffset は -1 になる）。
  *
  * どちらのケースでも、まだ発火していない（dismissTime より未来の）候補は
  * pickFiredDismissCandidate / 発火チェックで除外する。dismiss は必ず発火済みの
  * アラームに対して起きるため、時刻が近いだけの未来の候補を誤採用しない。
  */
-export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): AlarmTime | null {
+function resolveDismissCandidate(target: WakeTarget, dismissTime: Date): DismissCandidate | null {
   const regular = resolveRegularTimeForDate(target, dismissTime);
   const override = target.nextOverride;
-  if (override === null) return regular;
+  if (override === null) return regular === null ? null : { time: regular, dayOffset: 0 };
+
+  const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
 
   if (formatLocalDate(dismissTime) === override.targetDate) {
-    if (regular === null) return override.time;
-    const dismissMinutes = dismissTime.getHours() * 60 + dismissTime.getMinutes();
-    return pickFiredDismissCandidate(
+    if (regular === null) return { time: override.time, dayOffset: 0 };
+    const picked = pickFiredDismissCandidate(
       override.time,
       toMinutes(override.time),
       regular,
       toMinutes(regular),
       dismissMinutes,
     );
+    return { time: picked, dayOffset: 0 };
   }
 
-  return resolveTimeForDismissAcrossMidnight(dismissTime, override, regular) ?? regular;
+  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
+  if (formatLocalDate(prevDay) === override.targetDate) {
+    if (regular === null) return { time: override.time, dayOffset: -1 };
+    const regularMinutes = toMinutes(regular);
+    if (regularMinutes > dismissMinutes) return { time: override.time, dayOffset: -1 };
+
+    const overrideMinutesUntilMidnight = 24 * 60 - toMinutes(override.time);
+    const overrideElapsed = dismissMinutes + overrideMinutesUntilMidnight;
+    const regularElapsed = dismissMinutes - regularMinutes;
+    return overrideElapsed <= regularElapsed
+      ? { time: override.time, dayOffset: -1 }
+      : { time: regular, dayOffset: 0 };
+  }
+
+  return regular === null ? null : { time: regular, dayOffset: 0 };
+}
+
+/**
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラーム時刻を解決する。
+ * 詳細な選定ロジックは resolveDismissCandidate を参照。
+ */
+export function resolveTimeForDismiss(target: WakeTarget, dismissTime: Date): AlarmTime | null {
+  return resolveDismissCandidate(target, dismissTime)?.time ?? null;
+}
+
+/**
+ * dismiss 時刻に基づいて、実際に発火したと思われるアラームの完全な日時を解決する。
+ *
+ * resolveTimeForDismiss は時刻（AlarmTime）のみを返すため、深夜またぎで前日の
+ * override が採用された場合にその情報が失われる。goalDeadline のように
+ * 「発火時刻 + バッファ分」を日付をまたいで計算する場面で
+ * `dismissTime の暦日 + resolveTimeForDismiss の時刻` を組み合わせると、
+ * 前日 23:50 発火のアラームが翌日基準で計算され、締め切りが 1 日ズレる。
+ * この関数は resolveDismissCandidate の dayOffset を反映した正しい日付で
+ * Date を組み立てる。
+ */
+export function resolveDismissInstant(target: WakeTarget, dismissTime: Date): Date | null {
+  const candidate = resolveDismissCandidate(target, dismissTime);
+  if (candidate === null) return null;
+  const base = new Date(dismissTime.getTime() + candidate.dayOffset * 24 * 60 * 60 * 1000);
+  return new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
+    candidate.time.hour,
+    candidate.time.minute,
+    0,
+  );
 }
 
 /**

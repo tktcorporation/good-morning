@@ -19,7 +19,7 @@ import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTarget } from '../../types/wake-target';
-import { resolveTimeForDismiss } from '../../types/wake-target';
+import { resolveDismissInstant } from '../../types/wake-target';
 import { AlarmKit } from '../AlarmKitService';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
@@ -111,8 +111,8 @@ const handleInlineDismiss = (
     const { target } = useWakeTargetStore.getState();
     if (target === null) return;
     const now = new Date();
-    const resolvedTime = resolveTimeForDismiss(target, now);
-    if (resolvedTime === null) return;
+    const alarmInstant = resolveDismissInstant(target, now);
+    if (alarmInstant === null) return;
 
     // override 対象日は通常の繰り返しアラームも維持される設計（二重鳴動を許容）
     // のため、同日内で override → 通常アラームの順に2回 dismiss されうる。
@@ -128,7 +128,7 @@ const handleInlineDismiss = (
 
     yield* handleAlarmDismissEffect({
       target,
-      resolvedTime,
+      alarmInstant,
       dismissTime: now,
       mountedAt: now,
       dayBoundaryHour,

@@ -2,6 +2,7 @@ import {
   computeOverrideTargetDate,
   getNextLogicalDay,
   isNextOverrideExpired,
+  resolveDismissInstant,
   resolveTimeForDate,
   resolveTimeForDismiss,
   type WakeTarget,
@@ -194,6 +195,48 @@ describe('resolveTimeForDismiss', () => {
     };
     const dismissTime = new Date('2026-02-27T00:05:00');
     expect(resolveTimeForDismiss(target, dismissTime)).toEqual({ hour: 23, minute: 50 });
+  });
+});
+
+describe('resolveDismissInstant', () => {
+  const baseTarget: WakeTarget = {
+    defaultTime: { hour: 9, minute: 0 },
+    dayOverrides: {},
+    nextOverride: null,
+    todos: [],
+    enabled: true,
+    targetSleepMinutes: null,
+    wakeUpGoalBufferMinutes: 30,
+  };
+
+  test('同日 override では dismissTime と同じ暦日の日時を返す', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-26T07:03:00');
+    expect(resolveDismissInstant(target, dismissTime)).toEqual(new Date('2026-02-26T07:00:00'));
+  });
+
+  test('深夜またぎで override が採用された場合、発火日は前日の日付になる', () => {
+    // dismissTime の暦日（2026-02-27）と組み合わせると goalDeadline 等の
+    // 計算が 1 日ズレるため、実際に発火した前日（2026-02-26）の日時を返す必要がある
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-27T00:05:00');
+    expect(resolveDismissInstant(target, dismissTime)).toEqual(new Date('2026-02-26T23:50:00'));
+  });
+
+  test('深夜またぎで通常アラームが採用された場合は dismissTime と同じ暦日の日時を返す', () => {
+    const target: WakeTarget = {
+      ...baseTarget,
+      defaultTime: { hour: 8, minute: 0 },
+      nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
+    };
+    const dismissTime = new Date('2026-02-27T08:58:00');
+    expect(resolveDismissInstant(target, dismissTime)).toEqual(new Date('2026-02-27T08:00:00'));
   });
 });
 

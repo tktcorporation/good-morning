@@ -35,10 +35,18 @@ export const SESSION_WINDOW_AFTER_MINUTES = 30;
 /** セッションライフサイクル操作で発生しうるエラーの union */
 export type SessionError = AlarmKitError | NotificationError;
 
-/** handleAlarmDismissEffect のパラメータ */
+/**
+ * handleAlarmDismissEffect のパラメータ。
+ *
+ * alarmInstant は実際に発火したと思われるアラームの完全な日時
+ * （wake-target.ts の resolveDismissInstant で解決）。時刻（AlarmTime）だけ
+ * だと、深夜またぎで前日の override が採用されたケースの日付情報が失われ、
+ * goalDeadline のような日付をまたぐ計算が dismissTime の暦日を誤って基準に
+ * してしまう。
+ */
 export interface AlarmDismissParams {
   readonly target: WakeTarget;
-  readonly resolvedTime: AlarmTime;
+  readonly alarmInstant: Date;
   readonly dismissTime: Date;
   readonly mountedAt: Date;
   readonly dayBoundaryHour: number;

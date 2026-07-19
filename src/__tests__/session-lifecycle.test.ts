@@ -20,7 +20,7 @@ import { useSettingsStore } from '../stores/settings-store';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { MorningSession } from '../types/morning-session';
-import { resolveTimeForDismiss, type WakeTarget } from '../types/wake-target';
+import { resolveDismissInstant, type WakeTarget } from '../types/wake-target';
 
 // expo-alarm-kit はグローバルモック済み。型にない拡張関数は requireMock で取得。
 // biome-ignore lint/suspicious/noExplicitAny: jest mock access
@@ -89,10 +89,18 @@ function createStartParams(overrides?: Partial<AlarmDismissParams>): AlarmDismis
   // dismissTime を固定の過去日時にすると、scheduleSnoozeAlarms の
   // 「過去時刻のスヌーズは登録しない」ガードで全スヌーズがスキップされるため、
   // 現在時刻基準の直近の時刻を使う
+  const dismissTime = new Date(Date.now() - 60 * 1000);
   return {
     target: createTargetWithTodos(),
-    resolvedTime: { hour: 7, minute: 0 },
-    dismissTime: new Date(Date.now() - 60 * 1000),
+    alarmInstant: new Date(
+      dismissTime.getFullYear(),
+      dismissTime.getMonth(),
+      dismissTime.getDate(),
+      7,
+      0,
+      0,
+    ),
+    dismissTime,
     mountedAt: new Date(Date.now() - 2 * 60 * 1000),
     dayBoundaryHour: 4,
     ...overrides,
@@ -364,12 +372,12 @@ describe('handleAlarmDismissEffect', () => {
     };
 
     const regularDismissTime = new Date('2026-02-25T23:50:00');
-    const regularResolvedTime = resolveTimeForDismiss(target, regularDismissTime);
-    if (regularResolvedTime === null) throw new Error('regularResolvedTime should not be null');
+    const regularAlarmInstant = resolveDismissInstant(target, regularDismissTime);
+    if (regularAlarmInstant === null) throw new Error('regularAlarmInstant should not be null');
     await runEffect(
       handleAlarmDismissEffect({
         target,
-        resolvedTime: regularResolvedTime,
+        alarmInstant: regularAlarmInstant,
         dismissTime: regularDismissTime,
         mountedAt: regularDismissTime,
         dayBoundaryHour: 4,
@@ -377,12 +385,12 @@ describe('handleAlarmDismissEffect', () => {
     );
 
     const overrideDismissTime = new Date('2026-02-26T00:10:00');
-    const overrideResolvedTime = resolveTimeForDismiss(target, overrideDismissTime);
-    if (overrideResolvedTime === null) throw new Error('overrideResolvedTime should not be null');
+    const overrideAlarmInstant = resolveDismissInstant(target, overrideDismissTime);
+    if (overrideAlarmInstant === null) throw new Error('overrideAlarmInstant should not be null');
     await runEffect(
       handleAlarmDismissEffect({
         target,
-        resolvedTime: overrideResolvedTime,
+        alarmInstant: overrideAlarmInstant,
         dismissTime: overrideDismissTime,
         mountedAt: overrideDismissTime,
         dayBoundaryHour: 4,
@@ -391,6 +399,38 @@ describe('handleAlarmDismissEffect', () => {
 
     const records = useWakeRecordStore.getState().records;
     expect(records.map((r) => r.date).sort()).toEqual(['2026-02-25', '2026-02-26']);
+  });
+
+  test('深夜またぎで override が採用された dismiss は、goalDeadline が発火日基準で正しく計算される', async () => {
+    // resolveDismissInstant が前日の override 発火日時を正しく返さないと、
+    // goalDeadline が dismissTime の暦日（2026-02-27）基準で計算され、
+    // 本来の 2026-02-27T00:20 ではなく 2026-02-28T00:20 になってしまう
+    const target: WakeTarget = {
+      defaultTime: { hour: 9, minute: 0 },
+      dayOverrides: {},
+      nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
+      todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+      enabled: true,
+      targetSleepMinutes: null,
+      wakeUpGoalBufferMinutes: 30,
+    };
+    const dismissTime = new Date('2026-02-27T00:05:00');
+    const alarmInstant = resolveDismissInstant(target, dismissTime);
+    if (alarmInstant === null) throw new Error('alarmInstant should not be null');
+
+    await runEffect(
+      handleAlarmDismissEffect({
+        target,
+        alarmInstant,
+        dismissTime,
+        mountedAt: dismissTime,
+        dayBoundaryHour: 4,
+      }),
+    );
+
+    const records = useWakeRecordStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]?.goalDeadline).toBe(new Date(2026, 1, 26, 23, 80, 0).toISOString());
   });
 });
 
@@ -641,6 +681,23 @@ describe('restoreSessionOnLaunch', () => {
     expect(useMorningSessionStore.getState().session).toBeNull();
     expect(mockCancelAlarm).toHaveBeenCalledWith('snooze-expired');
     expect(mockEndLiveActivity).toHaveBeenCalledWith('activity-expired');
+  });
+
+  test('records ストア未ロード時は expireSessionIfNeeded の保留を stale クリーンアップに誤って進めない', async () => {
+    // expireSessionIfNeeded は records 未ロード時に「保留」の意味で false を
+    // 返す。これを「期限切れでない」と誤解釈して stale クリーンアップに
+    // 進むと、WakeRecord 未更新のままセッションが破棄され、起床結果が失われる
+    useWakeRecordStore.setState({ records: [], loaded: false });
+    setActiveSession({
+      date: '2020-01-01',
+      windowEnd: '2020-01-01T00:30:00.000Z',
+      liveActivityId: 'activity-1',
+    });
+
+    await runEffect(restoreSessionOnLaunch(4));
+
+    expect(useMorningSessionStore.getState().session).not.toBeNull();
+    expect(mockEndLiveActivity).not.toHaveBeenCalled();
   });
 
   test('records ストア未ロード時は期限切れセッションの WakeRecord 更新をスキップし、AsyncStorage の起床履歴を空で上書きしない', async () => {
@@ -977,5 +1034,26 @@ describe('recoverMissedDismiss', () => {
     expect(mockCancelAlarm).toHaveBeenCalledWith('ns-2');
     expect(mockClearSnoozeAlarmIds).toHaveBeenCalled();
     expect(mockClearDismissEvents).toHaveBeenCalled();
+  });
+
+  test('複数の未処理 primary dismiss イベントを全て処理し、それより前の日の起床記録を失わない', async () => {
+    // アプリを開かないまま複数の朝にわたってアラームを dismiss したケース。
+    // 最後の1件だけ処理してネイティブキュー全体をクリアすると、
+    // それ以前の日の起床記録が永遠に失われる
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+    const target = createTargetWithTodos();
+    useWakeTargetStore.setState({ target, alarmIds: [], loaded: true });
+    mockGetDismissEvents.mockReturnValue([
+      { alarmId: 'alarm-1', dismissedAt: '2026-02-25T07:01:00.000Z', payload: '' },
+      { alarmId: 'alarm-1', dismissedAt: '2026-02-26T07:01:00.000Z', payload: '' },
+    ]);
+
+    const result = await runEffect(recoverMissedDismiss(4));
+
+    const records = useWakeRecordStore.getState().records;
+    expect(records.map((r) => r.date).sort()).toEqual(['2026-02-25', '2026-02-26']);
+    expect(mockClearDismissEvents).toHaveBeenCalled();
+    expect(result).toBe(true);
   });
 });

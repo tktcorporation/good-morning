@@ -13,6 +13,7 @@ import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
+import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../../types/wake-record';
@@ -45,7 +46,11 @@ export const handleAlarmDismissEffect = (
   params: AlarmDismissParams,
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
-    const { target, resolvedTime, dismissTime, mountedAt, dayBoundaryHour } = params;
+    const { target, alarmInstant, dismissTime, mountedAt, dayBoundaryHour } = params;
+    const resolvedTime: AlarmTime = {
+      hour: alarmInstant.getHours(),
+      minute: alarmInstant.getMinutes(),
+    };
 
     // WakeRecord の永続化はメモリ上の records 配列全体を書き戻す実装のため、
     // records が未ロード（空配列のまま）の状態で addRecord すると、
@@ -81,13 +86,16 @@ export const handleAlarmDismissEffect = (
       type: todo.type,
     }));
 
+    // alarmInstant（実際に発火した日時）を基準にする。dismissTime の暦日を
+    // 使うと、深夜またぎで前日の override が採用されたケースで締め切りが
+    // 1 日ズレる
     const goalDeadline = hasTodos
       ? new Date(
-          dismissTime.getFullYear(),
-          dismissTime.getMonth(),
-          dismissTime.getDate(),
-          resolvedTime.hour,
-          resolvedTime.minute + target.wakeUpGoalBufferMinutes,
+          alarmInstant.getFullYear(),
+          alarmInstant.getMonth(),
+          alarmInstant.getDate(),
+          alarmInstant.getHours(),
+          alarmInstant.getMinutes() + target.wakeUpGoalBufferMinutes,
           0,
         ).toISOString()
       : null;

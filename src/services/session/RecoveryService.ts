@@ -17,7 +17,7 @@ import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import { useWakeTargetStore } from '../../stores/wake-target-store';
-import { resolveTimeForDismiss, type WakeTarget } from '../../types/wake-target';
+import { resolveDismissInstant, type WakeTarget } from '../../types/wake-target';
 import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
@@ -67,6 +67,20 @@ export const restoreSessionOnLaunch = (
   dayBoundaryHour: number,
 ): Effect.Effect<void, SessionError, AlarmKit | Notification> =>
   Effect.gen(function* () {
+    const preState = useMorningSessionStore.getState();
+    // records 未ロードのまま expireSessionIfNeeded を通すと、その内部ガードが
+    // 「records 待ちで保留」の意味で false を返す。これを「期限切れでない」と
+    // 誤解釈して下の stale クリーンアップへ進むと、WakeRecord を更新しない
+    // まま（todosCompleted 等が確定しないまま）セッションだけ破棄してしまい、
+    // この records ロード失敗が原因で起床結果が永久に失われる
+    if (
+      preState.session !== null &&
+      preState.session.recordId !== null &&
+      !useWakeRecordStore.getState().loaded
+    ) {
+      return;
+    }
+
     const expired = yield* expireSessionIfNeeded;
     if (expired) return;
 
@@ -170,14 +184,25 @@ export const recoverMissedDismiss = (
       return false;
     }
 
-    // primaryEvents.length > 0 は上のガードで保証済み
-    const event = primaryEvents[primaryEvents.length - 1] as (typeof primaryEvents)[number];
-    const recovered = yield* processPrimaryDismissEvent(
-      target,
-      event,
-      dayBoundaryHour,
-      recordState.records,
+    // アプリを開かないまま複数の朝にわたって dismiss されると、ネイティブ
+    // キューに複数件たまることがある。最後の1件だけ処理してキュー全体を
+    // クリアすると、それ以前の日の起床記録が永久に失われる。古い順に
+    // 全件処理し、各回で最新の records を見て重複判定する（前の回で
+    // 追加された record を次の回の重複判定に反映させるため）
+    const sortedEvents = [...primaryEvents].sort((a, b) =>
+      a.dismissedAt.localeCompare(b.dismissedAt),
     );
+    let recovered = false;
+    for (const event of sortedEvents) {
+      const currentRecords = useWakeRecordStore.getState().records;
+      const result = yield* processPrimaryDismissEvent(
+        target,
+        event,
+        dayBoundaryHour,
+        currentRecords,
+      );
+      recovered = recovered || result;
+    }
 
     yield* kit.clearDismissEvents;
     return recovered;
@@ -211,15 +236,15 @@ const processPrimaryDismissEvent = (
       return false;
     }
 
-    const resolvedTime = resolveTimeForDismiss(target, dismissTime);
-    if (resolvedTime === null) {
+    const alarmInstant = resolveDismissInstant(target, dismissTime);
+    if (alarmInstant === null) {
       yield* reclaimUnmanagedNativeSnoozes;
       return false;
     }
 
     yield* handleAlarmDismissEffect({
       target,
-      resolvedTime,
+      alarmInstant,
       dismissTime,
       mountedAt: dismissTime,
       dayBoundaryHour,
