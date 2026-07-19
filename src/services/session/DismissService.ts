@@ -18,7 +18,11 @@ import type { WakeTodoRecord } from '../../types/wake-record';
 import { calculateDiffMinutes, calculateWakeResult } from '../../types/wake-record';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit } from '../AlarmKitService';
-import { SNOOZE_DURATION_SECONDS, scheduleSnoozeAlarms } from '../AlarmSchedulerService';
+import {
+  nextSnoozeFireTime,
+  SNOOZE_DURATION_SECONDS,
+  scheduleSnoozeAlarms,
+} from '../AlarmSchedulerService';
 import type { Notification } from '../NotificationService';
 import { scheduleReminderNotifications } from '../TodoReminderService';
 import {
@@ -138,22 +142,34 @@ export const handleAlarmDismissEffect = (
     // 3. スヌーズスケジュール（失敗してもセッションは有効に保つ）
     yield* Effect.gen(function* () {
       let snoozeIds: readonly string[] = [];
+      // 生存している中で最も早いスヌーズの発火時刻。null なら未確定
+      // （JS フォールバック側で nextSnoozeFireTime から算出する）
+      let firstFireAt: Date | null = null;
       const nativeSnoozeIds = yield* kit.getSnoozeAlarmIds;
       if (nativeSnoozeIds.length > 0) {
         // 取り込み前に別経路の syncAlarms が孤立キャンセルで消している可能性が
         // あるため、ネイティブ台帳と突合して生存している ID だけ採用する。
         // 死んだ ID を採用すると Live Activity はカウントダウンを表示するのに
-        // 9 分後に何も鳴らない
+        // 9 分後に何も鳴らない。
+        // ネイティブ側は 1..N 番目を発火順に生成・保存しているため、配列内の
+        // 元インデックスは「何分後のスヌーズか」を表す。先頭からいくつか
+        // 既に発火・キャンセル済みで消えていることがあり、生存突合後の先頭を
+        // 「9 分後」固定で扱うと、実際より早い時刻をカウントダウン表示する
         const registered = new Set(yield* kit.getAllAlarms);
+        const firstSurvivingIndex = nativeSnoozeIds.findIndex((id) => registered.has(id));
         snoozeIds = nativeSnoozeIds.filter((id) => registered.has(id));
         yield* kit.clearSnoozeAlarmIds;
+        if (firstSurvivingIndex >= 0) {
+          firstFireAt = new Date(
+            dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * (firstSurvivingIndex + 1),
+          );
+        }
       }
       if (snoozeIds.length === 0) {
         snoozeIds = yield* scheduleSnoozeAlarms(dismissTime);
+        firstFireAt = nextSnoozeFireTime(dismissTime);
       }
-      const snoozeFiresAt = new Date(
-        dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000,
-      ).toISOString();
+      const snoozeFiresAt = (firstFireAt ?? nextSnoozeFireTime(dismissTime)).toISOString();
       yield* Effect.promise(() =>
         useMorningSessionStore.getState().setSnoozeState(snoozeIds, snoozeFiresAt),
       );

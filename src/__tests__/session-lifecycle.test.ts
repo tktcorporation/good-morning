@@ -11,6 +11,7 @@ import {
   handleSnoozeArrivalEffect,
   onAllTodosCompletedEffect,
   runEffect,
+  SNOOZE_DURATION_SECONDS,
 } from '../services';
 import { recoverMissedDismiss, restoreSessionOnLaunch } from '../services/session';
 import { useMorningSessionStore } from '../stores/morning-session-store';
@@ -279,6 +280,24 @@ describe('handleAlarmDismissEffect', () => {
 
     expect(mockScheduleAlarm).not.toHaveBeenCalled();
     expect(useMorningSessionStore.getState().session?.snoozeAlarmIds).toEqual(['ns-1', 'ns-2']);
+  });
+
+  test('先頭のネイティブスヌーズが消えている場合、snoozeFiresAt は生存している最初のスヌーズの時刻になる', async () => {
+    // 生存突合で先頭 (9分後) が除外され次 (18分後) から残った場合、
+    // snoozeFiresAt を固定で「dismissTime+9分」にすると、Live Activity が
+    // 既に過ぎた時刻へカウントダウンしてしまう
+    const params = createStartParams();
+    mockGetSnoozeAlarmIds.mockReturnValueOnce(['dead-1', 'ns-2', 'ns-3']);
+    mockGetAllAlarms.mockReturnValue(['ns-2', 'ns-3']);
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.snoozeAlarmIds).toEqual(['ns-2', 'ns-3']);
+    const expectedFiresAt = new Date(
+      params.dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * 2,
+    ).toISOString();
+    expect(session?.snoozeFiresAt).toBe(expectedFiresAt);
   });
 
   test('falls back to JS snooze scheduling when native IDs empty', async () => {

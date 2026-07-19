@@ -222,6 +222,21 @@ export const scheduleWakeTargetAlarm = (
   });
 
 /**
+ * baseTime を基準に、次に発火する（now より未来の）スヌーズ時刻を計算する。
+ *
+ * scheduleSnoozeAlarms の過去 epoch スキップと同じ間隔計算を、呼び出し元が
+ * 「実際に何分後のスヌーズが最初に鳴るか」を知るために独立して使う
+ * （setSnoozeState の snoozeFiresAt をここから算出する）。
+ */
+export function nextSnoozeFireTime(baseTime: Date, now: Date = new Date()): Date {
+  let candidate = new Date(baseTime.getTime() + SNOOZE_DURATION_SECONDS * 1000);
+  while (candidate.getTime() <= now.getTime()) {
+    candidate = new Date(candidate.getTime() + SNOOZE_DURATION_SECONDS * 1000);
+  }
+  return candidate;
+}
+
+/**
  * スヌーズアラームを先行スケジュールする。
  * 9分間隔で count 本のアラームを登録する。
  */
