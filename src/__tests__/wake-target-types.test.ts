@@ -379,11 +379,15 @@ describe('resolveNextAlarmTime', () => {
   });
 
   test('翌日に nextOverride が設定されていて、今日のアラームが既に発火済みなら override 時刻を返す', () => {
+    // 二重鳴動を許容する設計のため、override 対象日でも通常アラームは維持
+    // される。通常アラーム(10:00)が override(9:00)より後なので、翌日最初に
+    // 鳴るのは override
     const target: WakeTarget = {
       ...baseTarget,
+      defaultTime: { hour: 10, minute: 0 },
       nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-27' },
     };
-    const now = new Date('2026-02-26T08:00:00');
+    const now = new Date('2026-02-26T10:30:00');
     expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 9, minute: 0 });
   });
 
@@ -406,6 +410,32 @@ describe('resolveNextAlarmTime', () => {
     const resolvedDate = resolveNextAlarmDate(baseTarget, now, 8);
     expect(resolvedDate).not.toBeNull();
     expect(formatLocalDate(resolvedDate as Date)).toBe('2026-02-27');
+  });
+
+  test('override 対象日でも、通常アラームがまだ発火していなければそちらを次のアラームとして返す', () => {
+    // override 対象日でも二重鳴動を許容する設計により通常アラームは維持される。
+    // resolveTimeForDate は override を優先して1つの時刻しか返さないため、
+    // これをそのまま使うと通常アラーム(7:00)がまだ鳴っていないのに
+    // override(9:00)を「次のアラーム」として誤って報告してしまう
+    const target: WakeTarget = {
+      ...baseTarget,
+      nextOverride: { time: { hour: 9, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    const now = new Date('2026-02-26T06:00:00');
+    expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 7, minute: 0 });
+  });
+
+  test('override が先に発火した後でも、同日のまだ発火していない通常アラームを次のアラームとして返す', () => {
+    // override(7:00) 発火後、通常アラーム(9:00) がまだ未来なのに、
+    // override 優先の単一候補判定だと「今日は発火済み」として翌日へ
+    // スキップしてしまい、当日の通常アラームを見逃す
+    const target: WakeTarget = {
+      ...baseTarget,
+      defaultTime: { hour: 9, minute: 0 },
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    };
+    const now = new Date('2026-02-26T07:05:00');
+    expect(resolveNextAlarmTime(target, now, 4)).toEqual({ hour: 9, minute: 0 });
   });
 });
 

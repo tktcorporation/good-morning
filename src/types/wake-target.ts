@@ -292,37 +292,57 @@ interface NextAlarmCandidate {
 /**
  * 現在時刻を基準に、次に鳴る予定のアラーム候補（時刻 + 属する日付）を解決する。
  *
- * resolveTimeForDate(target, now) は「今日」の予定時刻を返すだけで、今日の
- * アラームが既に発火済み（現在時刻が過ぎている）かどうかは考慮しない。
- * ウィジェット等の「次のアラームはいつか」表示にそのまま使うと、今日の
- * アラームを消化した後も同じ時刻を表示し続け、翌日に予定された
- * nextOverride があってもそれが反映されない。
+ * override 対象日でも通常の繰り返しアラームは維持される設計（二重鳴動を許容）
+ * のため、resolveTimeForDate（override 優先で1候補しか返さない）をそのまま
+ * 「次のアラーム」に使うと、通常アラームがまだ発火していないのに override を
+ * 誤って報告したり、override 発火後にまだ発火していない同日の通常アラームを
+ * 見逃したりする。当日・翌日それぞれの通常アラーム・override 候補を列挙し、
+ * その中から now より未来で最も早いものを選ぶ。
  *
  * dayBoundaryHour がアラーム時刻より後に設定されている場合、アラーム発火後
  * 〜境界通過前の時間帯は論理日がまだ前日のままのため、getNextLogicalDay
- * （論理日 + 1日）が「今日」に戻ってしまい、既に過ぎたアラームを再び
- * 「次のアラーム」として返してしまう。候補日が now の暦日と同じままなら
- * 実際に未来になるまでさらに 1 日ずつ進める。
+ * （論理日 + 1日）が「今日」に戻ってしまう。候補日が now の暦日と同じままなら
+ * 実際に翌日になるまでさらに 1 日ずつ進める。
  */
 function resolveNextAlarmCandidate(
   target: WakeTarget,
   now: Date,
   dayBoundaryHour: number,
 ): NextAlarmCandidate | null {
-  const todayTime = resolveTimeForDate(target, now);
-  if (todayTime !== null) {
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const todayMinutes = todayTime.hour * 60 + todayTime.minute;
-    if (todayMinutes > nowMinutes) {
-      return { time: todayTime, date: now };
-    }
-  }
   let nextDay = getNextLogicalDay(dayBoundaryHour, now);
   while (formatLocalDate(nextDay) === formatLocalDate(now)) {
     nextDay = new Date(nextDay.getTime() + 24 * 60 * 60 * 1000);
   }
-  const nextTime = resolveTimeForDate(target, nextDay);
-  return nextTime === null ? null : { time: nextTime, date: nextDay };
+
+  const dates = [now, nextDay];
+  const override = target.nextOverride;
+  const options: NextAlarmCandidate[] = [];
+  for (const date of dates) {
+    const regular = resolveRegularTimeForDate(target, date);
+    if (regular !== null) options.push({ time: regular, date });
+    if (override !== null && formatLocalDate(date) === override.targetDate) {
+      options.push({ time: override.time, date });
+    }
+  }
+
+  const upcoming = options
+    .map((option) => ({
+      option,
+      instant: new Date(
+        option.date.getFullYear(),
+        option.date.getMonth(),
+        option.date.getDate(),
+        option.time.hour,
+        option.time.minute,
+        0,
+      ),
+    }))
+    .filter((o) => o.instant.getTime() > now.getTime());
+  if (upcoming.length === 0) return null;
+
+  return upcoming.reduce((closest, current) =>
+    current.instant.getTime() < closest.instant.getTime() ? current : closest,
+  ).option;
 }
 
 /** 次に鳴る予定のアラーム時刻。詳細は resolveNextAlarmCandidate を参照。 */

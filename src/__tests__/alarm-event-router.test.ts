@@ -252,6 +252,33 @@ describe('handleAlarmEventEffect: スヌーズ payload', () => {
     expect(useMorningSessionStore.getState().session).not.toBeNull();
     expect(routerPush).toHaveBeenCalledWith('/');
   });
+
+  test('自動開始セッション（recordId=null）中にスヌーズが届いても、未消化の dismiss イベントを取りこぼさない', async () => {
+    // recordId=null の自動開始セッションは「dismiss 未処理」を意味する。
+    // handleSnoozeArrivalEffect は session が存在すれば true を返すため、
+    // これを「処理済み」と誤認して dismiss 復元をスキップすると、WakeRecord が
+    // 作られずネイティブスヌーズもセッションに取り込まれないまま残り、
+    // 後続の同期処理にそのスヌーズを孤立扱いでキャンセルされてしまう
+    let uuidCounter = 0;
+    mockGenerateUUID.mockImplementation(() => `uuid-${++uuidCounter}`);
+    useWakeTargetStore.setState({ target: createTarget(), loaded: true, alarmIds: [] });
+    setActiveSession({ recordId: null, snoozeAlarmIds: [] });
+    const dismissedAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    mockGetDismissEvents.mockReturnValue([{ alarmId: 'alarm-1', dismissedAt, payload: '' }]);
+    mockGetSnoozeAlarmIds.mockReturnValue(['ns-1']);
+    mockGetAllAlarms.mockReturnValue(['ns-1']);
+
+    const { opts } = routerOpts({
+      launchPayload: { alarmId: 'snooze-1', payload: '{"isSnooze":true}' },
+    });
+
+    await runEffect(handleAlarmEventEffect('cold-start', opts));
+
+    expect(useWakeRecordStore.getState().records).toHaveLength(1);
+    const session = useMorningSessionStore.getState().session;
+    expect(session?.recordId).not.toBeNull();
+    expect(session?.snoozeAlarmIds).toEqual(['ns-1']);
+  });
 });
 
 describe('handleAlarmEventEffect: tryAutoStartSession のロードガード', () => {

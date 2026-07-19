@@ -150,7 +150,14 @@ const handlePayloadEvent = (
   Effect.gen(function* () {
     if (isSnoozePayload(payload)) {
       const handled = yield* handleSnoozeArrivalEffect;
-      if (!handled) {
+      // handleSnoozeArrivalEffect は session が存在すれば true を返すが、
+      // tryAutoStartSession による自動開始セッション（recordId=null）は
+      // 「dismiss 未処理」を意味する。true だからと dismiss 復元をスキップ
+      // すると、WakeRecord が作られずネイティブスヌーズもセッションに
+      // 取り込まれないまま残り、後続の同期処理にそのスヌーズを孤立扱いで
+      // キャンセルされてしまう
+      const recordId = useMorningSessionStore.getState().session?.recordId ?? null;
+      if (!handled || recordId === null) {
         // アプリ非起動中に本アラームが dismiss され、スヌーズ通知経由で
         // 起動したケース。セッションが無いままスヌーズ到着だけ処理して終わると、
         // 未消化の primary dismiss イベント（WakeRecord・セッション・
