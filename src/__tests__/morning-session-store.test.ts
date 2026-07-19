@@ -297,3 +297,27 @@ describe('morning-session-store', () => {
     });
   });
 });
+
+describe('loadSession', () => {
+  // AsyncStorage.getItem や JSON.parse が失敗すると loadSession が reject し、
+  // loaded=false のまま固まる。すると syncAlarmsEffect 等の「session ロード待ち」
+  // ガードが永久に解除されず、target 変更などの明示的な操作をしてもアラーム同期が
+  // 二度と走らなくなる。読み取り・パースいずれの失敗でも reject せず、
+  // session=null で loaded=true に到達する必要がある
+
+  test('AsyncStorage.getItem が reject しても loaded=true・session=null で復旧する', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('storage unavailable'));
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.session).toBeNull();
+  });
+
+  test('破損 JSON でも reject せず loaded=true・session=null で復旧する', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce('not-json{{{');
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.session).toBeNull();
+  });
+});

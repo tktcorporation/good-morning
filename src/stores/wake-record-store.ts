@@ -51,18 +51,27 @@ async function persistRecords(records: readonly WakeRecord[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 }
 
+/** 永続化済み records のパース。破損は空扱い（loaded=false のまま固まるのを防ぐ）。 */
+function parseStoredRecords(raw: string | null): readonly WakeRecord[] {
+  if (raw === null) return [];
+  try {
+    return JSON.parse(raw) as readonly WakeRecord[];
+  } catch {
+    return [];
+  }
+}
+
 export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   records: [],
   loaded: false,
 
   loadRecords: async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw !== null) {
-      const parsed: readonly WakeRecord[] = JSON.parse(raw) as readonly WakeRecord[];
-      set({ records: parsed, loaded: true });
-    } else {
-      set({ loaded: true });
-    }
+    // 読み取り・パースいずれの失敗も reject させない: loadRecords が失敗すると
+    // loaded=false のまま固まり、syncAlarmsEffect 等の「records ロード待ち」
+    // ガードが永久に解除されず、target 変更などの明示的な操作をしても
+    // アラーム同期が二度と走らなくなる（wake-target-store の loadTarget と同じ理由）
+    const raw = await AsyncStorage.getItem(STORAGE_KEY).catch(() => null);
+    set({ records: parseStoredRecords(raw), loaded: true });
   },
 
   addRecord: async (data: Omit<WakeRecord, 'id'>): Promise<WakeRecord> => {

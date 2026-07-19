@@ -1,8 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWakeRecordStore } from '../stores/wake-record-store';
 import type { WakeRecord } from '../types/wake-record';
 
+const mockGetItem = AsyncStorage.getItem as jest.Mock;
+
 beforeEach(() => {
   useWakeRecordStore.setState({ records: [], loaded: false });
+  mockGetItem.mockReset();
+  mockGetItem.mockResolvedValue(null);
 });
 
 const sampleRecord: Omit<WakeRecord, 'id'> = {
@@ -99,5 +104,29 @@ describe('wake-record store', () => {
     expect(stats.totalRecords).toBe(3);
     expect(stats.successRate).toBeCloseTo(66.7, 0);
     expect(stats.averageDiffMinutes).toBe(10);
+  });
+});
+
+describe('loadRecords', () => {
+  // AsyncStorage.getItem や JSON.parse が失敗すると loadRecords が reject し、
+  // loaded=false のまま固まる。すると syncAlarmsEffect 等の「records ロード待ち」
+  // ガードが永久に解除されず、target 変更などの明示的な操作をしてもアラーム同期が
+  // 二度と走らなくなる。読み取り・パースいずれの失敗でも reject せず、
+  // 空の records で loaded=true に到達する必要がある
+
+  test('AsyncStorage.getItem が reject しても loaded=true・records=[] で復旧する', async () => {
+    mockGetItem.mockRejectedValueOnce(new Error('storage unavailable'));
+    await expect(useWakeRecordStore.getState().loadRecords()).resolves.toBeUndefined();
+    const state = useWakeRecordStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.records).toEqual([]);
+  });
+
+  test('破損 JSON でも reject せず loaded=true・records=[] で復旧する', async () => {
+    mockGetItem.mockResolvedValueOnce('not-json{{{');
+    await expect(useWakeRecordStore.getState().loadRecords()).resolves.toBeUndefined();
+    const state = useWakeRecordStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.records).toEqual([]);
   });
 });

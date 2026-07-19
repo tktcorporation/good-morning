@@ -67,19 +67,29 @@ async function persistSession(session: MorningSession | null): Promise<void> {
   }
 }
 
+/** 永続化済み session のパース。破損は未設定（null）扱い（loaded=false のまま固まるのを防ぐ）。 */
+function parseStoredSession(raw: string | null): MorningSession | null {
+  if (raw === null) return null;
+  try {
+    // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
+    const parsed = JSON.parse(raw) as StoredMorningSession;
+    return normalizeStoredSession(parsed);
+  } catch {
+    return null;
+  }
+}
+
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
   session: null,
   loaded: false,
 
   loadSession: async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw !== null) {
-      // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
-      const parsed = JSON.parse(raw) as StoredMorningSession;
-      set({ session: normalizeStoredSession(parsed), loaded: true });
-    } else {
-      set({ loaded: true });
-    }
+    // 読み取り・パースいずれの失敗も reject させない: loadSession が失敗すると
+    // loaded=false のまま固まり、syncAlarmsEffect 等の「session ロード待ち」
+    // ガードが永久に解除されず、target 変更などの明示的な操作をしても
+    // アラーム同期が二度と走らなくなる（wake-target-store の loadTarget と同じ理由）
+    const raw = await AsyncStorage.getItem(STORAGE_KEY).catch(() => null);
+    set({ session: parseStoredSession(raw), loaded: true });
   },
 
   startSession: async (
