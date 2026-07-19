@@ -171,6 +171,12 @@ export function resolveOverrideAwareDateStr(
  * 見落とし、セッションの自動開始が override 時刻まで遅れてしまう。当日の通常
  * アラーム・override の両方を候補にし、now が実際に含まれるウィンドウを選ぶ。
  *
+ * 候補のウィンドウが重なる場合（例: override 7:00・通常 7:10）、配列の並び順で
+ * 最初に一致したものを返すと、まだ発火していない候補を誤って選んでしまう
+ * ことがある。resolveDismissCandidate と同じ基準で、実際に発火済み
+ * （候補の絶対日時 <= now）のものを優先し、複数該当する場合は now に最も
+ * 近いものを選ぶ。
+ *
  * @returns ウィンドウ内ならセッション情報、そうでなければ null
  */
 export function checkSessionWindow(
@@ -193,13 +199,33 @@ export function checkSessionWindow(
     candidates.push(nextOverride.time);
   }
 
-  for (const resolvedTime of candidates) {
-    const { start, end } = getSessionWindow(resolvedTime, baseDate);
-    if (now.getTime() >= start.getTime() && now.getTime() < end.getTime()) {
-      return { resolvedTime, windowEnd: end, dateStr };
-    }
-  }
-  return null;
+  const inWindow = candidates
+    .map((resolvedTime) => {
+      const { start, end } = getSessionWindow(resolvedTime, baseDate);
+      const instant = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        baseDate.getDate(),
+        resolvedTime.hour,
+        resolvedTime.minute,
+        0,
+      );
+      return { resolvedTime, start, end, instant };
+    })
+    .filter((c) => now.getTime() >= c.start.getTime() && now.getTime() < c.end.getTime());
+
+  if (inWindow.length === 0) return null;
+
+  const fired = inWindow.filter((c) => c.instant.getTime() <= now.getTime());
+  const pool = fired.length > 0 ? fired : inWindow;
+
+  const chosen = pool.reduce((closest, current) => {
+    const closestDiff = Math.abs(now.getTime() - closest.instant.getTime());
+    const currentDiff = Math.abs(now.getTime() - current.instant.getTime());
+    return currentDiff < closestDiff ? current : closest;
+  });
+
+  return { resolvedTime: chosen.resolvedTime, windowEnd: chosen.end, dateStr };
 }
 
 // ─── ペイロード判定（純粋関数） ──────────────────────────────────

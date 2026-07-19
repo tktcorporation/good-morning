@@ -174,6 +174,24 @@ describe('checkSessionWindow', () => {
     expect(result?.dateStr).toBe('2026-02-25');
   });
 
+  test('同日 override と通常アラームのウィンドウが重なる場合、既に発火した方を優先する', () => {
+    // override(7:00)・通常(7:10) のウィンドウは重なる（6:30-7:30 と 6:40-7:40）。
+    // now=7:05 は両方のウィンドウ内だが、候補配列への追加順（通常→override）
+    // だけで最初に一致したものを返すと、まだ発火していない通常(7:10)を
+    // 誤って選んでしまう。実際に発火済みの override(7:00) を優先する必要がある
+    const target = targetWithTodos({
+      defaultTime: { hour: 7, minute: 10 },
+      nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
+    });
+    const now = new Date('2026-02-26T07:05:00');
+
+    const result = checkSessionWindow(now, target, 4);
+
+    expect(result).not.toBeNull();
+    expect(result?.resolvedTime).toEqual({ hour: 7, minute: 0 });
+    expect(result?.windowEnd).toEqual(new Date('2026-02-26T07:30:00'));
+  });
+
   test('override 対象日でも、まだ発火していない通常アラームのウィンドウ内なら通常アラームでセッションを自動開始する', () => {
     // 二重鳴動を許容する設計のため、override 対象日でも通常アラームは維持される。
     // resolveTimeForDate は override を常に優先するため、これをそのまま使うと
