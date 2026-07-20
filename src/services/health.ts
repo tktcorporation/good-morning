@@ -4,6 +4,7 @@ import {
   queryCategorySamples,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
+import { addDays, minutesBetween } from '../utils/date';
 import { logError } from '../utils/logger';
 
 export interface SleepSummary {
@@ -79,14 +80,14 @@ export function extractMainSleepSession(
   for (let i = 1; i < sorted.length; i++) {
     const sample = sorted[i];
     if (sample === undefined) continue;
-    const gapMinutes = (sample.startDate.getTime() - sessionEnd.getTime()) / (1000 * 60);
+    const gapMinutes = minutesBetween(sessionEnd, sample.startDate);
 
     if (gapMinutes > SESSION_GAP_THRESHOLD_MINUTES) {
       // 新しいセッション開始 → 現在のセッションを確定
       sessions.push({
         start: sessionStart,
         end: sessionEnd,
-        totalMinutes: Math.round((sessionEnd.getTime() - sessionStart.getTime()) / (1000 * 60)),
+        totalMinutes: Math.round(minutesBetween(sessionStart, sessionEnd)),
       });
       sessionStart = sample.startDate;
       sessionEnd = sample.endDate;
@@ -102,7 +103,7 @@ export function extractMainSleepSession(
   sessions.push({
     start: sessionStart,
     end: sessionEnd,
-    totalMinutes: Math.round((sessionEnd.getTime() - sessionStart.getTime()) / (1000 * 60)),
+    totalMinutes: Math.round(minutesBetween(sessionStart, sessionEnd)),
   });
 
   // 最も長いセッションを主睡眠として返す
@@ -133,8 +134,7 @@ export async function getSleepSummary(date: Date): Promise<SleepSummary | null> 
   if (!isHealthDataAvailable()) return null;
 
   try {
-    const startDate = new Date(date);
-    startDate.setDate(startDate.getDate() - 1);
+    const startDate = addDays(date, -1);
     startDate.setHours(18, 0, 0, 0);
     const endDate = new Date(date);
     endDate.setHours(18, 0, 0, 0);

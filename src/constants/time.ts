@@ -11,7 +11,9 @@
 
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
-const MS_PER_MINUTE = 60 * 1000;
+
+/** 1 分のミリ秒数。Date 差分をミリ秒→分に変換する用途で使う。 */
+export const MS_PER_MINUTE = 60 * 1000;
 
 /** 1 日の分数。深夜を跨ぐ時刻差の補正（±1440）に使う。 */
 export const MINUTES_PER_DAY = HOURS_PER_DAY * MINUTES_PER_HOUR;

@@ -15,7 +15,7 @@ import {
 import type { StorageError } from '../services/errors';
 import type { WakeRecord, WakeResult, WakeStats, WakeTodoRecord } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
-import { formatLocalDate } from '../utils/date';
+import { addDays, formatLocalDate, parseLocalDateString } from '../utils/date';
 import { logError, logWarn } from '../utils/logger';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
@@ -238,8 +238,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   },
 
   getWeekStats: (weekStartStr: string): WakeStats => {
-    const weekEnd = new Date(`${weekStartStr}T00:00:00`);
-    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEnd = addDays(parseLocalDateString(weekStartStr), 6);
     const endStr = formatLocalDate(weekEnd);
     const periodRecords = get().records.filter((r) => r.date >= weekStartStr && r.date <= endStr);
 
@@ -305,7 +304,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     let previousDate: Date | null = null;
 
     for (const record of sorted) {
-      const currentDate = new Date(`${record.date}T00:00:00`);
+      const currentDate = parseLocalDateString(record.date);
 
       // Check for date gap: if more than 1 day between consecutive records, break streak
       if (previousDate !== null) {

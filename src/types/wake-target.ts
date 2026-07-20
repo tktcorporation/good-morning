@@ -1,4 +1,4 @@
-import { formatLocalDate, getLogicalDate, getLogicalDateString } from '../utils/date';
+import { addDays, formatLocalDate, getLogicalDate, getLogicalDateString } from '../utils/date';
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 /**
@@ -129,7 +129,7 @@ interface DismissCandidate {
 
 /** DismissCandidate が実際に発火する絶対日時を計算する。 */
 function toDismissInstant(dismissTime: Date, candidate: DismissCandidate): Date {
-  const base = new Date(dismissTime.getTime() + candidate.dayOffset * 24 * 60 * 60 * 1000);
+  const base = addDays(dismissTime, candidate.dayOffset);
   return new Date(
     base.getFullYear(),
     base.getMonth(),
@@ -157,7 +157,7 @@ function collectDismissCandidates(
 ): readonly DismissCandidate[] {
   const candidates: DismissCandidate[] = [];
   const override = target.nextOverride;
-  const prevDay = new Date(dismissTime.getTime() - 24 * 60 * 60 * 1000);
+  const prevDay = addDays(dismissTime, -1);
 
   const todayRegular = resolveRegularTimeForDate(target, dismissTime);
   if (todayRegular !== null) candidates.push({ time: todayRegular, dayOffset: 0 });
@@ -295,9 +295,7 @@ export function isNextOverrideExpired(override: NextOverride, now: Date = new Da
  * ものであり、実際の targetDate 確定は resolveOverrideSaveDate が行う。
  */
 export function getNextLogicalDay(dayBoundaryHour: number, now: Date = new Date()): Date {
-  const nextDay = new Date(getLogicalDate(now, dayBoundaryHour).getTime());
-  nextDay.setDate(nextDay.getDate() + 1);
-  return nextDay;
+  return addDays(getLogicalDate(now, dayBoundaryHour), 1);
 }
 
 /** resolveNextAlarmCandidate の戻り値。date は time が属する暦日（ラベル表示等に使う）。 */
@@ -333,14 +331,14 @@ function resolveNextAlarmCandidate(
 ): NextAlarmCandidate | null {
   let nextDay = getNextLogicalDay(dayBoundaryHour, now);
   while (formatLocalDate(nextDay) === formatLocalDate(now)) {
-    nextDay = new Date(nextDay.getTime() + 24 * 60 * 60 * 1000);
+    nextDay = addDays(nextDay, 1);
   }
 
   const dates = [now];
   let cursor = nextDay;
   for (let i = 0; i < 7; i++) {
     dates.push(cursor);
-    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+    cursor = addDays(cursor, 1);
   }
   const override = target.nextOverride;
   const options: NextAlarmCandidate[] = [];
@@ -422,7 +420,7 @@ export function resolveOverrideEditDay(
     0,
   );
   if (candidate.getTime() <= now.getTime()) {
-    return new Date(day.getTime() + 24 * 60 * 60 * 1000);
+    return addDays(day, 1);
   }
   return day;
 }
@@ -445,7 +443,7 @@ export function resolveOverrideSaveDate(
   time: AlarmTime,
   now: Date = new Date(),
 ): string {
-  const alarmDate = new Date(
+  let alarmDate = new Date(
     editDay.getFullYear(),
     editDay.getMonth(),
     editDay.getDate(),
@@ -455,7 +453,7 @@ export function resolveOverrideSaveDate(
     0,
   );
   if (alarmDate.getTime() <= now.getTime()) {
-    alarmDate.setDate(alarmDate.getDate() + 1);
+    alarmDate = addDays(alarmDate, 1);
   }
   return formatLocalDate(alarmDate);
 }
