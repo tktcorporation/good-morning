@@ -39,10 +39,10 @@ export default function SquatCheckScreen() {
   /**
    * SquatChallengeItem を強制リマウントするためのキー。
    *
-   * useSquatDetector は内部に検出回数の useState を持つため、todo を初期化するだけだと
-   * 「前回の累積カウント + 1」で targetCount に到達してしまい、1 回のスクワットで
-   * 完了扱いになる（Codex 指摘 PR #72）。key を変えて子ツリーを unmount → mount し、
-   * フック内部の state も含めて確実にリセットする。
+   * useSquatDetector はフェーズ判定状態とデバウンス用タイムスタンプを内部に持つ。
+   * todo を初期化するだけだとリセット直前の状態（デバウンス中等）が残り、
+   * リセット直後の最初のスクワットを取りこぼしうる。key を変えて子ツリーを
+   * unmount → mount し、フック内部の state も含めて確実にリセットする。
    */
   const [resetId, setResetId] = useState(0);
   const debug = useMotionDebug(true);

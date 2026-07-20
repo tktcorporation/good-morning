@@ -134,7 +134,12 @@ interface WakeRecordState {
    * dayBoundaryHour を無視し、深夜帯にレコードが見つからない。
    */
   getWeekStats: (weekStartStr: string) => WakeStats;
-  getCurrentStreak: () => number;
+  /**
+   * WakeRecord.result（great/ok）ベースの連続成功日数（直近から遡って算出）。
+   * DailyGradeStore の StreakState.currentStreak（ダッシュボード等に表示される
+   * 「本物」のストリーク）とは別概念。現状 UI からは参照されていない。
+   */
+  getCurrentWakeResultStreak: () => number;
 }
 
 function persistRecords(records: readonly WakeRecord[]): Promise<void> {
@@ -248,8 +253,8 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
       return {
         successRate: 0,
         averageDiffMinutes: 0,
-        currentStreak: 0,
-        longestStreak: 0,
+        wakeResultCurrentStreak: 0,
+        wakeResultLongestStreak: 0,
         totalRecords: 0,
         resultCounts: { great: 0, ok: 0, late: 0, missed: 0 },
       };
@@ -269,33 +274,33 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
 
     // Calculate streaks within the period
     const sorted = [...periodRecords].sort((a, b) => a.date.localeCompare(b.date));
-    let currentStreak = 0;
-    let longestStreak = 0;
+    let wakeResultCurrentStreak = 0;
+    let wakeResultLongestStreak = 0;
     let streak = 0;
 
     for (const record of sorted) {
       if (isSuccessWakeResult(record.result)) {
         streak += 1;
-        if (streak > longestStreak) {
-          longestStreak = streak;
+        if (streak > wakeResultLongestStreak) {
+          wakeResultLongestStreak = streak;
         }
       } else {
         streak = 0;
       }
     }
-    currentStreak = streak;
+    wakeResultCurrentStreak = streak;
 
     return {
       successRate: Math.round(successRate * 10) / 10,
       averageDiffMinutes,
-      currentStreak,
-      longestStreak,
+      wakeResultCurrentStreak,
+      wakeResultLongestStreak,
       totalRecords,
       resultCounts,
     };
   },
 
-  getCurrentStreak: (): number => {
+  getCurrentWakeResultStreak: (): number => {
     const { records } = get();
     if (records.length === 0) return 0;
 

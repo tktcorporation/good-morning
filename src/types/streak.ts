@@ -15,9 +15,14 @@
  * AsyncStorage に永続化され、毎日のグレード確定時に更新される。
  */
 export interface StreakState {
-  /** 現在の連続達成日数 */
+  /**
+   * 現在の連続達成日数。DailyGrade（excellent/good/fair/poor）とフリーズ制度に
+   * 基づく、ダッシュボード等に実際に表示される「本物」のストリーク。
+   * WakeStats.wakeResultCurrentStreak（WakeRecord.result ベースの別概念）とは
+   * 算出方法が異なるため混同しないこと。
+   */
   readonly currentStreak: number;
-  /** 過去最長の連続達成日数 */
+  /** 過去最長の連続達成日数。WakeStats.wakeResultLongestStreak とは別概念。 */
   readonly longestStreak: number;
   /** 残りフリーズ回数（0〜MAX_FREEZES）。excellent 獲得で +1、poor で -1 */
   readonly freezesAvailable: number;

@@ -30,6 +30,7 @@ import { bestEffort } from '../effect-utils';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
 import { handleAlarmDismissEffect, recordWakeDismiss } from './DismissService';
+import { isFullSyncReady } from './readiness';
 import { isSnoozeEvent, resolveOverrideAwareDateStr, type SessionError } from './types';
 
 /**
@@ -151,21 +152,13 @@ export const recoverMissedDismiss = (
     const kit = yield* AlarmKit;
 
     const targetState = useWakeTargetStore.getState();
-    const recordState = useWakeRecordStore.getState();
     const sessionState = useMorningSessionStore.getState();
-    if (
-      !targetState.loaded ||
-      targetState.target === null ||
-      !recordState.loaded ||
-      !sessionState.loaded ||
-      !useSettingsStore.getState().loaded
-    ) {
-      // dayBoundaryHour（設定未ロード時はデフォルト値のまま）で論理日付が
-      // ズレると、record/session の重複判定・作成が誤った日付で行われる。
-      // session 未ロードのまま進むと isActive()（session !== null）が
-      // 常に false になり、実際には dismiss 未処理の可能性があるのに
-      // processPrimaryDismissEvent の戻り値だけを見て
-      // clearDismissEvents してしまう（handleAlarmDismissEffect 側の
+    if (!isFullSyncReady() || targetState.target === null) {
+      // ストア未ロードのまま進むと record/session の重複判定・作成が誤った
+      // 日付で行われる（理由は isFullSyncReady 参照）。session 未ロードのまま
+      // 進むと isActive()（session !== null）が常に false になり、実際には
+      // dismiss 未処理の可能性があるのに processPrimaryDismissEvent の戻り値
+      // だけを見て clearDismissEvents してしまう（handleAlarmDismissEffect 側の
       // session 未ロードガードで record/session 作成自体は行われないため、
       // イベントだけが失われる）
       return false;

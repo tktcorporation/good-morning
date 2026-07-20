@@ -124,12 +124,17 @@ export function useGradeFinalization(): void {
 
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
 
   // useRef で finalize 中かどうかを追跡し、並行実行を防止する
   const finalizingRef = useRef(false);
 
   useEffect(() => {
-    if (!(gradeLoaded && recordsLoaded && targetLoaded)) return;
+    // settings 未ロードだと dayBoundaryHour がデフォルト値のままの可能性があり、
+    // 日付走査の論理日付（getLogicalDateString）がズレて誤った日にグレードを
+    // 確定してしまう。他のセッション系サービス（RecoveryService 等）と同様、
+    // settings のロード完了も待つ。
+    if (!(gradeLoaded && recordsLoaded && targetLoaded && settingsLoaded)) return;
     if (hasFinalized) return;
     if (finalizingRef.current) return;
 
@@ -179,6 +184,7 @@ export function useGradeFinalization(): void {
     gradeLoaded,
     recordsLoaded,
     targetLoaded,
+    settingsLoaded,
     streak.lastGradedDate,
     records,
     target,

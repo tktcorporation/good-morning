@@ -47,8 +47,15 @@ export interface WakeRecord {
 export interface WakeStats {
   readonly successRate: number; // 0-100
   readonly averageDiffMinutes: number;
-  readonly currentStreak: number;
-  readonly longestStreak: number;
+  /**
+   * WakeRecord.result（great/ok）が連続した日数。DailyGradeStore の
+   * StreakState.currentStreak（DailyGrade + フリーズ制度ベース、ダッシュボード等に
+   * 表示される「本物」のストリーク）とは算出方法が異なる別概念のため、
+   * 混同を避けて wakeResult を冠した名前にしている。
+   */
+  readonly wakeResultCurrentStreak: number;
+  /** wakeResultCurrentStreak の期間内最長値。StreakState.longestStreak とは別概念。 */
+  readonly wakeResultLongestStreak: number;
   readonly totalRecords: number;
   readonly resultCounts: Record<WakeResult, number>;
 }

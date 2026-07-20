@@ -54,7 +54,7 @@ describe('wake-record store', () => {
     await store.addRecord({ ...sampleRecord, date: '2026-02-20', result: 'great' });
     await store.addRecord({ ...sampleRecord, date: '2026-02-21', result: 'great' });
     await store.addRecord({ ...sampleRecord, date: '2026-02-22', result: 'great' });
-    expect(useWakeRecordStore.getState().getCurrentStreak()).toBe(3);
+    expect(useWakeRecordStore.getState().getCurrentWakeResultStreak()).toBe(3);
   });
 
   it('breaks streak on late day', async () => {
@@ -62,7 +62,7 @@ describe('wake-record store', () => {
     await store.addRecord({ ...sampleRecord, date: '2026-02-20', result: 'great' });
     await store.addRecord({ ...sampleRecord, date: '2026-02-21', result: 'late' });
     await store.addRecord({ ...sampleRecord, date: '2026-02-22', result: 'great' });
-    expect(useWakeRecordStore.getState().getCurrentStreak()).toBe(1);
+    expect(useWakeRecordStore.getState().getCurrentWakeResultStreak()).toBe(1);
   });
 
   it('updates todosCompleted via updateRecord', async () => {

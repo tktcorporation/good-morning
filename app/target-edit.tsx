@@ -33,7 +33,10 @@ export default function TargetEditScreen() {
 
   const currentResolvedTime = useMemo(() => {
     if (target === null || editDay === null) return { hour: 7, minute: 0 };
-    return resolveTimeForDate(target, editDay) ?? { hour: 7, minute: 0 };
+    // editDay が OFF 曜日の場合 resolveTimeForDate は null を返す。ハードコードした
+    // 時刻ではなく target.defaultTime にフォールバックしないと、ピッカーの初期値が
+    // ユーザーの設定と無関係な固定時刻になり、そのまま保存すると意図せず上書きする。
+    return resolveTimeForDate(target, editDay) ?? target.defaultTime;
   }, [target, editDay]);
 
   const [hour, setHour] = useState(currentResolvedTime.hour);

@@ -11,7 +11,6 @@
 
 import { Effect } from 'effect';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
-import { useSettingsStore } from '../../stores/settings-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { AlarmTime } from '../../types/alarm';
 import type { SessionTodo } from '../../types/morning-session';
@@ -28,6 +27,7 @@ import {
 import { bestEffort } from '../effect-utils';
 import type { Notification } from '../NotificationService';
 import { scheduleReminderNotifications } from '../TodoReminderService';
+import { isDismissProcessingReady } from './readiness';
 import { type AlarmDismissParams, SESSION_WINDOW_AFTER_MINUTES, type SessionError } from './types';
 
 /** recordWakeDismiss の戻り値。呼び出し元がセッション紐づけの要否を判断するための情報を含む。 */
@@ -122,22 +122,9 @@ export const handleAlarmDismissEffect = (
   Effect.gen(function* () {
     const { target, alarmInstant, dismissTime, mountedAt, dayBoundaryHour } = params;
 
-    // WakeRecord の永続化はメモリ上の records 配列全体を書き戻す実装のため、
-    // records が未ロード（空配列のまま）の状態で addRecord すると、
-    // 既存の起床履歴全体が新規レコード 1 件で上書きされる。
-    // session も同様: 未ロードだと isActive()（session !== null）が false
-    // になり、実際には進行中セッションが永続化されているのに startSession
-    // が新規セッションで上書き保存してしまう。settings も同様: 未ロードだと
-    // dayBoundaryHour がデフォルト値のままになり、誤った論理日付で
-    // record/session が作成・紐づけされる。
-    // ロードが完了していない場合は履歴・セッションを壊すより処理を諦める方が安全。
-    if (
-      !(
-        useWakeRecordStore.getState().loaded &&
-        useMorningSessionStore.getState().loaded &&
-        useSettingsStore.getState().loaded
-      )
-    ) {
+    // ロードが完了していない場合は履歴・セッションを壊すより処理を諦める方が安全
+    // （理由は isDismissProcessingReady 参照）。
+    if (!isDismissProcessingReady()) {
       return;
     }
 
