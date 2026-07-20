@@ -16,6 +16,21 @@ import type { WakeResult } from '../types/wake-record';
 import { normalizeMinuteDiff } from '../utils/date';
 
 /**
+ * 完了時刻が起床目標デッドライン以内かどうかを判定する。
+ *
+ * WakeRecord.result（CompletionService.onAllTodosCompletedEffect が TODO 全完了
+ * 直後に確定）と DailyGrade の morningPass（isMorningPass が翌朝グレード確定時に
+ * 算出）の両方がこの判定基準を参照する。境界条件（等号の向き等）を片方だけ
+ * 変えると、同じ起床について WakeRecord.result と grade の合否が食い違う
+ * ため、比較ロジックをここに集約する。
+ */
+export function isWithinGoalDeadline(completedAt: string | Date, goalDeadline: string): boolean {
+  const completedTime =
+    typeof completedAt === 'string' ? new Date(completedAt).getTime() : completedAt.getTime();
+  return completedTime <= new Date(goalDeadline).getTime();
+}
+
+/**
  * 朝の起床が「合格」かどうかを判定する。
  *
  * goalDeadline がある場合（バッファ設定あり＋TODOあり）:
@@ -39,7 +54,7 @@ export function isMorningPass(
   // goalDeadline がある場合: TODO完了 + デッドライン内で判定
   if (goalDeadline != null) {
     if (todosCompleted !== true || todosCompletedAt == null) return false;
-    return new Date(todosCompletedAt).getTime() <= new Date(goalDeadline).getTime();
+    return isWithinGoalDeadline(todosCompletedAt, goalDeadline);
   }
   // フォールバック: 従来の WakeResult ベース判定
   return result === 'great' || result === 'ok';

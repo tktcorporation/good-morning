@@ -3,9 +3,33 @@ import {
   calculateDailyGrade,
   evaluateBedtime,
   isMorningPass,
+  isWithinGoalDeadline,
 } from '../domain/grade-calculator';
 import type { StreakState } from '../types/streak';
 import { MAX_FREEZES } from '../types/streak';
+
+describe('isWithinGoalDeadline', () => {
+  // WakeRecord.result（CompletionService）と DailyGrade の morningPass
+  // （isMorningPass）が同じ基準を共有していることを保証する回帰テスト
+  const deadline = '2026-02-26T07:30:00.000Z';
+
+  it('returns true when completed before the deadline', () => {
+    expect(isWithinGoalDeadline('2026-02-26T07:25:00.000Z', deadline)).toBe(true);
+  });
+
+  it('returns true when completed exactly at the deadline (inclusive)', () => {
+    expect(isWithinGoalDeadline(deadline, deadline)).toBe(true);
+  });
+
+  it('returns false when completed after the deadline', () => {
+    expect(isWithinGoalDeadline('2026-02-26T07:31:00.000Z', deadline)).toBe(false);
+  });
+
+  it('accepts a Date instance as well as an ISO string', () => {
+    expect(isWithinGoalDeadline(new Date('2026-02-26T07:25:00.000Z'), deadline)).toBe(true);
+    expect(isWithinGoalDeadline(new Date('2026-02-26T07:31:00.000Z'), deadline)).toBe(false);
+  });
+});
 
 describe('isMorningPass', () => {
   describe('without goalDeadline (legacy fallback)', () => {

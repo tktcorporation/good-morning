@@ -461,6 +461,15 @@ export function resolveOverrideSaveDate(
 /** デフォルトの起床目標バッファ（分）。アラーム後30分以内にTODO完了で成功。 */
 export const DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES = 30;
 
+/**
+ * 起床目標バッファの許容範囲（分）。UI（GoalBufferSection）の±5分刻み調整と
+ * store の setWakeUpGoalBufferMinutes の両方でこの範囲を SSOT として使う。
+ * 下限10分は「TODO完了に最低限必要な時間」、上限120分は
+ * 「バッファとして意味を保てる上限」として設定。
+ */
+export const MIN_WAKE_UP_GOAL_BUFFER_MINUTES = 10;
+export const MAX_WAKE_UP_GOAL_BUFFER_MINUTES = 120;
+
 export const DEFAULT_WAKE_TARGET: WakeTarget = {
   defaultTime: { hour: 7, minute: 0 },
   dayOverrides: {},

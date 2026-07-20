@@ -225,9 +225,8 @@ function GoalBufferSection({
       <View style={styles.bufferRow}>
         <Pressable
           style={styles.bufferButton}
-          onPress={() =>
-            setWakeUpGoalBufferMinutes(Math.max(10, target.wakeUpGoalBufferMinutes - 5))
-          }
+          // 範囲クランプは store 側（setWakeUpGoalBufferMinutes）が単一のソースとして行う
+          onPress={() => setWakeUpGoalBufferMinutes(target.wakeUpGoalBufferMinutes - 5)}
         >
           <Text style={styles.bufferButtonText}>{'-'}</Text>
         </Pressable>
@@ -236,9 +235,7 @@ function GoalBufferSection({
         </Text>
         <Pressable
           style={styles.bufferButton}
-          onPress={() =>
-            setWakeUpGoalBufferMinutes(Math.min(120, target.wakeUpGoalBufferMinutes + 5))
-          }
+          onPress={() => setWakeUpGoalBufferMinutes(target.wakeUpGoalBufferMinutes + 5)}
         >
           <Text style={styles.bufferButtonText}>{'+'}</Text>
         </Pressable>

@@ -11,6 +11,8 @@ import {
   DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
   isFixedSquatTodoList,
   isNextOverrideExpired,
+  MAX_WAKE_UP_GOAL_BUFFER_MINUTES,
+  MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
   resolveOverrideSaveDate,
 } from '../types/wake-target';
 import { logError } from '../utils/logger';
@@ -341,7 +343,11 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   setWakeUpGoalBufferMinutes: async (minutes: number) => {
     const { target } = get();
     if (target === null) return;
-    const updated: WakeTarget = { ...target, wakeUpGoalBufferMinutes: minutes };
+    const clamped = Math.max(
+      MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
+      Math.min(MAX_WAKE_UP_GOAL_BUFFER_MINUTES, minutes),
+    );
+    const updated: WakeTarget = { ...target, wakeUpGoalBufferMinutes: clamped };
     set({ target: updated });
     await persist(updated);
   },

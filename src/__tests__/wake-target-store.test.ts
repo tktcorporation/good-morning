@@ -247,6 +247,25 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBeNull();
   });
 
+  test('setWakeUpGoalBufferMinutes は範囲内の値をそのまま設定する', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    mockSetItem.mockClear();
+    await useWakeTargetStore.getState().setWakeUpGoalBufferMinutes(45);
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(45);
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"wakeUpGoalBufferMinutes":45'),
+    );
+  });
+
+  test('setWakeUpGoalBufferMinutes は下限未満・上限超過を範囲内にクランプする', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    await useWakeTargetStore.getState().setWakeUpGoalBufferMinutes(5);
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(10);
+    await useWakeTargetStore.getState().setWakeUpGoalBufferMinutes(999);
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(120);
+  });
+
   test('loadTarget migrates legacy bedtimeTarget to targetSleepMinutes', async () => {
     const legacyTarget = {
       defaultTime: { hour: 6, minute: 0 },

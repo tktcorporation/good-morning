@@ -10,6 +10,7 @@
  */
 
 import { Effect } from 'effect';
+import { isWithinGoalDeadline } from '../../domain/grade-calculator';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { MorningSession } from '../../types/morning-session';
@@ -60,7 +61,7 @@ export const onAllTodosCompletedEffect = (
 
       const goalBasedResult =
         session.goalDeadline !== null
-          ? now.getTime() <= new Date(session.goalDeadline).getTime()
+          ? isWithinGoalDeadline(now, session.goalDeadline)
             ? ('great' as const)
             : ('late' as const)
           : undefined;
