@@ -13,6 +13,7 @@ import {
   isNextOverrideExpired,
   resolveOverrideSaveDate,
 } from '../types/wake-target';
+import { logError } from '../utils/logger';
 import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeTarget;
@@ -226,8 +227,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     try {
       ({ raw, rawIds } = await runEffect(readStoredEffect()));
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[wake-target-store] loadTarget failed after retries', error);
+      logError('wake-target-store', 'loadTarget failed after retries', error);
       return;
     }
 

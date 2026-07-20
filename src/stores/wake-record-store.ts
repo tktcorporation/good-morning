@@ -16,6 +16,7 @@ import type { StorageError } from '../services/errors';
 import type { WakeRecord, WakeResult, WakeStats, WakeTodoRecord } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
 import { formatLocalDate } from '../utils/date';
+import { logError, logWarn } from '../utils/logger';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
 
@@ -154,8 +155,7 @@ function parseStoredRecords(decoded: readonly unknown[]): readonly WakeRecord[] 
     if (record !== null) {
       records.push(record);
     } else {
-      // biome-ignore lint/suspicious/noConsole: 破損レコードのスキップを可視化する
-      console.warn('[wake-record-store] 不正な形状の WakeRecord をスキップしました', raw);
+      logWarn('wake-record-store', '不正な形状の WakeRecord をスキップしました', raw);
     }
   }
   return records;
@@ -188,8 +188,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
       const records = await runEffect(loadRecordsEffect());
       set({ records, loaded: true });
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[wake-record-store] loadRecords failed after retries', error);
+      logError('wake-record-store', 'loadRecords failed after retries', error);
     }
   },
 

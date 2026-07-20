@@ -27,6 +27,7 @@ import type { AlarmTime } from '../types/alarm';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { WakeRecord } from '../types/wake-record';
 import { getLogicalDateString } from '../utils/date';
+import { logError } from '../utils/logger';
 import { calculateBedtime } from '../utils/sleep';
 
 /**
@@ -175,8 +176,7 @@ export function useGradeFinalization(): void {
     };
 
     finalize().catch((error: unknown) => {
-      // biome-ignore lint/suspicious/noConsole: グレード確定処理の失敗を握り潰さず可視化する
-      console.error('[useGradeFinalization] finalize failed', error);
+      logError('useGradeFinalization', 'finalize failed', error);
     });
   }, [
     gradeLoaded,

@@ -35,6 +35,7 @@ export {
 export { syncAlarmsEffect } from './AlarmSyncService';
 // Legacy-compatible wrappers (Effect サービスを async/sync 関数として提供)
 export { checkLaunchPayload, initializeAlarmKit, isAlarmKitAvailable } from './compat';
+export { bestEffort } from './effect-utils';
 // Errors
 export {
   AlarmKitOperationError,

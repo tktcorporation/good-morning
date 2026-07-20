@@ -25,6 +25,7 @@ import {
   SNOOZE_DURATION_SECONDS,
   scheduleSnoozeAlarms,
 } from '../AlarmSchedulerService';
+import { bestEffort } from '../effect-utils';
 import type { Notification } from '../NotificationService';
 import { scheduleReminderNotifications } from '../TodoReminderService';
 import { type AlarmDismissParams, SESSION_WINDOW_AFTER_MINUTES, type SessionError } from './types';
@@ -180,67 +181,69 @@ export const handleAlarmDismissEffect = (
     }
 
     // 3. スヌーズスケジュール（失敗してもセッションは有効に保つ）
-    yield* Effect.gen(function* () {
-      let snoozeIds: readonly string[] = [];
-      // 生存している中で最も早いスヌーズの発火時刻。null なら未確定
-      // （JS フォールバック側で nextSnoozeFireTime から算出する）
-      let firstFireAt: Date | null = null;
-      const nativeSnoozeIds = yield* kit.getSnoozeAlarmIds;
-      if (nativeSnoozeIds.length > 0) {
-        // 取り込み前に別経路の syncAlarms が孤立キャンセルで消している可能性が
-        // あるため、ネイティブ台帳と突合して生存している ID だけ採用する。
-        // 死んだ ID を採用すると Live Activity はカウントダウンを表示するのに
-        // 9 分後に何も鳴らない。
-        // ネイティブ側は 1..N 番目を発火順に生成・保存しているため、配列内の
-        // 元インデックスは「何分後のスヌーズか」を表す。先頭からいくつか
-        // 既に発火・キャンセル済みで消えていることがあり、生存突合後の先頭を
-        // 「9 分後」固定で扱うと、実際より早い時刻をカウントダウン表示する
-        const registered = new Set(yield* kit.getAllAlarms);
-        const firstSurvivingIndex = nativeSnoozeIds.findIndex((id) => registered.has(id));
-        snoozeIds = nativeSnoozeIds.filter((id) => registered.has(id));
-        yield* kit.clearSnoozeAlarmIds;
-        if (firstSurvivingIndex >= 0) {
-          firstFireAt = new Date(
-            dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * (firstSurvivingIndex + 1),
-          );
+    yield* bestEffort(
+      Effect.gen(function* () {
+        let snoozeIds: readonly string[] = [];
+        // 生存している中で最も早いスヌーズの発火時刻。null なら未確定
+        // （JS フォールバック側で nextSnoozeFireTime から算出する）
+        let firstFireAt: Date | null = null;
+        const nativeSnoozeIds = yield* kit.getSnoozeAlarmIds;
+        if (nativeSnoozeIds.length > 0) {
+          // 取り込み前に別経路の syncAlarms が孤立キャンセルで消している可能性が
+          // あるため、ネイティブ台帳と突合して生存している ID だけ採用する。
+          // 死んだ ID を採用すると Live Activity はカウントダウンを表示するのに
+          // 9 分後に何も鳴らない。
+          // ネイティブ側は 1..N 番目を発火順に生成・保存しているため、配列内の
+          // 元インデックスは「何分後のスヌーズか」を表す。先頭からいくつか
+          // 既に発火・キャンセル済みで消えていることがあり、生存突合後の先頭を
+          // 「9 分後」固定で扱うと、実際より早い時刻をカウントダウン表示する
+          const registered = new Set(yield* kit.getAllAlarms);
+          const firstSurvivingIndex = nativeSnoozeIds.findIndex((id) => registered.has(id));
+          snoozeIds = nativeSnoozeIds.filter((id) => registered.has(id));
+          yield* kit.clearSnoozeAlarmIds;
+          if (firstSurvivingIndex >= 0) {
+            firstFireAt = new Date(
+              dismissTime.getTime() + SNOOZE_DURATION_SECONDS * 1000 * (firstSurvivingIndex + 1),
+            );
+          }
         }
-      }
-      if (snoozeIds.length === 0) {
-        snoozeIds = yield* scheduleSnoozeAlarms(dismissTime);
-        // 遅延リカバリで全 20 本が過去時刻になっていた等、実際には
-        // 1 本も登録できなかった場合は null のままにする。理論上の未来値を
-        // 入れると、実在しないスヌーズへ Live Activity がカウントダウンする
-        firstFireAt = snoozeIds.length > 0 ? nextSnoozeFireTime(dismissTime) : null;
-      }
-      const snoozeFiresAt = firstFireAt?.toISOString() ?? null;
-      yield* Effect.promise(() =>
-        useMorningSessionStore.getState().setSnoozeState(snoozeIds, snoozeFiresAt),
-      );
-    }).pipe(Effect.catchAll(() => Effect.void));
-
-    // 4. リマインド通知（失敗してもセッションは有効に保つ）
-    yield* scheduleReminderNotifications(target.todos.length).pipe(
-      Effect.catchAll(() => Effect.void),
+        if (snoozeIds.length === 0) {
+          snoozeIds = yield* scheduleSnoozeAlarms(dismissTime);
+          // 遅延リカバリで全 20 本が過去時刻になっていた等、実際には
+          // 1 本も登録できなかった場合は null のままにする。理論上の未来値を
+          // 入れると、実在しないスヌーズへ Live Activity がカウントダウンする
+          firstFireAt = snoozeIds.length > 0 ? nextSnoozeFireTime(dismissTime) : null;
+        }
+        const snoozeFiresAt = firstFireAt?.toISOString() ?? null;
+        yield* Effect.promise(() =>
+          useMorningSessionStore.getState().setSnoozeState(snoozeIds, snoozeFiresAt),
+        );
+      }),
     );
 
+    // 4. リマインド通知（失敗してもセッションは有効に保つ）
+    yield* bestEffort(scheduleReminderNotifications(target.todos.length));
+
     // 5. Live Activity 開始（失敗してもセッションは有効に保つ）
-    yield* Effect.gen(function* () {
-      const { session: currentSession } = useMorningSessionStore.getState();
-      const liveActivityTodos = target.todos.map((td) => ({
-        id: td.id,
-        title: getLocalizedTodoTitle(td),
-        completed: false,
-      }));
-      const activityId = yield* kit.startLiveActivity(
-        liveActivityTodos,
-        currentSession?.snoozeFiresAt
-          ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
-          : null,
-      );
-      if (activityId !== null) {
-        yield* Effect.promise(() =>
-          useMorningSessionStore.getState().setLiveActivityId(activityId),
+    yield* bestEffort(
+      Effect.gen(function* () {
+        const { session: currentSession } = useMorningSessionStore.getState();
+        const liveActivityTodos = target.todos.map((td) => ({
+          id: td.id,
+          title: getLocalizedTodoTitle(td),
+          completed: false,
+        }));
+        const activityId = yield* kit.startLiveActivity(
+          liveActivityTodos,
+          currentSession?.snoozeFiresAt
+            ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
+            : null,
         );
-      }
-    }).pipe(Effect.catchAll(() => Effect.void));
+        if (activityId !== null) {
+          yield* Effect.promise(() =>
+            useMorningSessionStore.getState().setLiveActivityId(activityId),
+          );
+        }
+      }),
+    );
   });

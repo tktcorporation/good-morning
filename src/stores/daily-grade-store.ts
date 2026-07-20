@@ -26,6 +26,7 @@ import {
 import type { StorageError } from '../services/errors';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
+import { logError, logWarn } from '../utils/logger';
 
 const GRADES_STORAGE_KEY = STORAGE_KEYS.dailyGrades;
 const STREAK_STORAGE_KEY = STORAGE_KEYS.streakState;
@@ -76,8 +77,7 @@ function decodeGrades(decoded: readonly unknown[]): readonly DailyGradeRecord[] 
     if (record !== null) {
       records.push(record);
     } else {
-      // biome-ignore lint/suspicious/noConsole: 破損レコードのスキップを可視化する
-      console.warn('[daily-grade-store] 不正な形状の DailyGradeRecord をスキップしました', raw);
+      logWarn('daily-grade-store', '不正な形状の DailyGradeRecord をスキップしました', raw);
     }
   }
   return records;
@@ -219,8 +219,7 @@ export const useDailyGradeStore = create<DailyGradeState>((set, get) => ({
       const { grades, streak } = await runEffect(loadGradesEffect());
       set({ grades, streak, loaded: true });
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[daily-grade-store] loadGrades failed after retries', error);
+      logError('daily-grade-store', 'loadGrades failed after retries', error);
     }
   },
 

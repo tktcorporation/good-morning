@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { asRecord, decodeFieldOrDefault, decodeStoredJson, runEffect, Storage } from '../services';
 import type { StorageError } from '../services/errors';
+import { logError } from '../utils/logger';
 
 const STORAGE_KEY = STORAGE_KEYS.appSettings;
 const DEFAULT_DAY_BOUNDARY_HOUR = 3;
@@ -98,8 +99,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const settings = await runEffect(loadSettingsEffect());
       set({ ...settings, loaded: true });
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[settings-store] loadSettings failed after retries', error);
+      logError('settings-store', 'loadSettings failed after retries', error);
     }
   },
 

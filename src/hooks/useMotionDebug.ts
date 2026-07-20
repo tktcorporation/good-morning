@@ -1,9 +1,7 @@
 import { Accelerometer, Barometer, Gyroscope, Magnetometer, Pedometer } from 'expo-sensors';
 import { useEffect, useRef, useState } from 'react';
+import { logWarn } from '../utils/logger';
 import { nextSquatPhase, type SquatPhase } from './useSquatDetector';
-
-// biome-ignore lint/suspicious/noConsole: debug-screen hook needs visible failures for triage
-const logWarn = console.warn;
 
 /**
  * デバッグ画面（app/squat-check.tsx）でリアルタイムにモーション情報を可視化するためのフック。
@@ -96,7 +94,7 @@ async function fetchTodaySteps(): Promise<{
     return { steps: result.steps, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    logWarn('[useMotionDebug] fetchTodaySteps failed:', message);
+    logWarn('useMotionDebug', 'fetchTodaySteps failed', message);
     return { steps: null, error: message };
   }
 }
@@ -135,7 +133,7 @@ async function subscribeSimpleSensor<T>(
     return sensor.addListener(onSample);
   } catch (e) {
     if (!isCancelled()) setAvailability('unavailable');
-    logWarn(`[useMotionDebug] ${sensorLabel} subscription failed:`, e);
+    logWarn('useMotionDebug', `${sensorLabel} subscription failed`, e);
     return null;
   }
 }
@@ -350,7 +348,7 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
         }
         await requestAndStartPedometer();
       } catch (e) {
-        logWarn('[useMotionDebug] setupPedometer failed:', e);
+        logWarn('useMotionDebug', 'setupPedometer failed', e);
         if (cancelled) return;
         setPedometer((p) => ({
           ...p,
@@ -363,8 +361,8 @@ export function useMotionDebug(enabled: boolean): MotionDebugState {
     // 各 setup 関数は内部で try/catch しているが、想定外の throw（型エラー・
     // Promise.all の例外伝播・state setter の throw 等）が unhandled rejection に
     // ならないよう .catch を付けて防衛する。
-    setupAll().catch((e) => logWarn('[useMotionDebug] setupAll unexpected:', e));
-    setupPedometer().catch((e) => logWarn('[useMotionDebug] setupPedometer unexpected:', e));
+    setupAll().catch((e) => logWarn('useMotionDebug', 'setupAll unexpected', e));
+    setupPedometer().catch((e) => logWarn('useMotionDebug', 'setupPedometer unexpected', e));
 
     return () => {
       cancelled = true;

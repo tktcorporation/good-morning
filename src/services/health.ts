@@ -4,9 +4,7 @@ import {
   queryCategorySamples,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
-
-// biome-ignore lint/suspicious/noConsole: Health service errors need logging for debugging
-const logError = console.error;
+import { logError } from '../utils/logger';
 
 export interface SleepSummary {
   readonly bedtime: string; // ISO datetime
@@ -35,7 +33,7 @@ export async function initHealthKit(): Promise<boolean> {
       toRead: ['HKCategoryTypeIdentifierSleepAnalysis'],
     });
   } catch (error) {
-    logError('HealthKit authorization failed:', error);
+    logError('health', 'HealthKit authorization failed', error);
     return false;
   }
 }
@@ -164,7 +162,7 @@ export async function getSleepSummary(date: Date): Promise<SleepSummary | null> 
       totalMinutes: mainSession.totalMinutes,
     };
   } catch (error) {
-    logError('Failed to get sleep summary:', error);
+    logError('health', 'Failed to get sleep summary', error);
     return null;
   }
 }

@@ -26,6 +26,7 @@ import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
 import { cancelAlarmsByIds, SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerService';
+import { bestEffort } from '../effect-utils';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
 import { handleAlarmDismissEffect, recordWakeDismiss } from './DismissService';
@@ -53,18 +54,14 @@ const cleanupStaleOrDanglingSession = (
 
     if (state.session.date !== today && state.isExpired()) {
       if (state.session.liveActivityId !== null) {
-        yield* kit
-          .endLiveActivity(state.session.liveActivityId)
-          .pipe(Effect.catchAll(() => Effect.void));
+        yield* bestEffort(kit.endLiveActivity(state.session.liveActivityId));
       }
       yield* Effect.promise(() => state.clearSession());
       return;
     }
 
     if (state.areAllCompleted() && state.session.liveActivityId !== null) {
-      yield* kit
-        .endLiveActivity(state.session.liveActivityId)
-        .pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(kit.endLiveActivity(state.session.liveActivityId));
     }
   });
 
@@ -132,7 +129,7 @@ const reclaimUnmanagedNativeSnoozes: Effect.Effect<void, never, AlarmKit> = Effe
     const kit = yield* AlarmKit;
     const nativeIds = yield* kit.getSnoozeAlarmIds;
     if (nativeIds.length === 0) return;
-    yield* cancelAlarmsByIds(nativeIds).pipe(Effect.catchAll(() => Effect.void));
+    yield* bestEffort(cancelAlarmsByIds(nativeIds));
     yield* kit.clearSnoozeAlarmIds;
   },
 );
@@ -310,8 +307,8 @@ export const handleSnoozeArrivalEffect: Effect.Effect<boolean, AlarmKitError, Al
 
     const activityId = sessionState.session.liveActivityId;
     if (activityId !== null) {
-      yield* kit
-        .updateLiveActivity(
+      yield* bestEffort(
+        kit.updateLiveActivity(
           activityId,
           sessionState.session.todos.map((t) => ({
             id: t.id,
@@ -319,8 +316,8 @@ export const handleSnoozeArrivalEffect: Effect.Effect<boolean, AlarmKitError, Al
             completed: t.completed,
           })),
           Math.floor(new Date(nextSnoozeFiresAt).getTime() / 1000),
-        )
-        .pipe(Effect.catchAll(() => Effect.void));
+        ),
+      );
     }
 
     return true;

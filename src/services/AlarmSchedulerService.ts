@@ -16,6 +16,7 @@ import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { WakeTarget } from '../types/wake-target';
 import { isNextOverrideExpired } from '../types/wake-target';
 import { AlarmKit, type AlarmKitError } from './AlarmKitService';
+import { bestEffort } from './effect-utils';
 import { AlarmKitOperationError } from './errors';
 
 // スヌーズ間隔・本数は TODO リマインドと同じケイデンスを共有するため
@@ -203,7 +204,7 @@ export const scheduleWakeTargetAlarm = (
     if (failure !== null) {
       // ロールバック: 登録できた新規分を取り消し、旧アラームには触れない。
       // ロールバック自体の失敗は握る（元の失敗を優先して伝える）
-      yield* cancelAlarmsByIds(newIds).pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(cancelAlarmsByIds(newIds));
       return yield* Effect.fail(failure);
     }
 
@@ -213,10 +214,8 @@ export const scheduleWakeTargetAlarm = (
     // setAlarmIds(newIds) を呼ばず store が旧 ID のまま固定化し、
     // ネイティブとの不整合が残り続ける。掃除の取りこぼしは次回 sync の
     // 孤立アラーム掃除（cancelAlarmsExcept）で自然に回収される
-    yield* cancelAlarmsByIds(previousIds).pipe(Effect.catchAll(() => Effect.void));
-    yield* cancelAlarmsExcept([...snoozeAlarmIds, ...newIds]).pipe(
-      Effect.catchAll(() => Effect.void),
-    );
+    yield* bestEffort(cancelAlarmsByIds(previousIds));
+    yield* bestEffort(cancelAlarmsExcept([...snoozeAlarmIds, ...newIds]));
 
     return newIds;
   });

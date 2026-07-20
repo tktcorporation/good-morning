@@ -15,6 +15,7 @@ import {
 import type { StorageError } from '../services/errors';
 import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
+import { logError } from '../utils/logger';
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
@@ -177,8 +178,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
       const session = await runEffect(loadSessionEffect());
       set({ session, loaded: true });
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[morning-session-store] loadSession failed after retries', error);
+      logError('morning-session-store', 'loadSession failed after retries', error);
     }
   },
 
