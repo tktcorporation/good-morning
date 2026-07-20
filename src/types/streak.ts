@@ -5,8 +5,8 @@
  * DailyGrade の結果に基づいてストリークを加算・維持・リセットし、
  * フリーズ（猶予回数）で poor な日をカバーできる仕組み。
  *
- * 利用箇所: src/services/grade-calculator.ts (applyGradeToStreak),
- *           stores/streak-store.ts (将来)
+ * 利用箇所: src/domain/grade-calculator.ts (applyGradeToStreak),
+ *           src/stores/daily-grade-store.ts
  * ストリーク機能が不要になれば削除可能。
  */
 

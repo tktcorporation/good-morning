@@ -338,6 +338,16 @@ describe('useWakeTargetStore', () => {
     );
   });
 
+  test('loadTarget は範囲外の wakeUpGoalBufferMinutes を範囲内にクランプする', async () => {
+    stubStoredTarget(JSON.stringify({ ...DEFAULT_WAKE_TARGET, wakeUpGoalBufferMinutes: 3 }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(10);
+
+    stubStoredTarget(JSON.stringify({ ...DEFAULT_WAKE_TARGET, wakeUpGoalBufferMinutes: 999 }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(120);
+  });
+
   test('loadTarget は time 欠損の破損 nextOverride を null に正規化する', async () => {
     stubStoredTarget(
       JSON.stringify({

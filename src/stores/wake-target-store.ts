@@ -163,9 +163,15 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
     }
   }
 
+  // 範囲は setWakeUpGoalBufferMinutes と同じ MIN/MAX を単一のソースとして使う。
+  // setter を経由しない永続化データ（旧バージョン・手動編集等）が範囲外でも
+  // ここでクランプすることで、範囲保証を setter だけに依存させない。
   const wakeUpGoalBufferMinutes =
     typeof parsed.wakeUpGoalBufferMinutes === 'number'
-      ? parsed.wakeUpGoalBufferMinutes
+      ? Math.max(
+          MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
+          Math.min(MAX_WAKE_UP_GOAL_BUFFER_MINUTES, parsed.wakeUpGoalBufferMinutes),
+        )
       : DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES;
 
   // 起床タスクは「スクワット 10 回」固定に統一する設計のため、

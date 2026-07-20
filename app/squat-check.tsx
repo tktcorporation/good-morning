@@ -48,7 +48,16 @@ export default function SquatCheckScreen() {
   const debug = useMotionDebug(true);
 
   const handleIncrement = useCallback((_id: string) => {
-    setTodo((prev) => ({ ...prev, currentCount: (prev.currentCount ?? 0) + 1 }));
+    setTodo((prev) => {
+      const currentCount = (prev.currentCount ?? 0) + 1;
+      const completed = currentCount >= (prev.requiredCount ?? REQUIRED_COUNT);
+      return {
+        ...prev,
+        currentCount,
+        completed,
+        completedAt: completed ? new Date().toISOString() : prev.completedAt,
+      };
+    });
   }, []);
 
   const handleComplete = useCallback((_id: string) => {
