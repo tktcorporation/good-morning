@@ -1,17 +1,20 @@
-import {
-  CategoryValueSleepAnalysis,
-  isHealthDataAvailable,
-  queryCategorySamples,
-  requestAuthorization,
-} from '@kingstinct/react-native-healthkit';
+import { CategoryValueSleepAnalysis } from '@kingstinct/react-native-healthkit';
+import { Effect, ManagedRuntime } from 'effect';
 import { addDays, minutesBetween } from '../utils/date';
 import { logError } from '../utils/logger';
+import { HealthKit, HealthKitLive } from './HealthKitService';
 
 export interface SleepSummary {
   readonly bedtime: string; // ISO datetime
   readonly wakeUpTime: string; // ISO datetime
   readonly totalMinutes: number;
 }
+
+/**
+ * health.ts 専用の Effect ランタイム。
+ * 共有 AppLayer には統合しない（理由は HealthKitService.ts のコメント参照）。
+ */
+const healthKitRuntime = ManagedRuntime.make(HealthKitLive);
 
 /**
  * HealthKit の SleepAnalysis 読み取り権限をリクエストする。
@@ -27,16 +30,18 @@ export interface SleepSummary {
  * 呼び出し元: src/constants/permissions.ts, src/hooks/useDailySummary.ts, src/hooks/useGradeFinalization.ts
  */
 export async function initHealthKit(): Promise<boolean> {
-  if (!isHealthDataAvailable()) return false;
-
-  try {
-    return await requestAuthorization({
-      toRead: ['HKCategoryTypeIdentifierSleepAnalysis'],
-    });
-  } catch (error) {
-    logError('health', 'HealthKit authorization failed', error);
-    return false;
-  }
+  return healthKitRuntime.runPromise(
+    Effect.gen(function* () {
+      const kit = yield* HealthKit;
+      if (!(yield* kit.isAvailable)) return false;
+      return yield* kit.requestSleepAuthorization;
+    }).pipe(
+      Effect.catchTag('HealthKitError', (error) => {
+        logError('health', 'HealthKit authorization failed', error);
+        return Effect.succeed(false);
+      }),
+    ),
+  );
 }
 
 interface SleepSession {
@@ -131,38 +136,36 @@ export function extractMainSleepSession(
  * 呼び出し元: src/hooks/useDailySummary.ts, src/hooks/useGradeFinalization.ts
  */
 export async function getSleepSummary(date: Date): Promise<SleepSummary | null> {
-  if (!isHealthDataAvailable()) return null;
+  return healthKitRuntime.runPromise(
+    Effect.gen(function* () {
+      const kit = yield* HealthKit;
+      if (!(yield* kit.isAvailable)) return null;
 
-  try {
-    const startDate = addDays(date, -1);
-    startDate.setHours(18, 0, 0, 0);
-    const endDate = new Date(date);
-    endDate.setHours(18, 0, 0, 0);
+      const startDate = addDays(date, -1);
+      startDate.setHours(18, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(18, 0, 0, 0);
 
-    const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
-      limit: 0, // 0 = 全サンプル取得
-      ascending: true,
-      filter: {
-        date: { startDate, endDate },
-      },
-    });
+      const samples = yield* kit.querySleepSamples({ startDate, endDate });
+      if (samples.length === 0) return null;
 
-    if (samples.length === 0) return null;
+      // INBED サンプルをフィルタ。見つからなければ全サンプルにフォールバック。
+      const inBedSamples = samples.filter((s) => s.value === CategoryValueSleepAnalysis.inBed);
+      const samplesToUse = inBedSamples.length > 0 ? inBedSamples : samples;
 
-    // INBED サンプルをフィルタ。見つからなければ全サンプルにフォールバック。
-    const inBedSamples = samples.filter((s) => s.value === CategoryValueSleepAnalysis.inBed);
-    const samplesToUse = inBedSamples.length > 0 ? inBedSamples : samples;
+      const mainSession = extractMainSleepSession(samplesToUse);
+      if (mainSession === null) return null;
 
-    const mainSession = extractMainSleepSession(samplesToUse);
-    if (mainSession === null) return null;
-
-    return {
-      bedtime: mainSession.start.toISOString(),
-      wakeUpTime: mainSession.end.toISOString(),
-      totalMinutes: mainSession.totalMinutes,
-    };
-  } catch (error) {
-    logError('health', 'Failed to get sleep summary', error);
-    return null;
-  }
+      return {
+        bedtime: mainSession.start.toISOString(),
+        wakeUpTime: mainSession.end.toISOString(),
+        totalMinutes: mainSession.totalMinutes,
+      };
+    }).pipe(
+      Effect.catchTag('HealthKitError', (error) => {
+        logError('health', 'Failed to get sleep summary', error);
+        return Effect.succeed(null);
+      }),
+    ),
+  );
 }
