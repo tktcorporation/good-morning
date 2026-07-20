@@ -35,6 +35,7 @@ export {
 export { syncAlarmsEffect } from './AlarmSyncService';
 // Legacy-compatible wrappers (Effect サービスを async/sync 関数として提供)
 export { checkLaunchPayload, initializeAlarmKit, isAlarmKitAvailable } from './compat';
+export { bestEffort } from './effect-utils';
 // Errors
 export {
   AlarmKitOperationError,
@@ -42,6 +43,7 @@ export {
   HealthKitError,
   LiveActivityError,
   NotificationError,
+  StorageDecodeError,
   StorageError,
   WidgetSyncError,
 } from './errors';
@@ -51,7 +53,16 @@ export type { AppServices } from './runtime';
 // Runtime
 export { AppLayer, runEffect, runEffectFork } from './runtime';
 export type { StorageService } from './StorageService';
-export { Storage, StorageLive } from './StorageService';
+export {
+  asRecord,
+  decodeFieldOrDefault,
+  decodeOptionalField,
+  decodeStoredJson,
+  Storage,
+  StorageLive,
+  TodoTypeSchema,
+  unknownArrayGate,
+} from './StorageService';
 export type { AlarmDismissParams } from './session';
 export {
   handleAlarmDismissEffect,

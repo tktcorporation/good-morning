@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '@/constants/theme';
+import { borderRadius, colors, fontSize, semanticColors, spacing } from '@/constants/theme';
 import {
   formatSleepDuration,
   MAX_SLEEP_MINUTES,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   // Modal overlay & sheet -- DayBoundaryPicker と同じ構造
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: semanticColors.overlay,
     justifyContent: 'flex-end',
   },
   sheet: {

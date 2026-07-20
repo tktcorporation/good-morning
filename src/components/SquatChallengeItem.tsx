@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -35,17 +35,19 @@ export function SquatChallengeItem({ todo, onIncrement, onComplete }: SquatChall
     onIncrement(todo.id);
   }, [onIncrement, todo.id]);
 
-  const handleComplete = useCallback(() => {
-    onComplete(todo.id);
-  }, [onComplete, todo.id]);
-
   // センサーは未完了の間だけ有効にする（完了後はバッテリー節約のため停止）
-  const { isListening } = useSquatDetector(
-    !todo.completed,
-    required - current,
-    handleSquat,
-    handleComplete,
-  );
+  const { isListening } = useSquatDetector(!todo.completed, handleSquat);
+
+  // 完了判定は onIncrement 先（永続化された currentCount）が単一のソース。
+  // todo.completed が false→true に変わった瞬間だけ onComplete を呼ぶ
+  // （マウント時に既に completed=true のケースでは再発火させない）。
+  const prevCompletedRef = useRef(todo.completed);
+  useEffect(() => {
+    if (!prevCompletedRef.current && todo.completed) {
+      onComplete(todo.id);
+    }
+    prevCompletedRef.current = todo.completed;
+  }, [todo.completed, todo.id, onComplete]);
 
   // プログレスリングの stroke-dashoffset
   const strokeDashoffset = useMemo(() => CIRCUMFERENCE * (1 - progress), [progress]);

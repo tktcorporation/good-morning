@@ -10,12 +10,14 @@
  */
 
 import { Effect } from 'effect';
+import { isWithinGoalDeadline } from '../../domain/grade-calculator';
 import { useMorningSessionStore } from '../../stores/morning-session-store';
 import { useWakeRecordStore } from '../../stores/wake-record-store';
 import type { MorningSession } from '../../types/morning-session';
 import { AlarmKit } from '../AlarmKitService';
 import { cancelAlarmsByIds } from '../AlarmSchedulerService';
 import { syncAlarmsEffect } from '../AlarmSyncService';
+import { bestEffort } from '../effect-utils';
 import type { Notification } from '../NotificationService';
 import { cancelReminderNotifications } from '../TodoReminderService';
 import { type SessionError, toWakeTodoRecords } from './types';
@@ -41,11 +43,11 @@ export const onAllTodosCompletedEffect = (
     }
 
     // 1.5. リマインド通知キャンセル
-    yield* cancelReminderNotifications.pipe(Effect.catchAll(() => Effect.void));
+    yield* bestEffort(cancelReminderNotifications);
 
     // 2. Live Activity 終了
     if (session.liveActivityId !== null) {
-      yield* kit.endLiveActivity(session.liveActivityId).pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(kit.endLiveActivity(session.liveActivityId));
       yield* Effect.promise(() => useMorningSessionStore.getState().setLiveActivityId(null));
     }
 
@@ -59,20 +61,22 @@ export const onAllTodosCompletedEffect = (
 
       const goalBasedResult =
         session.goalDeadline !== null
-          ? now.getTime() <= new Date(session.goalDeadline).getTime()
+          ? isWithinGoalDeadline(now, session.goalDeadline)
             ? ('great' as const)
             : ('late' as const)
           : undefined;
 
-      yield* Effect.promise(() =>
-        useWakeRecordStore.getState().updateRecord(completedRecordId, {
-          todosCompleted: true,
-          todosCompletedAt: now.toISOString(),
-          todoCompletionSeconds,
-          todos: todoRecords,
-          ...(goalBasedResult !== undefined ? { result: goalBasedResult } : {}),
-        }),
-      ).pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(
+        Effect.promise(() =>
+          useWakeRecordStore.getState().updateRecord(completedRecordId, {
+            todosCompleted: true,
+            todosCompletedAt: now.toISOString(),
+            todoCompletionSeconds,
+            todos: todoRecords,
+            ...(goalBasedResult !== undefined ? { result: goalBasedResult } : {}),
+          }),
+        ),
+      );
     }
   });
 
@@ -110,11 +114,11 @@ export const expireSessionIfNeeded: Effect.Effect<boolean, SessionError, AlarmKi
     }
 
     // 1.5. リマインド通知キャンセル
-    yield* cancelReminderNotifications.pipe(Effect.catchAll(() => Effect.void));
+    yield* bestEffort(cancelReminderNotifications);
 
     // 2. Live Activity 終了
     if (session.liveActivityId !== null) {
-      yield* kit.endLiveActivity(session.liveActivityId).pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(kit.endLiveActivity(session.liveActivityId));
     }
 
     // 3. WakeRecord 更新
@@ -127,14 +131,16 @@ export const expireSessionIfNeeded: Effect.Effect<boolean, SessionError, AlarmKi
       const todoRecords = toWakeTodoRecords(session.todos);
       const allCompleted = session.todos.every((t) => t.completed);
 
-      yield* Effect.promise(() =>
-        useWakeRecordStore.getState().updateRecord(expireRecordId, {
-          todosCompleted: allCompleted,
-          todosCompletedAt: allCompleted ? now.toISOString() : null,
-          todoCompletionSeconds,
-          todos: todoRecords,
-        }),
-      ).pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(
+        Effect.promise(() =>
+          useWakeRecordStore.getState().updateRecord(expireRecordId, {
+            todosCompleted: allCompleted,
+            todosCompletedAt: allCompleted ? now.toISOString() : null,
+            todoCompletionSeconds,
+            todos: todoRecords,
+          }),
+        ),
+      );
     }
 
     // 4. セッションクリア

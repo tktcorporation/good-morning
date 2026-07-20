@@ -247,6 +247,25 @@ describe('useWakeTargetStore', () => {
     expect(useWakeTargetStore.getState().target?.targetSleepMinutes).toBeNull();
   });
 
+  test('setWakeUpGoalBufferMinutes は範囲内の値をそのまま設定する', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    mockSetItem.mockClear();
+    await useWakeTargetStore.getState().setWakeUpGoalBufferMinutes(45);
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(45);
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"wakeUpGoalBufferMinutes":45'),
+    );
+  });
+
+  test('setWakeUpGoalBufferMinutes は下限未満・上限超過を範囲内にクランプする', async () => {
+    await useWakeTargetStore.getState().setTarget(DEFAULT_WAKE_TARGET);
+    await useWakeTargetStore.getState().setWakeUpGoalBufferMinutes(5);
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(10);
+    await useWakeTargetStore.getState().setWakeUpGoalBufferMinutes(999);
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(120);
+  });
+
   test('loadTarget migrates legacy bedtimeTarget to targetSleepMinutes', async () => {
     const legacyTarget = {
       defaultTime: { hour: 6, minute: 0 },
@@ -319,6 +338,16 @@ describe('useWakeTargetStore', () => {
     );
   });
 
+  test('loadTarget は範囲外の wakeUpGoalBufferMinutes を範囲内にクランプする', async () => {
+    stubStoredTarget(JSON.stringify({ ...DEFAULT_WAKE_TARGET, wakeUpGoalBufferMinutes: 3 }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(10);
+
+    stubStoredTarget(JSON.stringify({ ...DEFAULT_WAKE_TARGET, wakeUpGoalBufferMinutes: 999 }));
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.wakeUpGoalBufferMinutes).toBe(120);
+  });
+
   test('loadTarget は time 欠損の破損 nextOverride を null に正規化する', async () => {
     stubStoredTarget(
       JSON.stringify({
@@ -347,6 +376,40 @@ describe('useWakeTargetStore', () => {
       0: { type: 'off' },
       1: { type: 'custom', time: { hour: 6, minute: 30 } },
     });
+  });
+
+  test('AsyncStorage.getItem が一時的に reject してもリトライで復旧し、実際の設定値を失わない', async () => {
+    // 1回目は一時的な失敗、2回目で成功するケース。ここで即座に corrupted/デフォルト値に
+    // 倒すと、実際にはストレージに残っている target を「存在しない」ものとして扱ってしまう
+    let callCount = 0;
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') {
+        callCount += 1;
+        if (callCount === 1) return Promise.reject(new Error('transient storage error'));
+        return Promise.resolve(
+          JSON.stringify({ defaultTime: { hour: 8, minute: 15 }, enabled: true }),
+        );
+      }
+      return Promise.resolve(null);
+    });
+    await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.corrupted).toBe(false);
+    expect(state.target?.defaultTime).toEqual({ hour: 8, minute: 15 });
+  });
+
+  test('AsyncStorage.getItem がリトライしても reject し続ける場合、loaded=false のまま留まる', async () => {
+    // 読み取り自体が失敗し続ける場合、実際の target の有無が確認できていない。
+    // loaded=true にすると syncAlarmsEffect が誤ったデフォルト/corrupted状態で
+    // 走ってしまうため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
+    mockGetItem.mockRejectedValue(new Error('storage unavailable'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(useWakeTargetStore.getState().loadTarget()).resolves.toBeUndefined();
+    const state = useWakeTargetStore.getState();
+    expect(state.loaded).toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 
   test('loadTarget は破損 JSON では reject せず、target を確定できないため corrupted 状態にする', async () => {

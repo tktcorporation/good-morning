@@ -326,7 +326,7 @@ describe('loadSession', () => {
     // いない。loaded=true・session=null にすると、生存中のスヌーズが孤立
     // キャンセルされたり新規セッションで上書きされてしまうため、loaded=false の
     // まま留めて以降の再試行（アプリ再起動等）に委ねる
-    // readStorageItemWithRetry のリトライ回数（3回）分だけ reject を積む。
+    // StorageService の読み取りリトライ回数（3回）分だけ reject を積む。
     // mockRejectedValue（永続）だと以降のテストにもモックが漏れ出すため使わない
     (AsyncStorage.getItem as jest.Mock)
       .mockRejectedValueOnce(new Error('storage unavailable'))
@@ -347,5 +347,46 @@ describe('loadSession', () => {
     const state = useMorningSessionStore.getState();
     expect(state.loaded).toBe(true);
     expect(state.session).toBeNull();
+  });
+
+  test('startedAt が ISO パース不能な場合も reject せず loaded=true・session=null で確定する（RangeError が漏れない）', async () => {
+    const storedSession = {
+      recordId: null,
+      date: '2026-02-22',
+      startedAt: 'not-a-valid-date',
+      todos: [],
+      liveActivityId: null,
+      goalDeadline: null,
+    };
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(JSON.stringify(storedSession));
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.session).toBeNull();
+  });
+
+  test('todos内の1件が不正な形状でも、recordId/snooze状態等は失わず不正なtodoだけをスキップする', async () => {
+    const storedSession = {
+      recordId: 'wake_1',
+      date: '2026-02-22',
+      startedAt: '2026-02-22T07:00:00.000Z',
+      todos: [
+        { id: 'todo_1', title: 'Valid', completed: false, completedAt: null },
+        { id: 'todo_2' }, // title 欠落 → この要素だけスキップされる
+      ],
+      liveActivityId: null,
+      goalDeadline: null,
+      snoozeAlarmIds: ['alarm_1', 'alarm_2'],
+      snoozeFiresAt: '2026-02-22T07:10:00.000Z',
+    };
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(JSON.stringify(storedSession));
+    await expect(useMorningSessionStore.getState().loadSession()).resolves.toBeUndefined();
+    const state = useMorningSessionStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.session?.recordId).toBe('wake_1');
+    expect(state.session?.snoozeAlarmIds).toEqual(['alarm_1', 'alarm_2']);
+    expect(state.session?.snoozeFiresAt).toBe('2026-02-22T07:10:00.000Z');
+    expect(state.session?.todos).toHaveLength(1);
+    expect(state.session?.todos[0]?.id).toBe('todo_1');
   });
 });

@@ -5,7 +5,16 @@ jest.mock('@kingstinct/react-native-healthkit', () => ({
   requestAuthorization: jest.fn(),
 }));
 
-import { extractMainSleepSession } from '../services/health';
+import {
+  isHealthDataAvailable,
+  queryCategorySamples,
+  requestAuthorization,
+} from '@kingstinct/react-native-healthkit';
+import { extractMainSleepSession, getSleepSummary, initHealthKit } from '../services/health';
+
+const mockIsAvailable = isHealthDataAvailable as jest.Mock;
+const mockRequestAuth = requestAuthorization as jest.Mock;
+const mockQuerySamples = queryCategorySamples as jest.Mock;
 
 describe('extractMainSleepSession', () => {
   it('returns null for empty samples', () => {
@@ -105,5 +114,75 @@ describe('extractMainSleepSession', () => {
     expect(result).not.toBeNull();
     // 1セッションとして扱われる（23:00-07:00 = 8 hours）
     expect(result?.totalMinutes).toBe(480);
+  });
+});
+
+describe('initHealthKit', () => {
+  beforeEach(() => {
+    mockIsAvailable.mockReset();
+    mockRequestAuth.mockReset();
+  });
+
+  it('returns false without requesting authorization when unavailable', async () => {
+    mockIsAvailable.mockReturnValue(false);
+    await expect(initHealthKit()).resolves.toBe(false);
+    expect(mockRequestAuth).not.toHaveBeenCalled();
+  });
+
+  it('returns the authorization result when available', async () => {
+    mockIsAvailable.mockReturnValue(true);
+    mockRequestAuth.mockResolvedValue(true);
+    await expect(initHealthKit()).resolves.toBe(true);
+  });
+
+  it('returns false and logs when the authorization request rejects', async () => {
+    mockIsAvailable.mockReturnValue(true);
+    mockRequestAuth.mockRejectedValue(new Error('boom'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(initHealthKit()).resolves.toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe('getSleepSummary', () => {
+  beforeEach(() => {
+    mockIsAvailable.mockReset();
+    mockQuerySamples.mockReset();
+  });
+
+  it('returns null without querying when unavailable', async () => {
+    mockIsAvailable.mockReturnValue(false);
+    await expect(getSleepSummary(new Date('2026-02-27T08:00:00'))).resolves.toBeNull();
+    expect(mockQuerySamples).not.toHaveBeenCalled();
+  });
+
+  it('returns null when no samples are found', async () => {
+    mockIsAvailable.mockReturnValue(true);
+    mockQuerySamples.mockResolvedValue([]);
+    await expect(getSleepSummary(new Date('2026-02-27T08:00:00'))).resolves.toBeNull();
+  });
+
+  it('builds a SleepSummary from the queried samples', async () => {
+    mockIsAvailable.mockReturnValue(true);
+    mockQuerySamples.mockResolvedValue([
+      {
+        startDate: new Date('2026-02-26T23:00:00'),
+        endDate: new Date('2026-02-27T07:00:00'),
+        value: 0, // CategoryValueSleepAnalysis.inBed
+      },
+    ]);
+    const result = await getSleepSummary(new Date('2026-02-27T08:00:00'));
+    expect(result).not.toBeNull();
+    expect(result?.totalMinutes).toBe(480);
+  });
+
+  it('returns null and logs when the query rejects', async () => {
+    mockIsAvailable.mockReturnValue(true);
+    mockQuerySamples.mockRejectedValue(new Error('boom'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(getSleepSummary(new Date('2026-02-27T08:00:00'))).resolves.toBeNull();
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });

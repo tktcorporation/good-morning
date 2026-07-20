@@ -31,7 +31,7 @@
 
 - lint（`pnpm lint` 等）
 - test（`pnpm test` 等）
-- 未使用コード検出（`pnpm knip` 等）
+- 未使用コード検出（`pnpm unused` 等）
 - changeset チェック（changeset ファイルの有無）
 - ライセンスチェック
 - ビルド

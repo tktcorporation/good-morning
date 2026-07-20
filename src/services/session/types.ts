@@ -12,7 +12,7 @@ import type { SessionTodo } from '../../types/morning-session';
 import type { WakeTodoRecord } from '../../types/wake-record';
 import type { NextOverride, WakeTarget } from '../../types/wake-target';
 import { resolveRegularTimeForDate } from '../../types/wake-target';
-import { formatLocalDate, getLogicalDateString } from '../../utils/date';
+import { addDays, formatLocalDate, getLogicalDateString } from '../../utils/date';
 import type { AlarmKitError } from '../AlarmKitService';
 import type { NotificationError } from '../errors';
 
@@ -99,7 +99,7 @@ function isPreMidnightOverrideWindow(
   target: WakeTarget,
   override: NextOverride,
 ): boolean {
-  const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const nextDay = addDays(now, 1);
   if (formatLocalDate(nextDay) !== override.targetDate) return false;
 
   const minutesUntilMidnight = 24 * 60 - (now.getHours() * 60 + now.getMinutes());

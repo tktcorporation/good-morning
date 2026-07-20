@@ -1,13 +1,102 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect, Either, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { MS_PER_DAY } from '../constants/time';
-import type { WakeRecord, WakeResult, WakeStats } from '../types/wake-record';
+import {
+  asRecord,
+  decodeFieldOrDefault,
+  decodeOptionalField,
+  decodeStoredJson,
+  runEffect,
+  Storage,
+  TodoTypeSchema,
+  unknownArrayGate,
+} from '../services';
+import type { StorageError } from '../services/errors';
+import type { WakeRecord, WakeResult, WakeStats, WakeTodoRecord } from '../types/wake-record';
 import { createWakeRecordId, isSuccessWakeResult } from '../types/wake-record';
-import { formatLocalDate } from '../utils/date';
-import { readStorageItemWithRetry } from '../utils/storage-read';
+import { addDays, formatLocalDate, parseLocalDateString } from '../utils/date';
+import { logError, logWarn } from '../utils/logger';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeRecords;
+
+const AlarmTimeSchema = Schema.Struct({
+  hour: Schema.Number,
+  minute: Schema.Number,
+});
+const DEFAULT_ALARM_TIME = { hour: 0, minute: 0 };
+
+const WakeResultSchema = Schema.Literal('great', 'ok', 'late', 'missed');
+
+/**
+ * 永続化済み WakeTodoRecord を要素単位で寛容にデコードする。id/title はタスクを
+ * 識別・表示するための最小限のフィールドのため欠落・型不一致なら null を返し、
+ * 呼び出し元（decodeWakeRecord）がその要素だけを読み飛ばす。それ以外は
+ * decodeFieldOrDefault/decodeOptionalField でフィールド単位のデフォルト補完に倒す。
+ */
+function decodeWakeTodoRecord(raw: unknown): WakeTodoRecord | null {
+  const obj = asRecord(raw);
+  const idResult = Schema.decodeUnknownEither(Schema.String)(obj.id);
+  const titleResult = Schema.decodeUnknownEither(Schema.String)(obj.title);
+  if (Either.isLeft(idResult) || Either.isLeft(titleResult)) return null;
+
+  return {
+    id: idResult.right,
+    title: titleResult.right,
+    completedAt: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.completedAt, null),
+    orderCompleted: decodeFieldOrDefault(Schema.NullOr(Schema.Number), obj.orderCompleted, null),
+    type: decodeOptionalField(TodoTypeSchema, obj.type),
+  };
+}
+
+/**
+ * 永続化済み WakeRecord を要素単位で寛容にデコードする。id/date/result は
+ * レコードを識別・成立させるための最小限のフィールドのため欠落・型不一致なら
+ * レコードごと破棄する（呼び出し元 parseStoredRecords が配列から除外）。
+ * それ以外のフィールド（todos を含む）は個別にデフォルト補完し、1フィールド・
+ * 1タスクの破損で記録全体やレコード履歴を失わないようにする。
+ */
+function decodeWakeRecord(raw: unknown): WakeRecord | null {
+  const obj = asRecord(raw);
+  const idResult = Schema.decodeUnknownEither(Schema.String)(obj.id);
+  const dateResult = Schema.decodeUnknownEither(Schema.String)(obj.date);
+  const resultResult = Schema.decodeUnknownEither(WakeResultSchema)(obj.result);
+  if (Either.isLeft(idResult) || Either.isLeft(dateResult) || Either.isLeft(resultResult))
+    return null;
+
+  const todosRaw = Array.isArray(obj.todos) ? obj.todos : [];
+  const todos: WakeTodoRecord[] = [];
+  for (const t of todosRaw) {
+    const todo = decodeWakeTodoRecord(t);
+    if (todo !== null) todos.push(todo);
+  }
+
+  return {
+    id: idResult.right,
+    alarmId: decodeFieldOrDefault(Schema.String, obj.alarmId, ''),
+    date: dateResult.right,
+    targetTime: decodeFieldOrDefault(AlarmTimeSchema, obj.targetTime, DEFAULT_ALARM_TIME),
+    alarmTriggeredAt: decodeFieldOrDefault(Schema.String, obj.alarmTriggeredAt, ''),
+    dismissedAt: decodeFieldOrDefault(Schema.String, obj.dismissedAt, ''),
+    healthKitWakeTime: decodeFieldOrDefault(
+      Schema.NullOr(Schema.String),
+      obj.healthKitWakeTime,
+      null,
+    ),
+    result: resultResult.right,
+    diffMinutes: decodeFieldOrDefault(Schema.Number, obj.diffMinutes, 0),
+    todos,
+    todoCompletionSeconds: decodeFieldOrDefault(Schema.Number, obj.todoCompletionSeconds, 0),
+    alarmLabel: decodeFieldOrDefault(Schema.String, obj.alarmLabel, ''),
+    todosCompleted: decodeFieldOrDefault(Schema.Boolean, obj.todosCompleted, false),
+    todosCompletedAt: decodeFieldOrDefault(
+      Schema.NullOr(Schema.String),
+      obj.todosCompletedAt,
+      null,
+    ),
+    goalDeadline: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.goalDeadline, null),
+  };
+}
 
 interface WakeRecordState {
   readonly records: readonly WakeRecord[];
@@ -45,21 +134,50 @@ interface WakeRecordState {
    * dayBoundaryHour を無視し、深夜帯にレコードが見つからない。
    */
   getWeekStats: (weekStartStr: string) => WakeStats;
-  getCurrentStreak: () => number;
+  /**
+   * WakeRecord.result（great/ok）ベースの連続成功日数（直近から遡って算出）。
+   * DailyGradeStore の StreakState.currentStreak（ダッシュボード等に表示される
+   * 「本物」のストリーク）とは別概念。現状 UI からは参照されていない。
+   */
+  getCurrentWakeResultStreak: () => number;
 }
 
-async function persistRecords(records: readonly WakeRecord[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+function persistRecords(records: readonly WakeRecord[]): Promise<void> {
+  return runEffect(
+    Storage.pipe(Effect.flatMap((storage) => storage.set(STORAGE_KEY, JSON.stringify(records)))),
+  );
 }
 
-/** 永続化済み records のパース。破損は空扱い（loaded=false のまま固まるのを防ぐ）。 */
-function parseStoredRecords(raw: string | null): readonly WakeRecord[] {
-  if (raw === null) return [];
-  try {
-    return JSON.parse(raw) as readonly WakeRecord[];
-  } catch {
-    return [];
+/**
+ * decodeStoredJson でゲート済みの配列から WakeRecord を要素単位で検証・復元する。
+ * 1件が不正な形状でも配列全体を空にはしない（1件の破損で起床履歴全体を失うのを防ぐ） —
+ * 不正な要素だけを読み飛ばして warn ログに残す。
+ */
+function parseStoredRecords(decoded: readonly unknown[]): readonly WakeRecord[] {
+  const records: WakeRecord[] = [];
+  for (const raw of decoded) {
+    const record = decodeWakeRecord(raw);
+    if (record !== null) {
+      records.push(record);
+    } else {
+      logWarn('wake-record-store', '不正な形状の WakeRecord をスキップしました', raw);
+    }
   }
+  return records;
+}
+
+/**
+ * records を読み取ってデコードする Effect。
+ * 読み取り自体の失敗（StorageError）はそのまま呼び出し元に伝播させ、データ破損
+ * （JSON パース失敗・配列でない）は空配列にフォールバックする。
+ */
+function loadRecordsEffect(): Effect.Effect<readonly WakeRecord[], StorageError, Storage> {
+  return Storage.pipe(
+    Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, unknownArrayGate, raw)),
+    Effect.map((decoded) => (decoded === null ? [] : parseStoredRecords(decoded))),
+    Effect.catchTag('StorageDecodeError', () => Effect.succeed<readonly WakeRecord[]>([])),
+  );
 }
 
 export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
@@ -67,20 +185,16 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   loaded: false,
 
   loadRecords: async () => {
-    // パース失敗（データは読めたが壊れている）は空扱いで確定してよいが、
-    // 読み取り自体の失敗（リトライしても解決しない）はストレージ上の実データの
-    // 有無が確認できていない。loaded=true・records=[] にすると、次の
+    // 読み取り自体の失敗（StorageError、リトライしても解決しない）はストレージ上の
+    // 実データの有無が確認できていない。loaded=true・records=[] にすると、次の
     // addRecord/updateRecord が空配列を実データの上に永続化し既存の起床履歴を
     // 消してしまうため、loaded=false のまま留めて以降の再試行（アプリ再起動等）に委ねる
-    let raw: string | null;
     try {
-      raw = await readStorageItemWithRetry(STORAGE_KEY);
+      const records = await runEffect(loadRecordsEffect());
+      set({ records, loaded: true });
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[wake-record-store] loadRecords failed after retries', error);
-      return;
+      logError('wake-record-store', 'loadRecords failed after retries', error);
     }
-    set({ records: parseStoredRecords(raw), loaded: true });
   },
 
   addRecord: async (data: Omit<WakeRecord, 'id'>): Promise<WakeRecord> => {
@@ -129,8 +243,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
   },
 
   getWeekStats: (weekStartStr: string): WakeStats => {
-    const weekEnd = new Date(`${weekStartStr}T00:00:00`);
-    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEnd = addDays(parseLocalDateString(weekStartStr), 6);
     const endStr = formatLocalDate(weekEnd);
     const periodRecords = get().records.filter((r) => r.date >= weekStartStr && r.date <= endStr);
 
@@ -140,8 +253,8 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
       return {
         successRate: 0,
         averageDiffMinutes: 0,
-        currentStreak: 0,
-        longestStreak: 0,
+        wakeResultCurrentStreak: 0,
+        wakeResultLongestStreak: 0,
         totalRecords: 0,
         resultCounts: { great: 0, ok: 0, late: 0, missed: 0 },
       };
@@ -161,33 +274,33 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
 
     // Calculate streaks within the period
     const sorted = [...periodRecords].sort((a, b) => a.date.localeCompare(b.date));
-    let currentStreak = 0;
-    let longestStreak = 0;
+    let wakeResultCurrentStreak = 0;
+    let wakeResultLongestStreak = 0;
     let streak = 0;
 
     for (const record of sorted) {
       if (isSuccessWakeResult(record.result)) {
         streak += 1;
-        if (streak > longestStreak) {
-          longestStreak = streak;
+        if (streak > wakeResultLongestStreak) {
+          wakeResultLongestStreak = streak;
         }
       } else {
         streak = 0;
       }
     }
-    currentStreak = streak;
+    wakeResultCurrentStreak = streak;
 
     return {
       successRate: Math.round(successRate * 10) / 10,
       averageDiffMinutes,
-      currentStreak,
-      longestStreak,
+      wakeResultCurrentStreak,
+      wakeResultLongestStreak,
       totalRecords,
       resultCounts,
     };
   },
 
-  getCurrentStreak: (): number => {
+  getCurrentWakeResultStreak: (): number => {
     const { records } = get();
     if (records.length === 0) return 0;
 
@@ -196,7 +309,7 @@ export const useWakeRecordStore = create<WakeRecordState>((set, get) => ({
     let previousDate: Date | null = null;
 
     for (const record of sorted) {
-      const currentDate = new Date(`${record.date}T00:00:00`);
+      const currentDate = parseLocalDateString(record.date);
 
       // Check for date gap: if more than 1 day between consecutive records, break streak
       if (previousDate !== null) {

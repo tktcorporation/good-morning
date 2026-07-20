@@ -1,12 +1,82 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect, Either, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
-import { runEffectFork, syncWidgetEffect } from '../services';
+import {
+  asRecord,
+  decodeFieldOrDefault,
+  decodeOptionalField,
+  decodeStoredJson,
+  runEffect,
+  runEffectFork,
+  Storage,
+  syncWidgetEffect,
+  TodoTypeSchema,
+} from '../services';
+import type { StorageError } from '../services/errors';
 import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
-import { readStorageItemWithRetry } from '../utils/storage-read';
+import { logError } from '../utils/logger';
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
+
+/**
+ * 永続化済み SessionTodo を要素単位で寛容にデコードする。id/title はタスクを
+ * 識別・表示するための最小限のフィールドのため欠落・型不一致なら null を返し、
+ * 呼び出し元がその要素だけを読み飛ばす。
+ */
+function decodeSessionTodo(raw: unknown): SessionTodo | null {
+  const obj = asRecord(raw);
+  const idResult = Schema.decodeUnknownEither(Schema.String)(obj.id);
+  const titleResult = Schema.decodeUnknownEither(Schema.String)(obj.title);
+  if (Either.isLeft(idResult) || Either.isLeft(titleResult)) return null;
+
+  return {
+    id: idResult.right,
+    title: titleResult.right,
+    completed: decodeFieldOrDefault(Schema.Boolean, obj.completed, false),
+    completedAt: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.completedAt, null),
+    type: decodeOptionalField(TodoTypeSchema, obj.type),
+    requiredCount: decodeOptionalField(Schema.Number, obj.requiredCount),
+    currentCount: decodeOptionalField(Schema.Number, obj.currentCount),
+  };
+}
+
+/**
+ * 永続化済み MorningSession をフィールド単位で寛容にデコードする。date/startedAt は
+ * セッションを識別・成立させるための最小限のフィールドのため欠落・型不一致・
+ * （startedAt の場合）ISO パース不能なら null を返してセッションごと破棄する。
+ * Schema.Struct の一括デコードだと1フィールド・1タスクの不整合が recordId や
+ * snooze 状態まで巻き添えで失わせてしまうため、フィールドごとに独立してデコードする。
+ * startedAt のパース可否をここで検証することで、normalizeStoredSession の windowEnd
+ * フォールバック計算（`new Date(startedAt).toISOString()`）が RangeError を投げて
+ * StorageDecodeError の捕捉から漏れる事態も防ぐ。
+ */
+function decodeStoredMorningSession(parsed: unknown): StoredMorningSession | null {
+  const obj = asRecord(parsed);
+  const dateResult = Schema.decodeUnknownEither(Schema.String)(obj.date);
+  const startedAtResult = Schema.decodeUnknownEither(Schema.String)(obj.startedAt);
+  if (Either.isLeft(dateResult) || Either.isLeft(startedAtResult)) return null;
+  if (Number.isNaN(new Date(startedAtResult.right).getTime())) return null;
+
+  const todosRaw = Array.isArray(obj.todos) ? obj.todos : [];
+  const todos: SessionTodo[] = [];
+  for (const t of todosRaw) {
+    const todo = decodeSessionTodo(t);
+    if (todo !== null) todos.push(todo);
+  }
+
+  return {
+    recordId: decodeOptionalField(Schema.NullOr(Schema.String), obj.recordId),
+    date: dateResult.right,
+    startedAt: startedAtResult.right,
+    todos,
+    windowEnd: decodeOptionalField(Schema.String, obj.windowEnd),
+    liveActivityId: decodeOptionalField(Schema.NullOr(Schema.String), obj.liveActivityId),
+    goalDeadline: decodeOptionalField(Schema.NullOr(Schema.String), obj.goalDeadline),
+    snoozeAlarmIds: decodeOptionalField(Schema.Array(Schema.String), obj.snoozeAlarmIds),
+    snoozeFiresAt: decodeOptionalField(Schema.NullOr(Schema.String), obj.snoozeFiresAt),
+  };
+}
 
 interface MorningSessionState {
   readonly session: MorningSession | null;
@@ -60,24 +130,36 @@ interface MorningSessionState {
   getProgress: () => { completed: number; total: number };
 }
 
-async function persistSession(session: MorningSession | null): Promise<void> {
-  if (session === null) {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-  } else {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  }
+function persistSession(session: MorningSession | null): Promise<void> {
+  return runEffect(
+    Storage.pipe(
+      Effect.flatMap((storage) =>
+        session === null
+          ? storage.remove(STORAGE_KEY)
+          : storage.set(STORAGE_KEY, JSON.stringify(session)),
+      ),
+    ),
+  );
 }
 
-/** 永続化済み session のパース。破損は未設定（null）扱い（loaded=false のまま固まるのを防ぐ）。 */
-function parseStoredSession(raw: string | null): MorningSession | null {
-  if (raw === null) return null;
-  try {
-    // 後から追加されたフィールドが欠落するレガシーデータを既定値で補って正規化する。
-    const parsed = JSON.parse(raw) as StoredMorningSession;
-    return normalizeStoredSession(parsed);
-  } catch {
-    return null;
-  }
+/**
+ * session を読み取ってデコードする Effect。
+ * 読み取り自体の失敗（StorageError）はそのまま呼び出し元に伝播させ、データ破損
+ * （スキーマ不一致・JSON パース失敗）は未設定（null）扱いにする。デコード成功後は
+ * normalizeStoredSession で「後から追加されたフィールドが欠落するレガシーデータ」を
+ * 既定値で補って正規化する。
+ */
+function loadSessionEffect(): Effect.Effect<MorningSession | null, StorageError, Storage> {
+  return Storage.pipe(
+    Effect.flatMap((storage) => storage.get(STORAGE_KEY)),
+    Effect.flatMap((raw) => decodeStoredJson(STORAGE_KEY, Schema.Unknown, raw)),
+    Effect.map((decoded) => {
+      if (decoded === null) return null;
+      const stored = decodeStoredMorningSession(decoded);
+      return stored === null ? null : normalizeStoredSession(stored);
+    }),
+    Effect.catchTag('StorageDecodeError', () => Effect.succeed(null)),
+  );
 }
 
 export const useMorningSessionStore = create<MorningSessionState>((set, get) => ({
@@ -92,15 +174,12 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     // 自動開始/dismiss 処理が新規セッションを永続化済みセッションの上に
     // 上書きしてしまうため、loaded=false のまま留めて以降の再試行
     // （アプリ再起動等）に委ねる
-    let raw: string | null;
     try {
-      raw = await readStorageItemWithRetry(STORAGE_KEY);
+      const session = await runEffect(loadSessionEffect());
+      set({ session, loaded: true });
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: 起動時初期化の失敗を握り潰さず可視化する
-      console.error('[morning-session-store] loadSession failed after retries', error);
-      return;
+      logError('morning-session-store', 'loadSession failed after retries', error);
     }
-    set({ session: parseStoredSession(raw), loaded: true });
   },
 
   startSession: async (

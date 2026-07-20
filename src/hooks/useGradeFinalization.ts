@@ -26,7 +26,8 @@ import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { AlarmTime } from '../types/alarm';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { WakeRecord } from '../types/wake-record';
-import { getLogicalDateString } from '../utils/date';
+import { addDays, getLogicalDateString, parseLocalDateString } from '../utils/date';
+import { logError } from '../utils/logger';
 import { calculateBedtime } from '../utils/sleep';
 
 /**
@@ -45,15 +46,13 @@ let hasFinalized = false;
 function resolveStartDate(lastGradedDate: string | null, yesterday: Date): Date {
   let startDate: Date;
   if (lastGradedDate !== null) {
-    startDate = new Date(`${lastGradedDate}T00:00:00`);
-    startDate.setDate(startDate.getDate() + 1);
+    startDate = addDays(parseLocalDateString(lastGradedDate), 1);
   } else {
     startDate = new Date(yesterday);
   }
 
   // 最大7日前までに制限（長期間アプリ未使用時の大量処理を防止）
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgo = addDays(new Date(), -7);
   if (startDate < sevenDaysAgo) {
     startDate = sevenDaysAgo;
   }
@@ -125,12 +124,17 @@ export function useGradeFinalization(): void {
 
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
 
   // useRef で finalize 中かどうかを追跡し、並行実行を防止する
   const finalizingRef = useRef(false);
 
   useEffect(() => {
-    if (!(gradeLoaded && recordsLoaded && targetLoaded)) return;
+    // settings 未ロードだと dayBoundaryHour がデフォルト値のままの可能性があり、
+    // 日付走査の論理日付（getLogicalDateString）がズレて誤った日にグレードを
+    // 確定してしまう。他のセッション系サービス（RecoveryService 等）と同様、
+    // settings のロード完了も待つ。
+    if (!(gradeLoaded && recordsLoaded && targetLoaded && settingsLoaded)) return;
     if (hasFinalized) return;
     if (finalizingRef.current) return;
 
@@ -139,8 +143,7 @@ export function useGradeFinalization(): void {
 
     const finalize = async () => {
       try {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterday = addDays(new Date(), -1);
         // WakeRecord.date は getLogicalDateString で保存されるため、グレード確定の
         // 日付走査でも同じ関数で揃える。ローカル暦日でそのまま変換すると
         // dayBoundaryHour を無視し、深夜帯に不整合が起きる。
@@ -154,7 +157,7 @@ export function useGradeFinalization(): void {
             : null;
 
         // startDate 〜 yesterday の各日を走査
-        const current = new Date(startDate);
+        let current = new Date(startDate);
         while (current <= yesterday) {
           const dateStr = getLogicalDateString(current, dayBoundaryHour);
           await finalizeDay(
@@ -167,18 +170,21 @@ export function useGradeFinalization(): void {
             getGradeForDate,
             addGrade,
           );
-          current.setDate(current.getDate() + 1);
+          current = addDays(current, 1);
         }
       } finally {
         finalizingRef.current = false;
       }
     };
 
-    finalize();
+    finalize().catch((error: unknown) => {
+      logError('useGradeFinalization', 'finalize failed', error);
+    });
   }, [
     gradeLoaded,
     recordsLoaded,
     targetLoaded,
+    settingsLoaded,
     streak.lastGradedDate,
     records,
     target,

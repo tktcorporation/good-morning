@@ -1,14 +1,10 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { DayBoundaryPicker } from '../../src/components/DayBoundaryPicker';
-import {
-  APP_PERMISSIONS,
-  type PermissionItem,
-  type PermissionStatus,
-} from '../../src/constants/permissions';
+import { APP_PERMISSIONS, type PermissionItem } from '../../src/constants/permissions';
 import {
   borderRadius,
   colors,
@@ -19,6 +15,18 @@ import {
 } from '../../src/constants/theme';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
+
+/**
+ * 権限の許可状態を settings-store の値から純粋に導出する。
+ * APP_PERMISSIONS の id と settings-store の各 granted フィールドが1対1で対応する。
+ */
+function resolvePermissionGranted(
+  id: string,
+  alarmKitGranted: boolean,
+  healthKitEnabled: boolean,
+): boolean {
+  return id === 'alarmKit' ? alarmKitGranted : healthKitEnabled;
+}
 
 export default function SettingsScreen() {
   const { t } = useTranslation('common');
@@ -34,41 +42,11 @@ export default function SettingsScreen() {
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
   const alarmKitGranted = useSettingsStore((s) => s.alarmKitGranted);
   const setAlarmKitGranted = useSettingsStore((s) => s.setAlarmKitGranted);
-
-  /**
-   * 各権限の現在の状態を管理する。
-   * APP_PERMISSIONS の id をキーとして、PermissionStatus を保持。
-   * 初期値は 'pending' だが、loadSettings 完了後に AsyncStorage から
-   * 復元した値で上書きされる（下の useEffect を参照）。
-   */
-  const [permissionStatuses, setPermissionStatuses] = useState<Record<string, PermissionStatus>>(
-    () => {
-      const initial: Record<string, PermissionStatus> = {};
-      for (const perm of APP_PERMISSIONS) {
-        initial[perm.id] = 'pending';
-      }
-      return initial;
-    },
-  );
+  const setHealthKitEnabled = useSettingsStore((s) => s.setHealthKitEnabled);
 
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
-
-  // healthKitEnabled / alarmKitGranted が AsyncStorage からロードされた後、
-  // 権限ステータスに反映する。直接 useState の初期値では
-  // loadSettings 完了前なので false のままになる。
-  useEffect(() => {
-    if (healthKitEnabled) {
-      setPermissionStatuses((prev) => ({ ...prev, healthKit: 'granted' }));
-    }
-  }, [healthKitEnabled]);
-
-  useEffect(() => {
-    if (alarmKitGranted) {
-      setPermissionStatuses((prev) => ({ ...prev, alarmKit: 'granted' }));
-    }
-  }, [alarmKitGranted]);
 
   const handleToggleEnabled = useCallback(async () => {
     await toggleEnabled();
@@ -89,24 +67,23 @@ export default function SettingsScreen() {
    */
   const handlePermissionRequest = useCallback(
     async (perm: PermissionItem) => {
-      if (permissionStatuses[perm.id] === 'granted') return;
+      if (resolvePermissionGranted(perm.id, alarmKitGranted, healthKitEnabled)) return;
 
       const success = await perm.request();
       if (success) {
-        setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'granted' }));
-        // AlarmKit 権限の許可状態を永続化して、次回起動時に復元する
         if (perm.id === 'alarmKit') {
           await setAlarmKitGranted(true);
+        } else {
+          await setHealthKitEnabled(true);
         }
       } else {
-        setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'denied' }));
         Alert.alert(
           t(`settings.permissionItems.${perm.i18nKey}.name`),
           t('settings.permissionRequestFailed'),
         );
       }
     },
-    [permissionStatuses, t, setAlarmKitGranted],
+    [alarmKitGranted, healthKitEnabled, t, setAlarmKitGranted, setHealthKitEnabled],
   );
 
   const isEnabled = target?.enabled ?? false;
@@ -158,8 +135,7 @@ export default function SettingsScreen() {
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('settings.permissions')}</Text>
         {APP_PERMISSIONS.map((perm) => {
-          const status = permissionStatuses[perm.id];
-          const isGranted = status === 'granted';
+          const isGranted = resolvePermissionGranted(perm.id, alarmKitGranted, healthKitEnabled);
           return (
             <Pressable
               key={perm.id}

@@ -1,7 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
-import { runEffectFork, syncAlarmsEffect, syncWidgetEffect } from '../services';
+import { runEffect, runEffectFork, Storage, syncAlarmsEffect, syncWidgetEffect } from '../services';
+import type { StorageError } from '../services/errors';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
 import type { DayOverride, NextOverride, WakeTarget } from '../types/wake-target';
 import {
@@ -10,8 +11,11 @@ import {
   DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
   isFixedSquatTodoList,
   isNextOverrideExpired,
+  MAX_WAKE_UP_GOAL_BUFFER_MINUTES,
+  MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
   resolveOverrideSaveDate,
 } from '../types/wake-target';
+import { logError } from '../utils/logger';
 import { migrateBedtimeToSleepMinutes } from '../utils/sleep';
 
 const STORAGE_KEY = STORAGE_KEYS.wakeTarget;
@@ -54,8 +58,26 @@ interface WakeTargetState {
   setAlarmIds: (ids: readonly string[]) => Promise<void>;
 }
 
-async function persist(target: WakeTarget): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(target));
+function persist(target: WakeTarget): Promise<void> {
+  return runEffect(
+    Storage.pipe(Effect.flatMap((storage) => storage.set(STORAGE_KEY, JSON.stringify(target)))),
+  );
+}
+
+/** target と alarmIds を並行して読み取る。Storage.get はリトライ付き。 */
+function readStoredEffect(): Effect.Effect<
+  { raw: string | null; rawIds: string | null },
+  StorageError,
+  Storage
+> {
+  return Storage.pipe(
+    Effect.flatMap((storage) =>
+      Effect.all(
+        { raw: storage.get(STORAGE_KEY), rawIds: storage.get(ALARM_IDS_KEY) },
+        { concurrency: 'unbounded' },
+      ),
+    ),
+  );
 }
 
 /**
@@ -141,9 +163,15 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
     }
   }
 
+  // 範囲は setWakeUpGoalBufferMinutes と同じ MIN/MAX を単一のソースとして使う。
+  // setter を経由しない永続化データ（旧バージョン・手動編集等）が範囲外でも
+  // ここでクランプすることで、範囲保証を setter だけに依存させない。
   const wakeUpGoalBufferMinutes =
     typeof parsed.wakeUpGoalBufferMinutes === 'number'
-      ? parsed.wakeUpGoalBufferMinutes
+      ? Math.max(
+          MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
+          Math.min(MAX_WAKE_UP_GOAL_BUFFER_MINUTES, parsed.wakeUpGoalBufferMinutes),
+        )
       : DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES;
 
   // 起床タスクは「スクワット 10 回」固定に統一する設計のため、
@@ -196,14 +224,21 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   alarmIds: [],
 
   loadTarget: async () => {
-    const [raw, rawIds] = await Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY),
-      AsyncStorage.getItem(ALARM_IDS_KEY),
-    ]);
-
-    // 片方の破損でロード全体を reject させない: loadTarget が失敗すると
-    // loaded=false のまま syncAlarmsEffect が永久にスキップされ、
+    // 読み取り自体の失敗（StorageError、リトライしても解決しない）は target/alarmIds
+    // どちらの実データも確認できていない。loaded=false のまま留めて再試行（アプリ
+    // 再起動等）に委ねる — 他ストアと同じ方針。パース失敗（データは読めたが壊れている）は
+    // parseStoredAlarmIds/parseStoredTarget が内部で吸収し、ロード全体を失敗させない:
+    // loadTarget が失敗すると loaded=false のまま syncAlarmsEffect が永久にスキップされ、
     // アラーム同期が復旧不能になる
+    let raw: string | null;
+    let rawIds: string | null;
+    try {
+      ({ raw, rawIds } = await runEffect(readStoredEffect()));
+    } catch (error) {
+      logError('wake-target-store', 'loadTarget failed after retries', error);
+      return;
+    }
+
     const alarmIds = parseStoredAlarmIds(rawIds);
     const migrated = parseStoredTarget(raw);
 
@@ -314,7 +349,11 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
   setWakeUpGoalBufferMinutes: async (minutes: number) => {
     const { target } = get();
     if (target === null) return;
-    const updated: WakeTarget = { ...target, wakeUpGoalBufferMinutes: minutes };
+    const clamped = Math.max(
+      MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
+      Math.min(MAX_WAKE_UP_GOAL_BUFFER_MINUTES, minutes),
+    );
+    const updated: WakeTarget = { ...target, wakeUpGoalBufferMinutes: clamped };
     set({ target: updated });
     await persist(updated);
   },
@@ -330,6 +369,8 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
 
   setAlarmIds: async (ids: readonly string[]) => {
     set({ alarmIds: ids });
-    await AsyncStorage.setItem(ALARM_IDS_KEY, JSON.stringify(ids));
+    await runEffect(
+      Storage.pipe(Effect.flatMap((storage) => storage.set(ALARM_IDS_KEY, JSON.stringify(ids)))),
+    );
   },
 }));

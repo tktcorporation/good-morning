@@ -10,7 +10,14 @@ import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
-import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  semanticColors,
+  spacing,
+} from '../../src/constants/theme';
 import { useCountdown } from '../../src/hooks/useCountdown';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
@@ -218,9 +225,8 @@ function GoalBufferSection({
       <View style={styles.bufferRow}>
         <Pressable
           style={styles.bufferButton}
-          onPress={() =>
-            setWakeUpGoalBufferMinutes(Math.max(10, target.wakeUpGoalBufferMinutes - 5))
-          }
+          // 範囲クランプは store 側（setWakeUpGoalBufferMinutes）が単一のソースとして行う
+          onPress={() => setWakeUpGoalBufferMinutes(target.wakeUpGoalBufferMinutes - 5)}
         >
           <Text style={styles.bufferButtonText}>{'-'}</Text>
         </Pressable>
@@ -229,9 +235,7 @@ function GoalBufferSection({
         </Text>
         <Pressable
           style={styles.bufferButton}
-          onPress={() =>
-            setWakeUpGoalBufferMinutes(Math.min(120, target.wakeUpGoalBufferMinutes + 5))
-          }
+          onPress={() => setWakeUpGoalBufferMinutes(target.wakeUpGoalBufferMinutes + 5)}
         >
           <Text style={styles.bufferButtonText}>{'+'}</Text>
         </Pressable>
@@ -356,10 +360,10 @@ export default function DashboardScreen() {
             const kit = yield* AlarmKit;
             yield* kit.updateLiveActivity(
               activityId,
-              currentSession.todos.map((t) => ({
-                id: t.id,
-                title: getLocalizedTodoTitle(t),
-                completed: t.completed,
+              currentSession.todos.map((todo) => ({
+                id: todo.id,
+                title: getLocalizedTodoTitle(todo),
+                completed: todo.completed,
               })),
               snoozeEpoch,
             );
@@ -533,7 +537,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorBanner: {
-    backgroundColor: 'rgba(233, 69, 96, 0.15)',
+    backgroundColor: semanticColors.errorLight,
     borderWidth: 1,
     borderColor: colors.primary,
     borderRadius: borderRadius.sm,

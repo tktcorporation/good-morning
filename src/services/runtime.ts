@@ -15,6 +15,7 @@
  */
 
 import { type Effect, Layer, ManagedRuntime } from 'effect';
+import { logError } from '../utils/logger';
 import { type AlarmKit, AlarmKitLive } from './AlarmKitService';
 import { type Notification, NotificationLive } from './NotificationService';
 import { type Storage, StorageLive } from './StorageService';
@@ -64,7 +65,6 @@ export function runEffect<A, E>(effect: Effect.Effect<A, E, AppServices>): Promi
  */
 export function runEffectFork<A, E>(effect: Effect.Effect<A, E, AppServices>): void {
   appRuntime.runPromise(effect).catch((e) => {
-    // biome-ignore lint/suspicious/noConsole: Effect runtime error logging
-    console.error('[Effect Runtime]', e);
+    logError('Effect Runtime', 'runEffectFork failed', e);
   });
 }

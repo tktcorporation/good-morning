@@ -9,13 +9,24 @@
  * DailyGradeRecord は夜の就寝データが揃ってから（翌朝に）確定する。
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Effect, Either, Schema } from 'effect';
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '../constants/storage-keys';
 import { applyGradeToStreak } from '../domain/grade-calculator';
-import { runEffectFork, syncWidgetEffect } from '../services';
+import {
+  asRecord,
+  decodeFieldOrDefault,
+  decodeStoredJson,
+  runEffect,
+  runEffectFork,
+  Storage,
+  syncWidgetEffect,
+  unknownArrayGate,
+} from '../services';
+import type { StorageError } from '../services/errors';
 import type { DailyGradeRecord } from '../types/daily-grade';
 import type { StreakState } from '../types/streak';
+import { logError, logWarn } from '../utils/logger';
 
 const GRADES_STORAGE_KEY = STORAGE_KEYS.dailyGrades;
 const STREAK_STORAGE_KEY = STORAGE_KEYS.streakState;
@@ -31,6 +42,84 @@ export const INITIAL_STREAK_STATE: StreakState = {
   freezesUsedTotal: 0,
   lastGradedDate: null,
 };
+
+const DailyGradeSchema = Schema.Literal('excellent', 'good', 'fair', 'poor');
+const BedtimeResultSchema = Schema.Literal('onTime', 'late', 'noData');
+
+/**
+ * 永続化済み DailyGradeRecord を要素単位で寛容にデコードする。date/grade は
+ * レコードを識別・成立させるための最小限のフィールドのため欠落・型不一致なら
+ * レコードごと破棄する（呼び出し元が配列から除外）。それ以外のフィールドは
+ * decodeFieldOrDefault でフィールド単位のデフォルト補完に倒し、1フィールドの
+ * 破損で他の正常なレコード・フィールドまで失わないようにする。
+ */
+function decodeDailyGradeRecord(raw: unknown): DailyGradeRecord | null {
+  const obj = asRecord(raw);
+  const dateResult = Schema.decodeUnknownEither(Schema.String)(obj.date);
+  const gradeResult = Schema.decodeUnknownEither(DailyGradeSchema)(obj.grade);
+  if (Either.isLeft(dateResult) || Either.isLeft(gradeResult)) return null;
+
+  return {
+    date: dateResult.right,
+    grade: gradeResult.right,
+    morningPass: decodeFieldOrDefault(Schema.Boolean, obj.morningPass, false),
+    bedtimeResult: decodeFieldOrDefault(BedtimeResultSchema, obj.bedtimeResult, 'noData'),
+    bedtimeTarget: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.bedtimeTarget, null),
+    actualBedtime: decodeFieldOrDefault(Schema.NullOr(Schema.String), obj.actualBedtime, null),
+  };
+}
+
+/** 永続化済み grades 配列をデコードする。個々のレコードが不正な形状でも配列全体は破棄しない。 */
+function decodeGrades(decoded: readonly unknown[]): readonly DailyGradeRecord[] {
+  const records: DailyGradeRecord[] = [];
+  for (const raw of decoded) {
+    const record = decodeDailyGradeRecord(raw);
+    if (record !== null) {
+      records.push(record);
+    } else {
+      logWarn('daily-grade-store', '不正な形状の DailyGradeRecord をスキップしました', raw);
+    }
+  }
+  return records;
+}
+
+/**
+ * 永続化済み StreakState をフィールド単位で寛容にデコードする。
+ * Schema.Struct の一括デコードは1フィールドの型不一致で構造体全体を失敗させ、
+ * 他の正常なフィールド（longestStreak 等の積み上げてきた実績）まで巻き添えで
+ * デフォルト値に上書きしてしまうため、decodeFieldOrDefault でフィールドごとに
+ * 独立してデコードする。
+ */
+function decodeStreakState(parsed: unknown): StreakState {
+  const obj = asRecord(parsed);
+  return {
+    currentStreak: decodeFieldOrDefault(
+      Schema.Number,
+      obj.currentStreak,
+      INITIAL_STREAK_STATE.currentStreak,
+    ),
+    longestStreak: decodeFieldOrDefault(
+      Schema.Number,
+      obj.longestStreak,
+      INITIAL_STREAK_STATE.longestStreak,
+    ),
+    freezesAvailable: decodeFieldOrDefault(
+      Schema.Number,
+      obj.freezesAvailable,
+      INITIAL_STREAK_STATE.freezesAvailable,
+    ),
+    freezesUsedTotal: decodeFieldOrDefault(
+      Schema.Number,
+      obj.freezesUsedTotal,
+      INITIAL_STREAK_STATE.freezesUsedTotal,
+    ),
+    lastGradedDate: decodeFieldOrDefault(
+      Schema.NullOr(Schema.String),
+      obj.lastGradedDate,
+      INITIAL_STREAK_STATE.lastGradedDate,
+    ),
+  };
+}
 
 interface DailyGradeState {
   readonly grades: readonly DailyGradeRecord[];
@@ -63,9 +152,58 @@ interface DailyGradeState {
  * grades と streak の両方を AsyncStorage に永続化するヘルパー。
  * addGrade のたびに2つのキーを書き込む必要があるため共通化。
  */
-async function persistAll(grades: readonly DailyGradeRecord[], streak: StreakState): Promise<void> {
-  await AsyncStorage.setItem(GRADES_STORAGE_KEY, JSON.stringify(grades));
-  await AsyncStorage.setItem(STREAK_STORAGE_KEY, JSON.stringify(streak));
+function persistAll(grades: readonly DailyGradeRecord[], streak: StreakState): Promise<void> {
+  return runEffect(
+    Storage.pipe(
+      Effect.flatMap((storage) =>
+        Effect.all(
+          [
+            storage.set(GRADES_STORAGE_KEY, JSON.stringify(grades)),
+            storage.set(STREAK_STORAGE_KEY, JSON.stringify(streak)),
+          ],
+          { concurrency: 'unbounded' },
+        ),
+      ),
+      Effect.asVoid,
+    ),
+  );
+}
+
+/**
+ * grades と streak を並行して読み取り、デコードする Effect。
+ * 読み取り自体の失敗（StorageError）はそのまま呼び出し元に伝播させる。
+ * JSON パース失敗（未設定含む）は grades を空配列、streak を INITIAL_STREAK_STATE に
+ * フォールバックし、JSON としては読めたがフィールド単位で不整合がある場合は
+ * decodeGrades/decodeStreakState が個別の要素・フィールドのみフォールバックする。
+ */
+function loadGradesEffect(): Effect.Effect<
+  { grades: readonly DailyGradeRecord[]; streak: StreakState },
+  StorageError,
+  Storage
+> {
+  return Storage.pipe(
+    Effect.flatMap((storage) =>
+      Effect.all(
+        {
+          grades: storage.get(GRADES_STORAGE_KEY).pipe(
+            Effect.flatMap((raw) => decodeStoredJson(GRADES_STORAGE_KEY, unknownArrayGate, raw)),
+            Effect.map((decoded) => (decoded === null ? [] : decodeGrades(decoded))),
+            Effect.catchTag('StorageDecodeError', () =>
+              Effect.succeed<readonly DailyGradeRecord[]>([]),
+            ),
+          ),
+          streak: storage.get(STREAK_STORAGE_KEY).pipe(
+            Effect.flatMap((raw) => decodeStoredJson(STREAK_STORAGE_KEY, Schema.Unknown, raw)),
+            Effect.map((decoded) =>
+              decoded === null ? INITIAL_STREAK_STATE : decodeStreakState(decoded),
+            ),
+            Effect.catchTag('StorageDecodeError', () => Effect.succeed(INITIAL_STREAK_STATE)),
+          ),
+        },
+        { concurrency: 'unbounded' },
+      ),
+    ),
+  );
 }
 
 export const useDailyGradeStore = create<DailyGradeState>((set, get) => ({
@@ -74,18 +212,15 @@ export const useDailyGradeStore = create<DailyGradeState>((set, get) => ({
   loaded: false,
 
   loadGrades: async () => {
-    const [rawGrades, rawStreak] = await Promise.all([
-      AsyncStorage.getItem(GRADES_STORAGE_KEY),
-      AsyncStorage.getItem(STREAK_STORAGE_KEY),
-    ]);
-
-    const grades: readonly DailyGradeRecord[] =
-      rawGrades !== null ? (JSON.parse(rawGrades) as DailyGradeRecord[]) : [];
-
-    const streak: StreakState =
-      rawStreak !== null ? (JSON.parse(rawStreak) as StreakState) : INITIAL_STREAK_STATE;
-
-    set({ grades, streak, loaded: true });
+    // 読み取り自体の失敗（StorageError、リトライしても解決しない）は grades/streak
+    // どちらの実データも確認できていない。loaded=false のまま留めて再試行
+    // （アプリ再起動等）に委ねる — 他ストアと同じ方針。
+    try {
+      const { grades, streak } = await runEffect(loadGradesEffect());
+      set({ grades, streak, loaded: true });
+    } catch (error) {
+      logError('daily-grade-store', 'loadGrades failed after retries', error);
+    }
   },
 
   addGrade: async (record: DailyGradeRecord) => {

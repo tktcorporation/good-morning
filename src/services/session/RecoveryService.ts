@@ -26,9 +26,11 @@ import { getLogicalDateString } from '../../utils/date';
 import { getLocalizedTodoTitle } from '../../utils/todo-display';
 import { AlarmKit, type AlarmKitError } from '../AlarmKitService';
 import { cancelAlarmsByIds, SNOOZE_DURATION_SECONDS } from '../AlarmSchedulerService';
+import { bestEffort } from '../effect-utils';
 import type { Notification } from '../NotificationService';
 import { expireSessionIfNeeded } from './CompletionService';
 import { handleAlarmDismissEffect, recordWakeDismiss } from './DismissService';
+import { isFullSyncReady } from './readiness';
 import { isSnoozeEvent, resolveOverrideAwareDateStr, type SessionError } from './types';
 
 /**
@@ -53,18 +55,14 @@ const cleanupStaleOrDanglingSession = (
 
     if (state.session.date !== today && state.isExpired()) {
       if (state.session.liveActivityId !== null) {
-        yield* kit
-          .endLiveActivity(state.session.liveActivityId)
-          .pipe(Effect.catchAll(() => Effect.void));
+        yield* bestEffort(kit.endLiveActivity(state.session.liveActivityId));
       }
       yield* Effect.promise(() => state.clearSession());
       return;
     }
 
     if (state.areAllCompleted() && state.session.liveActivityId !== null) {
-      yield* kit
-        .endLiveActivity(state.session.liveActivityId)
-        .pipe(Effect.catchAll(() => Effect.void));
+      yield* bestEffort(kit.endLiveActivity(state.session.liveActivityId));
     }
   });
 
@@ -132,7 +130,7 @@ const reclaimUnmanagedNativeSnoozes: Effect.Effect<void, never, AlarmKit> = Effe
     const kit = yield* AlarmKit;
     const nativeIds = yield* kit.getSnoozeAlarmIds;
     if (nativeIds.length === 0) return;
-    yield* cancelAlarmsByIds(nativeIds).pipe(Effect.catchAll(() => Effect.void));
+    yield* bestEffort(cancelAlarmsByIds(nativeIds));
     yield* kit.clearSnoozeAlarmIds;
   },
 );
@@ -154,21 +152,13 @@ export const recoverMissedDismiss = (
     const kit = yield* AlarmKit;
 
     const targetState = useWakeTargetStore.getState();
-    const recordState = useWakeRecordStore.getState();
     const sessionState = useMorningSessionStore.getState();
-    if (
-      !targetState.loaded ||
-      targetState.target === null ||
-      !recordState.loaded ||
-      !sessionState.loaded ||
-      !useSettingsStore.getState().loaded
-    ) {
-      // dayBoundaryHour（設定未ロード時はデフォルト値のまま）で論理日付が
-      // ズレると、record/session の重複判定・作成が誤った日付で行われる。
-      // session 未ロードのまま進むと isActive()（session !== null）が
-      // 常に false になり、実際には dismiss 未処理の可能性があるのに
-      // processPrimaryDismissEvent の戻り値だけを見て
-      // clearDismissEvents してしまう（handleAlarmDismissEffect 側の
+    if (!isFullSyncReady() || targetState.target === null) {
+      // ストア未ロードのまま進むと record/session の重複判定・作成が誤った
+      // 日付で行われる（理由は isFullSyncReady 参照）。session 未ロードのまま
+      // 進むと isActive()（session !== null）が常に false になり、実際には
+      // dismiss 未処理の可能性があるのに processPrimaryDismissEvent の戻り値
+      // だけを見て clearDismissEvents してしまう（handleAlarmDismissEffect 側の
       // session 未ロードガードで record/session 作成自体は行われないため、
       // イベントだけが失われる）
       return false;
@@ -310,8 +300,8 @@ export const handleSnoozeArrivalEffect: Effect.Effect<boolean, AlarmKitError, Al
 
     const activityId = sessionState.session.liveActivityId;
     if (activityId !== null) {
-      yield* kit
-        .updateLiveActivity(
+      yield* bestEffort(
+        kit.updateLiveActivity(
           activityId,
           sessionState.session.todos.map((t) => ({
             id: t.id,
@@ -319,8 +309,8 @@ export const handleSnoozeArrivalEffect: Effect.Effect<boolean, AlarmKitError, Al
             completed: t.completed,
           })),
           Math.floor(new Date(nextSnoozeFiresAt).getTime() / 1000),
-        )
-        .pipe(Effect.catchAll(() => Effect.void));
+        ),
+      );
     }
 
     return true;

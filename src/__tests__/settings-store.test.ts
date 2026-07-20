@@ -66,6 +66,22 @@ describe('useSettingsStore', () => {
     expect(state.dayBoundaryHour).toBe(3);
   });
 
+  test('1フィールドの型不一致では、そのフィールドのみデフォルト値に倒し他の正常なフィールドは保持する', async () => {
+    mockGetItem.mockResolvedValueOnce(
+      JSON.stringify({
+        dayBoundaryHour: 'not-a-number',
+        healthKitEnabled: true,
+        alarmKitGranted: true,
+      }),
+    );
+    await useSettingsStore.getState().loadSettings();
+    const state = useSettingsStore.getState();
+    expect(state.loaded).toBe(true);
+    expect(state.dayBoundaryHour).toBe(3); // 型不一致だったフィールドのみデフォルトに
+    expect(state.healthKitEnabled).toBe(true); // 正常だった他のフィールドは保持
+    expect(state.alarmKitGranted).toBe(true);
+  });
+
   test('setDayBoundaryHour persists to AsyncStorage', async () => {
     await useSettingsStore.getState().loadSettings();
     await useSettingsStore.getState().setDayBoundaryHour(5);

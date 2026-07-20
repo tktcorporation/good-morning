@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Full verification before Claude Code completion (Stop hook target)"
+set -uo pipefail
+
+cd "${MISE_PROJECT_ROOT:-.}" || exit 1
+
+status=0
+pnpm typecheck || status=1
+pnpm lint || status=1
+pnpm format:check || status=1
+pnpm test || status=1
+pnpm unused || status=1
+
+exit "$status"

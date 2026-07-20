@@ -16,9 +16,12 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
+    "format:check": "biome format .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "doctor": "expo doctor",
+    "unused": "knip",
+    "expo:check": "expo install --check",
+    "expo:doctor": "expo-doctor",
     "bundle:check": "expo export --platform ios --output-dir .expo-export-check --no-minify --source-maps && rm -rf .expo-export-check",
     "version-packages": "changeset version"
   },

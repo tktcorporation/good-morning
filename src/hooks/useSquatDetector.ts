@@ -56,26 +56,19 @@ export function nextSquatPhase(phase: SquatPhase, magnitude: number): SquatPhase
  * 背景: 朝の起床確認タスクとして、寝ぼけたまま操作できないフィジカルチャレンジを提供する。
  * チェックボックスをタップするだけの従来タスクと違い、実際に体を動かす必要がある。
  *
+ * 目標回数との比較・完了判定はこのフックの責務にしない（呼び出し元の状態と二重に
+ * カウンタを持つと、両者の増分タイミングのズレで目標回数の半分程度で誤って完了扱いに
+ * なる）。このフックは「1回検出したら onSquat を呼ぶ」だけに徹し、完了判定は
+ * onSquat の呼び出し元（永続化された currentCount 等、単一のソース）に委ねる。
+ *
  * @param enabled - true でセンサー購読を開始。false で停止（バッテリー節約）。
- * @param targetCount - 目標スクワット回数。達したら onComplete を呼ぶ。
  * @param onSquat - スクワット1回検出時のコールバック。
- * @param onComplete - 目標回数達成時のコールバック。
  */
-export function useSquatDetector(
-  enabled: boolean,
-  targetCount: number,
-  onSquat: () => void,
-  onComplete: () => void,
-) {
-  const [count, setCount] = useState(0);
+export function useSquatDetector(enabled: boolean, onSquat: () => void) {
   const [isListening, setIsListening] = useState(false);
   const phaseRef = useRef<SquatPhase>('standing');
   const lastSquatTimeRef = useRef(0);
 
-  const countRef = useRef(count);
-  countRef.current = count;
-
-  const handleComplete = useCallback(onComplete, [onComplete]);
   const handleSquat = useCallback(onSquat, [onSquat]);
 
   useEffect(() => {
@@ -95,12 +88,7 @@ export function useSquatDetector(
         const now = Date.now();
         if (now - lastSquatTimeRef.current > DEBOUNCE_MS) {
           lastSquatTimeRef.current = now;
-          const newCount = countRef.current + 1;
-          setCount(newCount);
           handleSquat();
-          if (newCount >= targetCount) {
-            handleComplete();
-          }
         }
         phaseRef.current = 'standing';
       } else {
@@ -114,13 +102,7 @@ export function useSquatDetector(
       subscription.remove();
       setIsListening(false);
     };
-  }, [enabled, targetCount, handleSquat, handleComplete]);
+  }, [enabled, handleSquat]);
 
-  const reset = useCallback(() => {
-    setCount(0);
-    phaseRef.current = 'standing';
-    lastSquatTimeRef.current = 0;
-  }, []);
-
-  return { count, isListening, reset };
+  return { isListening };
 }
