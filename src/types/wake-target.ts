@@ -2,16 +2,19 @@ import { addDays, formatLocalDate, getLogicalDate, getLogicalDateString } from '
 import type { AlarmTime, DayOfWeek, TodoItem } from './alarm';
 
 /**
- * 固定スクワットタスクの仕様。
+ * 固定起床タスクの仕様。
  *
  * 背景: ユーザーが起床タスクを自分で組み立てるのは認知負荷が高いというフィードバックを受け、
- * 「考えなくても始められる」ように起床タスクを「スクワット 10 回」1 件に固定した。
+ * 「考えなくても始められる」ように起床タスクを1件だけの固定タスクにした。
  * このため自由入力 / 追加 / 削除 / 並べ替えの UI と store API は廃止済み。
+ * どの1件を使うかは `WakeTarget.taskType` で選択する（設定画面で切り替え可能）。
  *
  * `WakeTarget.todos` 配列の構造自体は維持している（MorningSession / Live Activity /
- * SquatChallengeItem など配列前提のロジックが多いため）。常に「この固定 TODO 1 件のみ」が
- * 入る不変条件を `DEFAULT_WAKE_TARGET` と `migrateStoredTarget` で担保する。
+ * SquatChallengeItem など配列前提のロジックが多いため）。常に「taskType に対応する
+ * 固定 TODO 1 件のみ」が入る不変条件を `DEFAULT_WAKE_TARGET` と `migrateStoredTarget` で担保する。
  */
+export type WakeTaskType = 'squat' | 'sky';
+
 export const FIXED_SQUAT_TODO_TITLE = 'Squat';
 export const FIXED_SQUAT_REQUIRED_COUNT = 10;
 
@@ -22,6 +25,9 @@ export const FIXED_SQUAT_REQUIRED_COUNT = 10;
  */
 export const FIXED_SQUAT_TODO_ID = 'fixed-squat-todo';
 
+export const FIXED_SKY_TODO_TITLE = 'Sky Photo';
+export const FIXED_SKY_TODO_ID = 'fixed-sky-todo';
+
 export function buildFixedSquatTodo(): TodoItem {
   return {
     id: FIXED_SQUAT_TODO_ID,
@@ -30,6 +36,20 @@ export function buildFixedSquatTodo(): TodoItem {
     type: 'squat',
     requiredCount: FIXED_SQUAT_REQUIRED_COUNT,
   };
+}
+
+export function buildFixedSkyTodo(): TodoItem {
+  return {
+    id: FIXED_SKY_TODO_ID,
+    title: FIXED_SKY_TODO_TITLE,
+    completed: false,
+    type: 'sky',
+  };
+}
+
+/** taskType に対応する固定 TODO を1件生成する。DEFAULT_WAKE_TARGET / setTaskType の共通経路。 */
+export function buildFixedTodoForTaskType(taskType: WakeTaskType): TodoItem {
+  return taskType === 'squat' ? buildFixedSquatTodo() : buildFixedSkyTodo();
 }
 
 /**
@@ -45,6 +65,21 @@ export function isFixedSquatTodoList(todos: readonly TodoItem[]): boolean {
     only.type === 'squat' &&
     only.requiredCount === FIXED_SQUAT_REQUIRED_COUNT
   );
+}
+
+/** 永続化済みの todos が固定 sky TODO 1 件のみで構成されているかを判定する。 */
+export function isFixedSkyTodoList(todos: readonly TodoItem[]): boolean {
+  if (todos.length !== 1) return false;
+  const only = todos[0];
+  return only !== undefined && only.id === FIXED_SKY_TODO_ID && only.type === 'sky';
+}
+
+/** taskType に対応する固定 TODO 1 件のみで構成されているかを判定する。 */
+export function isFixedTodoListForTaskType(
+  todos: readonly TodoItem[],
+  taskType: WakeTaskType,
+): boolean {
+  return taskType === 'squat' ? isFixedSquatTodoList(todos) : isFixedSkyTodoList(todos);
 }
 
 export type DayOverride =
@@ -66,6 +101,8 @@ export interface WakeTarget {
   readonly dayOverrides: Partial<Readonly<Record<DayOfWeek, DayOverride>>>;
   readonly nextOverride: NextOverride | null;
   readonly todos: readonly TodoItem[];
+  /** どの固定起床タスクを使うか。todos はこの値に対応する固定 TODO 1 件のみを保持する。 */
+  readonly taskType: WakeTaskType;
   readonly enabled: boolean;
   /**
    * 目標睡眠時間（分）。Daily Grade System で夜の評価に使用。
@@ -474,8 +511,9 @@ export const DEFAULT_WAKE_TARGET: WakeTarget = {
   defaultTime: { hour: 7, minute: 0 },
   dayOverrides: {},
   nextOverride: null,
-  // 起床タスクは「スクワット 10 回」固定。詳細は FIXED_SQUAT_TODO_ID のコメント参照。
+  // 起床タスクは「スクワット 10 回」がデフォルト。詳細は FIXED_SQUAT_TODO_ID のコメント参照。
   todos: [buildFixedSquatTodo()],
+  taskType: 'squat',
   enabled: true,
   targetSleepMinutes: null,
   wakeUpGoalBufferMinutes: DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,

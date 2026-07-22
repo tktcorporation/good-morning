@@ -1,0 +1,45 @@
+import { isSkyClassification, SKY_CONFIDENCE_THRESHOLD } from '../utils/sky-classification';
+
+describe('isSkyClassification', () => {
+  it('空関連ラベルが閾値以上の信頼度で含まれていれば true を返す', () => {
+    expect(isSkyClassification([{ identifier: 'Sky', confidence: 0.8 }])).toBe(true);
+  });
+
+  it('空関連ラベルが識別子の一部として含まれていれば大文字小文字を無視して一致する', () => {
+    expect(isSkyClassification([{ identifier: 'CLOUDY SKY', confidence: 0.4 }])).toBe(true);
+  });
+
+  it('雲・夕焼けなど空関連キーワードのバリエーションにも一致する', () => {
+    expect(isSkyClassification([{ identifier: 'sunset', confidence: 0.5 }])).toBe(true);
+    expect(isSkyClassification([{ identifier: 'cumulus cloud', confidence: 0.3 }])).toBe(true);
+  });
+
+  it('信頼度が閾値ちょうどなら true を返す（境界値）', () => {
+    expect(isSkyClassification([{ identifier: 'sky', confidence: SKY_CONFIDENCE_THRESHOLD }])).toBe(
+      true,
+    );
+  });
+
+  it('信頼度が閾値未満なら false を返す', () => {
+    expect(
+      isSkyClassification([{ identifier: 'sky', confidence: SKY_CONFIDENCE_THRESHOLD - 0.01 }]),
+    ).toBe(false);
+  });
+
+  it('空と無関係なラベルのみでは信頼度が高くても false を返す', () => {
+    expect(isSkyClassification([{ identifier: 'dog', confidence: 0.9 }])).toBe(false);
+  });
+
+  it('分類結果が空配列なら false を返す', () => {
+    expect(isSkyClassification([])).toBe(false);
+  });
+
+  it('複数ラベルのうち1件でも空関連＆閾値以上なら true を返す', () => {
+    expect(
+      isSkyClassification([
+        { identifier: 'dog', confidence: 0.9 },
+        { identifier: 'cloud', confidence: 0.2 },
+      ]),
+    ).toBe(true);
+  });
+});

@@ -11,9 +11,10 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native build artifacts
-ios/
-android/
+# Native build artifacts (prebuild で生成される。modules/*/ios のようなローカル
+# Expo Module のソースまで無視しないよう、トップレベルのみに限定する)
+/ios
+/android
 
 # Environment
 .env

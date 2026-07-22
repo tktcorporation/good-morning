@@ -6,7 +6,8 @@
   "override": "明日だけ",
   "todos": {
     "title": "明日のタスク",
-    "fixedTaskLabel": "スクワット 10 回"
+    "fixedTaskLabel": "スクワット 10 回",
+    "fixedSkyTaskLabel": "空の写真を撮影"
   },
   "morningRoutine": {
     "title": "今朝のルーティン",
@@ -21,6 +22,16 @@
       "detecting": "スクワット検出中...",
       "done": "完了!",
       "waiting": "準備中..."
+    },
+    "sky": {
+      "title": "空の写真",
+      "waiting": "準備中...",
+      "openCamera": "カメラを開く",
+      "classifying": "判定中...",
+      "shutter": "シャッター",
+      "retry": "もう一度撮影",
+      "failed": "空が写っていませんでした。もう一度撮影してください",
+      "done": "完了!"
     }
   },
   "goalBuffer": {

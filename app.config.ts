@@ -38,6 +38,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // 自体は不要だが、設定 → スクワット動作確認画面の歩数・気圧センサー表示で必須。
       NSMotionUsageDescription:
         'Good Morning uses motion data to detect squats and to show real-time movement information in the squat debug screen.',
+      // 「空の写真」起床タスクで、撮影した写真を端末上の Vision framework で
+      // 判定するためにカメラアクセスが必要（写真は送信・保存されない）。
+      NSCameraUsageDescription:
+        'Good Morning uses the camera to let you take a photo of the sky as a wake-up task.',
       NSSupportsLiveActivities: true,
     },
     entitlements: {

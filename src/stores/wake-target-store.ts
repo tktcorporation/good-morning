@@ -4,12 +4,12 @@ import { STORAGE_KEYS } from '../constants/storage-keys';
 import { runEffect, runEffectFork, Storage, syncAlarmsEffect, syncWidgetEffect } from '../services';
 import type { StorageError } from '../services/errors';
 import type { AlarmTime, DayOfWeek } from '../types/alarm';
-import type { DayOverride, NextOverride, WakeTarget } from '../types/wake-target';
+import type { DayOverride, NextOverride, WakeTarget, WakeTaskType } from '../types/wake-target';
 import {
-  buildFixedSquatTodo,
+  buildFixedTodoForTaskType,
   DEFAULT_WAKE_TARGET,
   DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES,
-  isFixedSquatTodoList,
+  isFixedTodoListForTaskType,
   isNextOverrideExpired,
   MAX_WAKE_UP_GOAL_BUFFER_MINUTES,
   MIN_WAKE_UP_GOAL_BUFFER_MINUTES,
@@ -52,6 +52,8 @@ interface WakeTargetState {
   clearExpiredOverride: () => Promise<void>;
   setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>;
   removeDayOverride: (day: DayOfWeek) => Promise<void>;
+  /** 起床タスクの種別を切り替える。todos は新しい taskType の固定 TODO 1 件に作り直される。 */
+  setTaskType: (taskType: WakeTaskType) => Promise<void>;
   setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
   setWakeUpGoalBufferMinutes: (minutes: number) => Promise<void>;
   toggleEnabled: () => Promise<void>;
@@ -132,6 +134,11 @@ function parseDayOverrides(raw: unknown): WakeTarget['dayOverrides'] {
   return result;
 }
 
+/** 永続化データの taskType を復元する。未設定・不正値はレガシー互換のため 'squat' に倒す。 */
+function parseTaskType(raw: unknown): WakeTaskType {
+  return raw === 'sky' ? 'sky' : 'squat';
+}
+
 /** 妥当な time と targetDate を持つ場合のみ nextOverride を復元する。破損は null 扱い。 */
 function parseNextOverride(raw: unknown): NextOverride | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -174,17 +181,21 @@ function migrateStoredTarget(parsed: Record<string, unknown>): WakeTarget {
         )
       : DEFAULT_WAKE_UP_GOAL_BUFFER_MINUTES;
 
-  // 起床タスクは「スクワット 10 回」固定に統一する設計のため、
-  // 永続化済みデータのうち固定 TODO 1 件以外を含むものは次回ロード時に正規化する。
+  // 起床タスクは taskType が指す 1 種類の固定 TODO に統一する設計のため、
+  // 永続化済みデータのうち taskType に対応する固定 TODO 1 件以外を含むものは次回ロード時に正規化する。
   // 自由入力タスクの履歴は破棄される（仕様の単純化を優先）。
+  const taskType = parseTaskType(parsed.taskType);
   const storedTodos = Array.isArray(parsed.todos) ? (parsed.todos as WakeTarget['todos']) : [];
-  const todos = isFixedSquatTodoList(storedTodos) ? storedTodos : [buildFixedSquatTodo()];
+  const todos = isFixedTodoListForTaskType(storedTodos, taskType)
+    ? storedTodos
+    : [buildFixedTodoForTaskType(taskType)];
 
   return {
     defaultTime,
     dayOverrides: parseDayOverrides(parsed.dayOverrides),
     nextOverride: parseNextOverride(parsed.nextOverride),
     todos,
+    taskType,
     // enabled 欠落は true に倒す: 保存済みデータが存在する = 利用中のユーザーで、
     // 誤って false に倒すと翌朝のアラームが黙って消える方が被害が大きい
     enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : true,
@@ -333,6 +344,19 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     if (target === null) return;
     const { [day]: _, ...rest } = target.dayOverrides;
     const updated: WakeTarget = { ...target, dayOverrides: rest };
+    set({ target: updated });
+    await persist(updated);
+    syncAfterTargetChange();
+  },
+
+  setTaskType: async (taskType: WakeTaskType) => {
+    const { target } = get();
+    if (target === null) return;
+    const updated: WakeTarget = {
+      ...target,
+      taskType,
+      todos: [buildFixedTodoForTaskType(taskType)],
+    };
     set({ target: updated });
     await persist(updated);
     syncAfterTargetChange();

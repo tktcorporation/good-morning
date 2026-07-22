@@ -110,6 +110,14 @@ interface MorningSessionState {
    * checkbox タスクに対して呼ばれた場合は何もしない。
    */
   incrementTodoCount: (todoId: string) => Promise<void>;
+  /**
+   * sky タスクをネイティブ画像分類の判定成功時にのみ完了させる。
+   * toggleTodo と異なりタップだけでは完了できない — squat の加速度センサー判定と同様、
+   * 寝ぼけたままの操作だけで完了できる抜け道を作らないため、呼び出し元
+   * （SkyChallengeItem）は判定成功時にのみこれを呼ぶ。sky 以外のタスクや、
+   * 既に completed なタスクに対して呼ばれた場合は何もしない。
+   */
+  completeSkyTodo: (todoId: string) => Promise<void>;
   clearSession: () => Promise<void>;
   /**
    * snoozeAlarmIds と snoozeFiresAt をアトミックに更新し、session を AsyncStorage に永続化する。
@@ -266,6 +274,25 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
           completedAt: nowCompleted ? new Date().toISOString() : null,
         };
       }),
+    };
+    set({ session: updated });
+    await persistSession(updated);
+    runEffectFork(syncWidgetEffect);
+  },
+
+  completeSkyTodo: async (todoId: string) => {
+    const { session } = get();
+    if (session === null) return;
+
+    const todo = session.todos.find((t) => t.id === todoId);
+    if (todo === undefined || todo.type !== 'sky') return;
+    if (todo.completed) return;
+
+    const updated: MorningSession = {
+      ...session,
+      todos: session.todos.map((t) =>
+        t.id === todoId ? { ...t, completed: true, completedAt: new Date().toISOString() } : t,
+      ),
     };
     set({ session: updated });
     await persistSession(updated);

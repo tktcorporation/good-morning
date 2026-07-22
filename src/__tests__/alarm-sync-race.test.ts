@@ -29,6 +29,7 @@ function createTarget(overrides?: Partial<WakeTarget>): WakeTarget {
     dayOverrides: {},
     nextOverride: null,
     todos: [],
+    taskType: 'squat',
     enabled: true,
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,

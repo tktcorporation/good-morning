@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
 import { ProgressBar } from '../../src/components/ProgressBar';
+import { SkyChallengeItem } from '../../src/components/SkyChallengeItem';
 import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
@@ -34,7 +35,7 @@ import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
-import type { WakeTarget } from '../../src/types/wake-target';
+import type { WakeTarget, WakeTaskType } from '../../src/types/wake-target';
 import {
   getNextLogicalDay,
   resolveOverrideEditDay,
@@ -125,6 +126,7 @@ function MorningRoutineSection({
   onToggleTodo,
   onIncrementTodo,
   onCompleteTodo,
+  onCompleteSkyTodo,
 }: {
   readonly session: import('../../src/types/morning-session').MorningSession;
   readonly progress: { completed: number; total: number };
@@ -134,6 +136,7 @@ function MorningRoutineSection({
   readonly onToggleTodo: (id: string) => void;
   readonly onIncrementTodo: (id: string) => void;
   readonly onCompleteTodo: (id: string) => void;
+  readonly onCompleteSkyTodo: (id: string) => void;
 }) {
   const { t } = useTranslation('dashboard');
   return (
@@ -166,22 +169,29 @@ function MorningRoutineSection({
           {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
         </Text>
       )}
-      {session.todos.map((todo) =>
-        (todo.type ?? 'checkbox') === 'squat' ? (
-          <SquatChallengeItem
-            key={todo.id}
-            todo={todo}
-            onIncrement={onIncrementTodo}
-            onComplete={onCompleteTodo}
-          />
-        ) : (
+      {session.todos.map((todo) => {
+        const type = todo.type ?? 'checkbox';
+        if (type === 'squat') {
+          return (
+            <SquatChallengeItem
+              key={todo.id}
+              todo={todo}
+              onIncrement={onIncrementTodo}
+              onComplete={onCompleteTodo}
+            />
+          );
+        }
+        if (type === 'sky') {
+          return <SkyChallengeItem key={todo.id} todo={todo} onComplete={onCompleteSkyTodo} />;
+        }
+        return (
           <TodoListItem
             key={todo.id}
             item={{ id: todo.id, title: todo.title, completed: todo.completed }}
             onToggle={onToggleTodo}
           />
-        ),
-      )}
+        );
+      })}
     </View>
   );
 }
@@ -189,18 +199,19 @@ function MorningRoutineSection({
 /**
  * 明日のタスク表示セクション（セッション非アクティブ時）。
  *
- * 起床タスクは「スクワット 10 回」固定（FIXED_SQUAT_TODO_ID 参照）。
- * 編集・追加・削除 UI は意図的に持たない — ユーザーがタスクを自分で組み立てる
- * 認知負荷を下げるため、選択肢ゼロにしている。
+ * 起床タスクは taskType が指す1種類に固定（設定画面で切り替え可能。FIXED_SQUAT_TODO_ID /
+ * FIXED_SKY_TODO_ID 参照）。自由な編集・追加・削除 UI は意図的に持たない —
+ * ユーザーがタスクを自分で組み立てる認知負荷を下げるため、種類の選択肢だけを提供する。
  */
-function TodoDisplaySection() {
+function TodoDisplaySection({ taskType }: { readonly taskType: WakeTaskType }) {
   const { t } = useTranslation('dashboard');
+  const label = taskType === 'sky' ? t('todos.fixedSkyTaskLabel') : t('todos.fixedTaskLabel');
   return (
     <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
       <View style={styles.todoRow}>
-        <View style={[styles.todoBullet, styles.todoBulletSquat]} />
-        <Text style={styles.todoText}>{t('todos.fixedTaskLabel')}</Text>
+        <View style={[styles.todoBullet, taskType === 'squat' && styles.todoBulletSquat]} />
+        <Text style={styles.todoText}>{label}</Text>
       </View>
     </View>
   );
@@ -279,6 +290,7 @@ export default function DashboardScreen() {
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
   const incrementTodoCount = useMorningSessionStore((s) => s.incrementTodoCount);
+  const completeSkyTodo = useMorningSessionStore((s) => s.completeSkyTodo);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
   const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
@@ -381,6 +393,13 @@ export default function DashboardScreen() {
     [incrementTodoCount],
   );
 
+  const handleCompleteSkyTodo = useCallback(
+    async (todoId: string) => {
+      await completeSkyTodo(todoId);
+    },
+    [completeSkyTodo],
+  );
+
   // スクワットタスク完了時も handleToggleTodo と同じ Live Activity 更新が走る。
   // incrementTodoCount が completed を true にした後に呼ばれるため、
   // ここでは追加のストア操作は不要（onAllTodosCompletedEffect が useEffect で発火する）。
@@ -472,9 +491,10 @@ export default function DashboardScreen() {
           onToggleTodo={handleToggleTodo}
           onIncrementTodo={handleIncrementTodo}
           onCompleteTodo={handleCompleteTodo}
+          onCompleteSkyTodo={handleCompleteSkyTodo}
         />
       ) : (
-        <TodoDisplaySection />
+        <TodoDisplaySection taskType={target?.taskType ?? 'squat'} />
       )}
 
       {/* Streak Badge — グレードストアから取得したストリーク情報を表示 */}

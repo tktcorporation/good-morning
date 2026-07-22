@@ -38,6 +38,30 @@ jest.mock('expo-localization', () => ({
   getCalendars: () => [{ calendar: 'gregory', timeZone: 'America/New_York' }],
 }));
 
+// Mock expo-camera（SkyChallengeItem がカメラプレビュー・撮影に使用）
+jest.mock('expo-camera', () => {
+  const React = require('react');
+  const MockCameraView = React.forwardRef((props, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      takePictureAsync: jest.fn().mockResolvedValue({ uri: 'file:///mock-photo.jpg' }),
+    }));
+    return React.createElement('CameraView', props);
+  });
+  MockCameraView.displayName = 'CameraView';
+  return {
+    CameraView: MockCameraView,
+    useCameraPermissions: jest.fn(() => [
+      { granted: true, canAskAgain: true, status: 'granted' },
+      jest.fn().mockResolvedValue({ granted: true, canAskAgain: true, status: 'granted' }),
+    ]),
+  };
+});
+
+// Mock expo-sky-vision（SkyChallengeItem がネイティブの空判定に使用。iOS 実機以外では動かない）
+jest.mock('expo-sky-vision', () => ({
+  classifyImageAsync: jest.fn().mockResolvedValue([]),
+}));
+
 // Mock i18n module
 jest.mock('./src/i18n', () => ({
   __esModule: true,

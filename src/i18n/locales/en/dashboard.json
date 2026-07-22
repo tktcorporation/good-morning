@@ -6,7 +6,8 @@
   "override": "Tomorrow only",
   "todos": {
     "title": "Tomorrow's Task",
-    "fixedTaskLabel": "10 Squats"
+    "fixedTaskLabel": "10 Squats",
+    "fixedSkyTaskLabel": "Take a Sky Photo"
   },
   "morningRoutine": {
     "title": "Morning Routine",
@@ -21,6 +22,16 @@
       "detecting": "Detecting squats...",
       "done": "Done!",
       "waiting": "Waiting..."
+    },
+    "sky": {
+      "title": "Sky Photo",
+      "waiting": "Waiting...",
+      "openCamera": "Open Camera",
+      "classifying": "Classifying...",
+      "shutter": "Shutter",
+      "retry": "Retake Photo",
+      "failed": "No sky detected. Please try again.",
+      "done": "Done!"
     }
   },
   "goalBuffer": {

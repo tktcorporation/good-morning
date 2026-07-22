@@ -20,10 +20,12 @@ export function getDayLabel(day: DayOfWeek, t: TranslateFn): string {
  * タスクの種類。
  * - checkbox: タップで完了する通常のチェックリスト項目
  * - squat: 加速度センサーでスクワットを検出し、規定回数こなすと完了になるチャレンジ
+ * - sky: カメラで空を撮影し、ネイティブの画像分類（Vision framework）で
+ *   空と判定されると完了になるチャレンジ
  *
  * 将来の拡張（歩数カウント、QRスキャン等）もここに追加する。
  */
-export type TodoType = 'checkbox' | 'squat';
+export type TodoType = 'checkbox' | 'squat' | 'sky';
 
 export interface TodoItem {
   readonly id: string;
