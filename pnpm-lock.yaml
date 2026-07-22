@@ -81,7 +81,7 @@ importers:
         specifier: ^55.0.17
         version: 55.0.17(expo@55.0.28)(react-native@0.83.6(@babel/core@7.29.7)(@types/react@19.2.14)(react@19.2.0))
       expo-sky-vision:
-        specifier: workspace:*
+        specifier: link:./modules/expo-sky-vision
         version: link:modules/expo-sky-vision
       expo-splash-screen:
         specifier: 55.0.23

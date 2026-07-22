@@ -1,5 +1,13 @@
 import {
+  buildFixedSkyTodo,
+  buildFixedSquatTodo,
+  buildFixedTodoForTaskType,
+  FIXED_SKY_TODO_ID,
+  FIXED_SQUAT_TODO_ID,
   getNextLogicalDay,
+  isFixedSkyTodoList,
+  isFixedSquatTodoList,
+  isFixedTodoListForTaskType,
   isNextOverrideExpired,
   resolveDismissDateStr,
   resolveDismissInstant,
@@ -542,5 +550,45 @@ describe('resolveNextAlarmDate', () => {
   test('今日のアラームが既に発火済みなら翌日の日付を返す', () => {
     const now = new Date('2026-02-26T08:00:00');
     expect(formatLocalDate(resolveNextAlarmDate(baseTarget, now, 4) as Date)).toBe('2026-02-27');
+  });
+});
+
+describe('固定起床タスクのビルダー・判定関数', () => {
+  test('buildFixedSkyTodo は固定 ID・type: sky の todo を返す', () => {
+    const todo = buildFixedSkyTodo();
+    expect(todo.id).toBe(FIXED_SKY_TODO_ID);
+    expect(todo.type).toBe('sky');
+    expect(todo.completed).toBe(false);
+  });
+
+  test('isFixedSkyTodoList は正しい固定 sky todo 1件のみで true を返す', () => {
+    expect(isFixedSkyTodoList([buildFixedSkyTodo()])).toBe(true);
+  });
+
+  test('isFixedSkyTodoList は空配列・2件以上・型不一致で false を返す', () => {
+    expect(isFixedSkyTodoList([])).toBe(false);
+    expect(isFixedSkyTodoList([buildFixedSkyTodo(), buildFixedSkyTodo()])).toBe(false);
+    expect(isFixedSkyTodoList([buildFixedSquatTodo()])).toBe(false);
+  });
+
+  test('isFixedSquatTodoList は正しい固定 squat todo 1件のみで true を返す', () => {
+    expect(isFixedSquatTodoList([buildFixedSquatTodo()])).toBe(true);
+    expect(isFixedSquatTodoList([buildFixedSkyTodo()])).toBe(false);
+  });
+
+  test('buildFixedTodoForTaskType は taskType に応じて squat/sky を振り分ける', () => {
+    expect(buildFixedTodoForTaskType('squat')).toEqual(buildFixedSquatTodo());
+    expect(buildFixedTodoForTaskType('sky')).toEqual(buildFixedSkyTodo());
+  });
+
+  test('isFixedTodoListForTaskType は taskType に応じて squat/sky の判定を振り分ける', () => {
+    expect(isFixedTodoListForTaskType([buildFixedSquatTodo()], 'squat')).toBe(true);
+    expect(isFixedTodoListForTaskType([buildFixedSkyTodo()], 'squat')).toBe(false);
+    expect(isFixedTodoListForTaskType([buildFixedSkyTodo()], 'sky')).toBe(true);
+    expect(isFixedTodoListForTaskType([buildFixedSquatTodo()], 'sky')).toBe(false);
+  });
+
+  test('FIXED_SQUAT_TODO_ID と FIXED_SKY_TODO_ID は異なる値を持つ（進行中セッションとの同一視を誤らないため）', () => {
+    expect(FIXED_SQUAT_TODO_ID).not.toBe(FIXED_SKY_TODO_ID);
   });
 });

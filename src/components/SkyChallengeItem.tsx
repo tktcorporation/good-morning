@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { classifyImageAsync } from 'expo-sky-vision';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, semanticColors, spacing } from '../constants/theme';
 import type { SessionTodo } from '../types/morning-session';
 import { isSkyClassification } from '../utils/sky-classification';
@@ -14,6 +14,8 @@ interface SkyChallengeItemProps {
 }
 
 type CaptureStatus = 'idle' | 'capturing' | 'classifying' | 'failed';
+
+const SKY_EMOJI = '\u{1F324}️';
 
 /**
  * 空撮影チャレンジの UI。カメラでシャッターを切り、端末上の Vision framework による
@@ -31,12 +33,19 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
   const handleOpenCamera = useCallback(async () => {
     if (permission?.granted !== true) {
       const result = await requestPermission();
-      if (!result.granted) return;
+      if (!result.granted) {
+        // iOS は一度拒否すると再度システムダイアログを出さないため、無反応のままにせず
+        // 設定アプリでの許可が必要なことを伝える（app/(tabs)/settings.tsx の権限拒否時と同様）。
+        Alert.alert(t('morningRoutine.sky.title'), t('morningRoutine.sky.permissionDenied'));
+        return;
+      }
     }
     setStatus('capturing');
-  }, [permission, requestPermission]);
+  }, [permission, requestPermission, t]);
 
   const handleCapture = useCallback(async () => {
+    // capturing 中の連打で takePictureAsync が二重発火しないようにするガード。
+    if (status !== 'capturing') return;
     const camera = cameraRef.current;
     if (camera === null) return;
     setStatus('classifying');
@@ -51,12 +60,12 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
     } catch {
       setStatus('failed');
     }
-  }, [onComplete, todo.id]);
+  }, [status, onComplete, todo.id]);
 
   if (todo.completed) {
     return (
       <View style={[styles.container, styles.containerCompleted]}>
-        <Text style={styles.emoji}>{'\u{1F324}️'}</Text>
+        <Text style={styles.emoji}>{SKY_EMOJI}</Text>
         <View style={styles.info}>
           <Text style={[styles.title, styles.titleCompleted]}>{t('morningRoutine.sky.title')}</Text>
           <Text style={styles.doneLabel}>{t('morningRoutine.sky.done')}</Text>
@@ -89,7 +98,7 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.emoji}>{'\u{1F324}️'}</Text>
+      <Text style={styles.emoji}>{SKY_EMOJI}</Text>
       <View style={styles.info}>
         <Text style={styles.title}>{t('morningRoutine.sky.title')}</Text>
         <Text style={status === 'failed' ? styles.failedText : styles.waitingText}>

@@ -42,4 +42,48 @@ describe('isSkyClassification', () => {
       ]),
     ).toBe(true);
   });
+
+  it('複数ラベルが全て閾値未満なら false を返す', () => {
+    expect(
+      isSkyClassification([
+        { identifier: 'sky', confidence: 0.05 },
+        { identifier: 'cloud', confidence: 0.05 },
+      ]),
+    ).toBe(false);
+  });
+
+  it('複数ラベルが全て空と無関係なら false を返す', () => {
+    expect(
+      isSkyClassification([
+        { identifier: 'dog', confidence: 0.9 },
+        { identifier: 'cat', confidence: 0.9 },
+      ]),
+    ).toBe(false);
+  });
+
+  it('信頼度が NaN なら false を返す（不正値をフェイルセーフに扱う）', () => {
+    expect(isSkyClassification([{ identifier: 'sky', confidence: Number.NaN }])).toBe(false);
+  });
+
+  it.each([
+    'sky',
+    'cloud',
+    'sunset',
+    'sunrise',
+    'horizon',
+    'cumulus',
+    'overcast',
+    'dusk',
+    'dawn',
+  ])('キーワード "%s" を含むラベルに一致する', (keyword) => {
+    expect(isSkyClassification([{ identifier: keyword, confidence: 0.5 }])).toBe(true);
+  });
+
+  it.each([
+    'skyscraper',
+    'skydiving',
+    'dusky grouse',
+  ])('空関連キーワードを部分文字列として含むだけの無関係なラベル "%s" には一致しない（単語境界チェック）', (identifier) => {
+    expect(isSkyClassification([{ identifier, confidence: 0.9 }])).toBe(false);
+  });
 });

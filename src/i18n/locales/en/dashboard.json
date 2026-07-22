@@ -31,6 +31,7 @@
       "shutter": "Shutter",
       "retry": "Retake Photo",
       "failed": "No sky detected. Please try again.",
+      "permissionDenied": "Camera access is not granted. Please allow it in the Settings app.",
       "done": "Done!"
     }
   },

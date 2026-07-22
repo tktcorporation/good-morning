@@ -210,7 +210,13 @@ function TodoDisplaySection({ taskType }: { readonly taskType: WakeTaskType }) {
     <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
       <View style={styles.todoRow}>
-        <View style={[styles.todoBullet, taskType === 'squat' && styles.todoBulletSquat]} />
+        <View
+          style={[
+            styles.todoBullet,
+            taskType === 'squat' && styles.todoBulletSquat,
+            taskType === 'sky' && styles.todoBulletSky,
+          ]}
+        />
         <Text style={styles.todoText}>{label}</Text>
       </View>
     </View>
@@ -688,6 +694,9 @@ const styles = StyleSheet.create({
   },
   todoBulletSquat: {
     backgroundColor: colors.warning,
+  },
+  todoBulletSky: {
+    backgroundColor: colors.success,
   },
   todoText: {
     flex: 1,

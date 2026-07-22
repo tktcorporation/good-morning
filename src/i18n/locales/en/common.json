@@ -64,6 +64,7 @@
     "taskType": "Wake-up Task",
     "taskTypeSquat": "10 Squats",
     "taskTypeSky": "Sky Photo",
+    "taskTypeAppliesNextSession": "This won't affect today's routine. It will apply starting next time.",
     "squatCheck": "Squat Check",
     "squatCheckSubtitle": "Try the same detection used at alarm time"
   },

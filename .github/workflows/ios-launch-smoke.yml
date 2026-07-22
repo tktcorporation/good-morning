@@ -33,6 +33,7 @@ on:
     paths:
       - 'app/**'
       - 'src/**'
+      - 'modules/**'
       - 'app.config.ts'
       - 'package.json'
       - 'pnpm-lock.yaml'

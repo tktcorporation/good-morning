@@ -13,6 +13,7 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
+import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { WakeTaskType } from '../../src/types/wake-target';
@@ -37,6 +38,9 @@ export default function SettingsScreen() {
   const target = useWakeTargetStore((s) => s.target);
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
   const setTaskType = useWakeTargetStore((s) => s.setTaskType);
+  // 進行中セッションの todos は taskType 変更後もスナップショットのまま独立して進行する
+  // （session/DismissService.ts 参照）。切り替えても本日のルーティンには反映されないことを伝える。
+  const isSessionActive = useMorningSessionStore((s) => s.session !== null);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -162,6 +166,9 @@ export default function SettingsScreen() {
             </Text>
           </Pressable>
         </View>
+        {isSessionActive && (
+          <Text style={styles.taskTypeNote}>{t('settings.taskTypeAppliesNextSession')}</Text>
+        )}
       </View>
 
       {/* Squat Check - 朝のスクワット検出を本番フロー外で確認するための動作確認モード */}
@@ -255,6 +262,11 @@ const styles = StyleSheet.create({
   },
   taskTypeOptionTextSelected: {
     color: colors.text,
+  },
+  taskTypeNote: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
   },
   rowTitle: {
     fontSize: fontSize.md,

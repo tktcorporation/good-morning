@@ -19,13 +19,21 @@ const SKY_KEYWORDS = [
   'dawn',
 ] as const;
 
+/**
+ * 単語境界付きでマッチする（例: "sky" は "cloudy sky" にマッチするが、
+ * "skyscraper"（ビル）や "skydiving" のような空と無関係なラベルの部分文字列としては
+ * マッチしない）。VNClassifyImageRequest の分類語彙は OS 提供でこちらから
+ * 列挙・制御できないため、部分一致だと無関係な被写体を空と誤判定しうる。
+ */
+const SKY_KEYWORD_PATTERNS = SKY_KEYWORDS.map((keyword) => new RegExp(`\\b${keyword}\\b`));
+
 /** 分類結果の中に、閾値以上の信頼度を持つ空関連ラベルが1件でもあれば true。 */
 export function isSkyClassification(
   classifications: readonly NativeImageClassification[],
 ): boolean {
   return classifications.some((c) => {
-    if (c.confidence < SKY_CONFIDENCE_THRESHOLD) return false;
+    if (!Number.isFinite(c.confidence) || c.confidence < SKY_CONFIDENCE_THRESHOLD) return false;
     const identifier = c.identifier.toLowerCase();
-    return SKY_KEYWORDS.some((keyword) => identifier.includes(keyword));
+    return SKY_KEYWORD_PATTERNS.some((pattern) => pattern.test(identifier));
   });
 }
