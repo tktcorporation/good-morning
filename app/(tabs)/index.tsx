@@ -196,37 +196,42 @@ function MorningRoutineSection({
           />
         );
       })}
-      <View style={styles.taskTypeSwitcher}>
-        <Text style={styles.taskTypeSwitcherLabel}>{t('morningRoutine.switchTaskType')}</Text>
-        <View style={styles.taskTypeRow}>
-          <Pressable
-            style={[styles.taskTypeOption, taskType === 'squat' && styles.taskTypeOptionSelected]}
-            onPress={() => onSwitchTaskType('squat')}
-          >
-            <Text
-              style={[
-                styles.taskTypeOptionText,
-                taskType === 'squat' && styles.taskTypeOptionTextSelected,
-              ]}
+      {/* 全完了後は表示しない: 完了済みタスクを未完了に戻すと、TODO全完了時の
+          WakeRecord確定処理（onAllTodosCompletedEffect）が再発火し、確定済みの
+          完了記録を上書きしてしまうため。*/}
+      {progress.completed < progress.total && (
+        <View style={styles.taskTypeSwitcher}>
+          <Text style={styles.taskTypeSwitcherLabel}>{t('morningRoutine.switchTaskType')}</Text>
+          <View style={styles.taskTypeRow}>
+            <Pressable
+              style={[styles.taskTypeOption, taskType === 'squat' && styles.taskTypeOptionSelected]}
+              onPress={() => onSwitchTaskType('squat')}
             >
-              {t('morningRoutine.squat.title')}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.taskTypeOption, taskType === 'sky' && styles.taskTypeOptionSelected]}
-            onPress={() => onSwitchTaskType('sky')}
-          >
-            <Text
-              style={[
-                styles.taskTypeOptionText,
-                taskType === 'sky' && styles.taskTypeOptionTextSelected,
-              ]}
+              <Text
+                style={[
+                  styles.taskTypeOptionText,
+                  taskType === 'squat' && styles.taskTypeOptionTextSelected,
+                ]}
+              >
+                {t('morningRoutine.squat.title')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.taskTypeOption, taskType === 'sky' && styles.taskTypeOptionSelected]}
+              onPress={() => onSwitchTaskType('sky')}
             >
-              {t('morningRoutine.sky.title')}
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.taskTypeOptionText,
+                  taskType === 'sky' && styles.taskTypeOptionTextSelected,
+                ]}
+              >
+                {t('morningRoutine.sky.title')}
+              </Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -341,6 +346,16 @@ export default function DashboardScreen() {
 
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
 
+  // 進行中セッションがあればその実タスク種別を優先する。設定画面からの
+  // taskType 変更は次回以降のデフォルトのみを更新しセッションには影響しないため、
+  // target.taskType だけで判定するとセッション中の表示・切り替え判定が実態とズレる。
+  const activeTaskType: WakeTaskType = useMemo(() => {
+    const sessionType = session?.todos[0]?.type;
+    if (sessionType === 'sky') return 'sky';
+    if (sessionType === 'squat') return 'squat';
+    return target?.taskType ?? 'squat';
+  }, [session, target]);
+
   // カウントダウンタイマー: スヌーズ（超過後は非表示）と目標（超過後も経過時間を警告表示）
   const { remaining: snoozeRemaining } = useCountdown(snoozeFiresAt);
   const { remaining: goalRemaining, exceeded: goalExceeded } = useCountdown(
@@ -450,31 +465,46 @@ export default function DashboardScreen() {
 
   const handleSwitchTaskType = useCallback(
     (type: WakeTaskType) => {
-      const currentType = target?.taskType ?? 'squat';
-      if (type === currentType) return;
+      if (type === activeTaskType) return;
 
-      // 進行中の進捗（squat の currentCount 等）を失う操作のため確認を挟む。
+      const performSwitch = () => {
+        void (async () => {
+          // 次回以降のデフォルトにも反映する。セッション中の切り替えは
+          // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
+          await setTaskType(type);
+          await switchSessionTaskType(type);
+          syncLiveActivityWithSession();
+        })();
+      };
+
+      // 失う進捗が無い（squat は未着手、sky は未完了なら常に該当）場合は
+      // 確認なしで即切り替える。進捗がある場合のみ、失うことを確認する。
+      const currentTodo = session?.todos[0];
+      const hasProgress =
+        currentTodo !== undefined && !currentTodo.completed && (currentTodo.currentCount ?? 0) > 0;
+      if (!hasProgress) {
+        performSwitch();
+        return;
+      }
+
       Alert.alert(
         t('morningRoutine.switchTaskTypeConfirmTitle'),
         t('morningRoutine.switchTaskTypeConfirmMessage'),
         [
           { text: tCommon('cancel'), style: 'cancel' },
-          {
-            text: t('morningRoutine.switchTaskTypeConfirmButton'),
-            onPress: () => {
-              void (async () => {
-                // 次回以降のデフォルトにも反映する。セッション中の切り替えは
-                // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
-                await setTaskType(type);
-                await switchSessionTaskType(type);
-                syncLiveActivityWithSession();
-              })();
-            },
-          },
+          { text: t('morningRoutine.switchTaskTypeConfirmButton'), onPress: performSwitch },
         ],
       );
     },
-    [target, setTaskType, switchSessionTaskType, syncLiveActivityWithSession, t, tCommon],
+    [
+      activeTaskType,
+      session,
+      setTaskType,
+      switchSessionTaskType,
+      syncLiveActivityWithSession,
+      t,
+      tCommon,
+    ],
   );
 
   // スクワットタスク完了時も handleToggleTodo と同じ Live Activity 更新が走る。
@@ -561,7 +591,7 @@ export default function DashboardScreen() {
       {sessionActive && progress !== null ? (
         <MorningRoutineSection
           session={session}
-          taskType={target?.taskType ?? 'squat'}
+          taskType={activeTaskType}
           progress={progress}
           goalRemaining={goalRemaining}
           goalExceeded={goalExceeded}
@@ -731,7 +761,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderWidth: 2,
     borderColor: colors.surface,
   },
@@ -739,7 +769,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   taskTypeOptionText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.textSecondary,
   },

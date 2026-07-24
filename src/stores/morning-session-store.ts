@@ -138,7 +138,9 @@ interface MorningSessionState {
    * 進行中セッションの起床タスクを別の種別（squat/sky）に丸ごと切り替える。
    * WakeTarget.todos と同じ「taskType に対応する固定 TODO 1 件のみ」という
    * 不変条件をセッション側でも保つため、既存の進捗（completed/currentCount）は
-   * 引き継がず、新しい taskType の未着手状態から始める。session が null の場合は何もしない。
+   * 引き継がず、新しい taskType の未着手状態から始める。session が null の場合、
+   * および全タスク完了済みの場合（完了済みを未完了に戻すと onAllTodosCompletedEffect
+   * の再発火で確定済み WakeRecord が上書きされるため）は何もしない。
    */
   switchTaskType: (taskType: WakeTaskType) => Promise<void>;
   clearSession: () => Promise<void>;
@@ -323,8 +325,14 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
   },
 
   switchTaskType: async (taskType: WakeTaskType) => {
-    const { session } = get();
+    const { session, areAllCompleted } = get();
     if (session === null) return;
+    // 全完了済みセッションを未完了に戻すと、onAllTodosCompletedEffect の
+    // useEffect（app/(tabs)/index.tsx）が session 参照の変化を検知して再発火し、
+    // 確定済みの WakeRecord（完了時刻・所要時間・todos）を新タスクの記録で
+    // 上書きしてしまう。UI 側でも全完了後は切り替え導線を隠すが、ストア単体で
+    // 呼ばれた場合の安全策としてもここでガードする。
+    if (areAllCompleted()) return;
 
     const updated: MorningSession = {
       ...session,

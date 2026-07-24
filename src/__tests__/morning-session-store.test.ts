@@ -196,11 +196,11 @@ describe('morning-session-store', () => {
         {
           id: 'squat_1',
           title: 'Squat',
-          completed: true,
-          completedAt: '2026-02-22T07:00:00.000Z',
+          completed: false,
+          completedAt: null,
           type: 'squat',
           requiredCount: 10,
-          currentCount: 10,
+          currentCount: 5,
         },
       ];
       await useMorningSessionStore
@@ -217,6 +217,101 @@ describe('morning-session-store', () => {
         completed: false,
         completedAt: null,
       });
+    });
+
+    it('全完了済みセッションでは何もしない（onAllTodosCompletedEffect の二重発火を防ぐガード）', async () => {
+      const squatTodos: readonly SessionTodo[] = [
+        {
+          id: 'squat_1',
+          title: 'Squat',
+          completed: true,
+          completedAt: '2026-02-22T07:00:00.000Z',
+          type: 'squat',
+          requiredCount: 10,
+          currentCount: 10,
+        },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', squatTodos, null, '2026-02-22T08:00:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('sky');
+
+      const todos = useMorningSessionStore.getState().session?.todos;
+      expect(todos).toEqual(squatTodos);
+    });
+
+    it('goalDeadline・recordId・liveActivityId・snooze 状態は切り替え後も保持される', async () => {
+      const squatTodos: readonly SessionTodo[] = [
+        {
+          id: 'squat_1',
+          title: 'Squat',
+          completed: false,
+          completedAt: null,
+          type: 'squat',
+          requiredCount: 10,
+          currentCount: 3,
+        },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession(
+          '2026-02-22',
+          squatTodos,
+          '2026-02-22T07:30:00.000Z',
+          '2026-02-22T08:00:00.000Z',
+        );
+      await useMorningSessionStore.getState().setRecordId('record-1');
+      await useMorningSessionStore.getState().setLiveActivityId('activity-1');
+      await useMorningSessionStore
+        .getState()
+        .setSnoozeState(['snooze-1'], '2026-02-22T07:10:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('sky');
+
+      const session = useMorningSessionStore.getState().session;
+      expect(session?.recordId).toBe('record-1');
+      expect(session?.goalDeadline).toBe('2026-02-22T07:30:00.000Z');
+      expect(session?.liveActivityId).toBe('activity-1');
+      expect(session?.snoozeAlarmIds).toEqual(['snooze-1']);
+      expect(session?.snoozeFiresAt).toBe('2026-02-22T07:10:00.000Z');
+    });
+
+    it('type未設定の checkbox todo が複数件あるセッションでも、固定 todo 1件に丸ごと置き換える', async () => {
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', sampleTodos, null, '2026-02-22T08:00:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('sky');
+
+      const todos = useMorningSessionStore.getState().session?.todos;
+      expect(todos).toHaveLength(1);
+      expect(todos?.[0]?.id).toBe(FIXED_SKY_TODO_ID);
+    });
+
+    it('永続化され、reload 後も切り替え後の todos が復元される', async () => {
+      const squatTodos: readonly SessionTodo[] = [
+        {
+          id: 'squat_1',
+          title: 'Squat',
+          completed: false,
+          completedAt: null,
+          type: 'squat',
+          requiredCount: 10,
+          currentCount: 0,
+        },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', squatTodos, null, '2026-02-22T08:00:00.000Z');
+      await useMorningSessionStore.getState().switchTaskType('sky');
+
+      useMorningSessionStore.setState({ session: null, loaded: false });
+      await useMorningSessionStore.getState().loadSession();
+
+      const todos = useMorningSessionStore.getState().session?.todos;
+      expect(todos).toHaveLength(1);
+      expect(todos?.[0]?.id).toBe(FIXED_SKY_TODO_ID);
     });
 
     it('sky から squat に切り替えると requiredCount 付きの固定 squat todo になる', async () => {
@@ -263,6 +358,28 @@ describe('morning-session-store', () => {
       const todo = useMorningSessionStore.getState().session?.todos[0];
       expect(todo?.currentCount).toBe(0);
       expect(todo?.completed).toBe(false);
+    });
+
+    it('同じ taskType に切り替えても進捗はリセットされる（store 単体では同値チェックしない）', async () => {
+      const squatTodos: readonly SessionTodo[] = [
+        {
+          id: 'squat_1',
+          title: 'Squat',
+          completed: false,
+          completedAt: null,
+          type: 'squat',
+          requiredCount: 10,
+          currentCount: 7,
+        },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', squatTodos, null, '2026-02-22T08:00:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('squat');
+
+      const todo = useMorningSessionStore.getState().session?.todos[0];
+      expect(todo?.currentCount).toBe(0);
     });
 
     it('セッションが無ければ何もしない', async () => {
