@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMorningSessionStore } from '../stores/morning-session-store';
 import type { SessionTodo } from '../types/morning-session';
+import {
+  FIXED_SKY_TODO_ID,
+  FIXED_SQUAT_REQUIRED_COUNT,
+  FIXED_SQUAT_TODO_ID,
+} from '../types/wake-target';
 
 beforeEach(() => {
   useMorningSessionStore.setState({
@@ -181,6 +186,87 @@ describe('morning-session-store', () => {
       await expect(
         useMorningSessionStore.getState().completeSkyTodo('sky_1'),
       ).resolves.not.toThrow();
+      expect(useMorningSessionStore.getState().session).toBeNull();
+    });
+  });
+
+  describe('switchTaskType', () => {
+    it('squat から sky に切り替えると todos が固定 sky todo 1件になる', async () => {
+      const squatTodos: readonly SessionTodo[] = [
+        {
+          id: 'squat_1',
+          title: 'Squat',
+          completed: true,
+          completedAt: '2026-02-22T07:00:00.000Z',
+          type: 'squat',
+          requiredCount: 10,
+          currentCount: 10,
+        },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', squatTodos, null, '2026-02-22T08:00:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('sky');
+
+      const todos = useMorningSessionStore.getState().session?.todos;
+      expect(todos).toHaveLength(1);
+      expect(todos?.[0]).toMatchObject({
+        id: FIXED_SKY_TODO_ID,
+        type: 'sky',
+        completed: false,
+        completedAt: null,
+      });
+    });
+
+    it('sky から squat に切り替えると requiredCount 付きの固定 squat todo になる', async () => {
+      const skyTodos: readonly SessionTodo[] = [
+        { id: 'sky_1', title: 'Sky Photo', completed: false, completedAt: null, type: 'sky' },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', skyTodos, null, '2026-02-22T08:00:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('squat');
+
+      const todos = useMorningSessionStore.getState().session?.todos;
+      expect(todos).toHaveLength(1);
+      expect(todos?.[0]).toMatchObject({
+        id: FIXED_SQUAT_TODO_ID,
+        type: 'squat',
+        completed: false,
+        completedAt: null,
+        requiredCount: FIXED_SQUAT_REQUIRED_COUNT,
+        currentCount: 0,
+      });
+    });
+
+    it('進行中の完了状態・カウントは切り替え後の新しい todo に引き継がれない', async () => {
+      const squatTodos: readonly SessionTodo[] = [
+        {
+          id: 'squat_1',
+          title: 'Squat',
+          completed: false,
+          completedAt: null,
+          type: 'squat',
+          requiredCount: 10,
+          currentCount: 7,
+        },
+      ];
+      await useMorningSessionStore
+        .getState()
+        .startSession('2026-02-22', squatTodos, null, '2026-02-22T08:00:00.000Z');
+
+      await useMorningSessionStore.getState().switchTaskType('sky');
+      await useMorningSessionStore.getState().switchTaskType('squat');
+
+      const todo = useMorningSessionStore.getState().session?.todos[0];
+      expect(todo?.currentCount).toBe(0);
+      expect(todo?.completed).toBe(false);
+    });
+
+    it('セッションが無ければ何もしない', async () => {
+      await expect(useMorningSessionStore.getState().switchTaskType('sky')).resolves.not.toThrow();
       expect(useMorningSessionStore.getState().session).toBeNull();
     });
   });

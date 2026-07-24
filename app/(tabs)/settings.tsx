@@ -38,8 +38,8 @@ export default function SettingsScreen() {
   const target = useWakeTargetStore((s) => s.target);
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
   const setTaskType = useWakeTargetStore((s) => s.setTaskType);
-  // 進行中セッションの todos は taskType 変更後もスナップショットのまま独立して進行する
-  // （session/DismissService.ts 参照）。切り替えても本日のルーティンには反映されないことを伝える。
+  // ここでの切り替えは次回以降のデフォルトのみ更新する。進行中セッションのタスクは
+  // ホーム画面（起床フロー中の画面）から切り替える導線があるため、そちらに誘導する。
   const isSessionActive = useMorningSessionStore((s) => s.session !== null);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
@@ -167,7 +167,7 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
         {isSessionActive && (
-          <Text style={styles.taskTypeNote}>{t('settings.taskTypeAppliesNextSession')}</Text>
+          <Text style={styles.taskTypeNote}>{t('settings.taskTypeSwitchInSessionHint')}</Text>
         )}
       </View>
 

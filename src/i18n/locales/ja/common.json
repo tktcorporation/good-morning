@@ -64,7 +64,7 @@
     "taskType": "起床タスク",
     "taskTypeSquat": "スクワット 10 回",
     "taskTypeSky": "空の写真",
-    "taskTypeAppliesNextSession": "本日のルーティンには適用されません。次回から反映されます",
+    "taskTypeSwitchInSessionHint": "進行中のタスクはここでは変わりません。ホーム画面から切り替えられます",
     "squatCheck": "スクワット動作確認",
     "squatCheckSubtitle": "アラーム時と同じ検出を試す"
   },

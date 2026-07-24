@@ -15,7 +15,23 @@ import {
 import type { StorageError } from '../services/errors';
 import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
+import type { WakeTaskType } from '../types/wake-target';
+import { buildFixedTodoForTaskType } from '../types/wake-target';
 import { logError } from '../utils/logger';
+
+/** taskType の固定 TODO テンプレート（TodoItem）を、未着手の SessionTodo に変換する。 */
+function buildInitialSessionTodo(taskType: WakeTaskType): SessionTodo {
+  const todo = buildFixedTodoForTaskType(taskType);
+  return {
+    id: todo.id,
+    title: todo.title,
+    completed: false,
+    completedAt: null,
+    type: todo.type,
+    requiredCount: todo.requiredCount,
+    currentCount: 0,
+  };
+}
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
@@ -118,6 +134,13 @@ interface MorningSessionState {
    * 既に completed なタスクに対して呼ばれた場合は何もしない。
    */
   completeSkyTodo: (todoId: string) => Promise<void>;
+  /**
+   * 進行中セッションの起床タスクを別の種別（squat/sky）に丸ごと切り替える。
+   * WakeTarget.todos と同じ「taskType に対応する固定 TODO 1 件のみ」という
+   * 不変条件をセッション側でも保つため、既存の進捗（completed/currentCount）は
+   * 引き継がず、新しい taskType の未着手状態から始める。session が null の場合は何もしない。
+   */
+  switchTaskType: (taskType: WakeTaskType) => Promise<void>;
   clearSession: () => Promise<void>;
   /**
    * snoozeAlarmIds と snoozeFiresAt をアトミックに更新し、session を AsyncStorage に永続化する。
@@ -293,6 +316,19 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
       todos: session.todos.map((t) =>
         t.id === todoId ? { ...t, completed: true, completedAt: new Date().toISOString() } : t,
       ),
+    };
+    set({ session: updated });
+    await persistSession(updated);
+    runEffectFork(syncWidgetEffect);
+  },
+
+  switchTaskType: async (taskType: WakeTaskType) => {
+    const { session } = get();
+    if (session === null) return;
+
+    const updated: MorningSession = {
+      ...session,
+      todos: [buildInitialSessionTodo(taskType)],
     };
     set({ session: updated });
     await persistSession(updated);

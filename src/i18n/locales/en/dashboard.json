@@ -17,6 +17,10 @@
     "goalCountdown": "Goal in {{time}}",
     "goalExceeded": "{{time}} over goal",
     "allDone": "All tasks done!",
+    "switchTaskType": "Switch task",
+    "switchTaskTypeConfirmTitle": "Switch task?",
+    "switchTaskTypeConfirmMessage": "Your current progress will be lost and you'll start the new task from scratch.",
+    "switchTaskTypeConfirmButton": "Switch",
     "squat": {
       "title": "Squat",
       "detecting": "Detecting squats...",

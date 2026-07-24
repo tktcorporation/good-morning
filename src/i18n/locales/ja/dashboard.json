@@ -17,6 +17,10 @@
     "goalCountdown": "目標まで {{time}}",
     "goalExceeded": "{{time}} 超過",
     "allDone": "全タスク完了!",
+    "switchTaskType": "タスクを切り替える",
+    "switchTaskTypeConfirmTitle": "タスクを切り替えますか?",
+    "switchTaskTypeConfirmMessage": "現在の進捗は失われ、新しいタスクを最初からやり直すことになります。",
+    "switchTaskTypeConfirmButton": "切り替える",
     "squat": {
       "title": "スクワット",
       "detecting": "スクワット検出中...",

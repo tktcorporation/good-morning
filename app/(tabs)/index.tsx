@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
 import { ProgressBar } from '../../src/components/ProgressBar';
@@ -119,6 +119,7 @@ function WeeklyCalendar({
  */
 function MorningRoutineSection({
   session,
+  taskType,
   progress,
   goalRemaining,
   goalExceeded,
@@ -127,8 +128,10 @@ function MorningRoutineSection({
   onIncrementTodo,
   onCompleteTodo,
   onCompleteSkyTodo,
+  onSwitchTaskType,
 }: {
   readonly session: import('../../src/types/morning-session').MorningSession;
+  readonly taskType: WakeTaskType;
   readonly progress: { completed: number; total: number };
   readonly goalRemaining: string | null;
   readonly goalExceeded: boolean;
@@ -137,6 +140,7 @@ function MorningRoutineSection({
   readonly onIncrementTodo: (id: string) => void;
   readonly onCompleteTodo: (id: string) => void;
   readonly onCompleteSkyTodo: (id: string) => void;
+  readonly onSwitchTaskType: (taskType: WakeTaskType) => void;
 }) {
   const { t } = useTranslation('dashboard');
   return (
@@ -192,6 +196,37 @@ function MorningRoutineSection({
           />
         );
       })}
+      <View style={styles.taskTypeSwitcher}>
+        <Text style={styles.taskTypeSwitcherLabel}>{t('morningRoutine.switchTaskType')}</Text>
+        <View style={styles.taskTypeRow}>
+          <Pressable
+            style={[styles.taskTypeOption, taskType === 'squat' && styles.taskTypeOptionSelected]}
+            onPress={() => onSwitchTaskType('squat')}
+          >
+            <Text
+              style={[
+                styles.taskTypeOptionText,
+                taskType === 'squat' && styles.taskTypeOptionTextSelected,
+              ]}
+            >
+              {t('morningRoutine.squat.title')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.taskTypeOption, taskType === 'sky' && styles.taskTypeOptionSelected]}
+            onPress={() => onSwitchTaskType('sky')}
+          >
+            <Text
+              style={[
+                styles.taskTypeOptionText,
+                taskType === 'sky' && styles.taskTypeOptionTextSelected,
+              ]}
+            >
+              {t('morningRoutine.sky.title')}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
@@ -293,10 +328,13 @@ export default function DashboardScreen() {
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
+  const setTaskType = useWakeTargetStore((s) => s.setTaskType);
+
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
   const incrementTodoCount = useMorningSessionStore((s) => s.incrementTodoCount);
   const completeSkyTodo = useMorningSessionStore((s) => s.completeSkyTodo);
+  const switchSessionTaskType = useMorningSessionStore((s) => s.switchTaskType);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
   const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
@@ -359,37 +397,41 @@ export default function DashboardScreen() {
     runEffectFork(onAllTodosCompletedEffect(session));
   }, [session, areAllCompleted]);
 
+  // session.todos の内容が変わる操作（toggle / タスク種別切り替え等）の後に
+  // Live Activity（ロック画面 / Dynamic Island）の表示を最新の todos に同期する。
+  const syncLiveActivityWithSession = useCallback(() => {
+    const state = useMorningSessionStore.getState();
+    const activityId = state.session?.liveActivityId ?? null;
+    const currentSession = state.session;
+    if (activityId === null || currentSession === null) return;
+    const snoozeEpoch = currentSession.snoozeFiresAt
+      ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
+      : null;
+    runEffectFork(
+      Effect.gen(function* () {
+        const kit = yield* AlarmKit;
+        yield* kit.updateLiveActivity(
+          activityId,
+          currentSession.todos.map((todo) => ({
+            id: todo.id,
+            title: getLocalizedTodoTitle(todo),
+            completed: todo.completed,
+          })),
+          snoozeEpoch,
+        );
+      }),
+    );
+  }, []);
+
   const handleToggleTodo = useCallback(
     async (todoId: string) => {
       // await で persistSession 完了を保証する。set() 自体は同期なので
       // UI は即座に更新されるが、await 後に getState() すれば
       // AsyncStorage 永続化も完了した確定状態を読める。
       await toggleTodo(todoId);
-
-      const state = useMorningSessionStore.getState();
-      const activityId = state.session?.liveActivityId ?? null;
-      const currentSession = state.session;
-      if (activityId !== null && currentSession !== null) {
-        const snoozeEpoch = currentSession.snoozeFiresAt
-          ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
-          : null;
-        runEffectFork(
-          Effect.gen(function* () {
-            const kit = yield* AlarmKit;
-            yield* kit.updateLiveActivity(
-              activityId,
-              currentSession.todos.map((todo) => ({
-                id: todo.id,
-                title: getLocalizedTodoTitle(todo),
-                completed: todo.completed,
-              })),
-              snoozeEpoch,
-            );
-          }),
-        );
-      }
+      syncLiveActivityWithSession();
     },
-    [toggleTodo],
+    [toggleTodo, syncLiveActivityWithSession],
   );
 
   const handleIncrementTodo = useCallback(
@@ -404,6 +446,35 @@ export default function DashboardScreen() {
       await completeSkyTodo(todoId);
     },
     [completeSkyTodo],
+  );
+
+  const handleSwitchTaskType = useCallback(
+    (type: WakeTaskType) => {
+      const currentType = target?.taskType ?? 'squat';
+      if (type === currentType) return;
+
+      // 進行中の進捗（squat の currentCount 等）を失う操作のため確認を挟む。
+      Alert.alert(
+        t('morningRoutine.switchTaskTypeConfirmTitle'),
+        t('morningRoutine.switchTaskTypeConfirmMessage'),
+        [
+          { text: tCommon('cancel'), style: 'cancel' },
+          {
+            text: t('morningRoutine.switchTaskTypeConfirmButton'),
+            onPress: () => {
+              void (async () => {
+                // 次回以降のデフォルトにも反映する。セッション中の切り替えは
+                // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
+                await setTaskType(type);
+                await switchSessionTaskType(type);
+                syncLiveActivityWithSession();
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [target, setTaskType, switchSessionTaskType, syncLiveActivityWithSession, t, tCommon],
   );
 
   // スクワットタスク完了時も handleToggleTodo と同じ Live Activity 更新が走る。
@@ -490,6 +561,7 @@ export default function DashboardScreen() {
       {sessionActive && progress !== null ? (
         <MorningRoutineSection
           session={session}
+          taskType={target?.taskType ?? 'squat'}
           progress={progress}
           goalRemaining={goalRemaining}
           goalExceeded={goalExceeded}
@@ -498,6 +570,7 @@ export default function DashboardScreen() {
           onIncrementTodo={handleIncrementTodo}
           onCompleteTodo={handleCompleteTodo}
           onCompleteSkyTodo={handleCompleteSkyTodo}
+          onSwitchTaskType={handleSwitchTaskType}
         />
       ) : (
         <TodoDisplaySection taskType={target?.taskType ?? 'squat'} />
@@ -638,6 +711,40 @@ const styles = StyleSheet.create({
     color: colors.warning,
     textAlign: 'center',
     marginTop: spacing.xs,
+  },
+
+  // Task Type Switcher (in-session)
+  taskTypeSwitcher: {
+    marginTop: spacing.md,
+  },
+  taskTypeSwitcherLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  taskTypeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  taskTypeOption: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  taskTypeOptionSelected: {
+    borderColor: colors.primary,
+  },
+  taskTypeOptionText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  taskTypeOptionTextSelected: {
+    color: colors.text,
   },
 
   // Goal Buffer
