@@ -10,7 +10,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { colors, commonStyles, fontSize, spacing } from '../../constants/theme';
 import type { DailyGradeRecord } from '../../types/daily-grade';
 import type { StreakState } from '../../types/streak';
 import { GradeIcon } from './GradeIcon';
@@ -32,8 +32,8 @@ export function DailyGradeSection({ gradeRecord, streak }: DailyGradeSectionProp
   const { t } = useTranslation('dashboard');
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>{t('grade.title')}</Text>
+    <View style={[commonStyles.card, { marginTop: spacing.lg }]}>
+      <Text style={[commonStyles.sectionTitle, { textAlign: 'center' }]}>{t('grade.title')}</Text>
 
       {gradeRecord === undefined ? (
         <Text style={styles.undetermined}>{t('grade.undetermined')}</Text>
@@ -78,19 +78,6 @@ export function DailyGradeSection({ gradeRecord, streak }: DailyGradeSectionProp
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
   undetermined: {
     color: colors.textMuted,
     fontSize: fontSize.md,

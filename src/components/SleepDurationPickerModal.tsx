@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '@/constants/theme';
+import { colors, commonStyles, fontSize, spacing } from '@/constants/theme';
 import {
   formatSleepDuration,
   MAX_SLEEP_MINUTES,
@@ -93,13 +93,22 @@ export function SleepDurationPickerModal({
       const isSelected = minutes === selectedValue;
       return (
         <Pressable
-          style={[styles.item, isSelected && styles.itemSelected]}
+          style={[
+            commonStyles.bottomSheetItem,
+            { height: ITEM_HEIGHT },
+            isSelected && commonStyles.bottomSheetItemSelected,
+          ]}
           onPress={() => setSelectedValue(minutes)}
         >
-          <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
+          <Text
+            style={[
+              commonStyles.bottomSheetItemText,
+              isSelected && commonStyles.bottomSheetItemTextSelected,
+            ]}
+          >
             {formatSleepDuration(minutes)}
           </Text>
-          {isSelected && <Text style={styles.checkmark}>{'✓'}</Text>}
+          {isSelected && <Text style={commonStyles.bottomSheetCheckmark}>{'✓'}</Text>}
         </Pressable>
       );
     },
@@ -116,10 +125,12 @@ export function SleepDurationPickerModal({
       onShow={handleShow}
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={commonStyles.bottomSheetOverlay} onPress={onClose}>
         {/* 内側のシートをタップしてもモーダルが閉じないようにイベント伝播を止める */}
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>{t('sleep.title')}</Text>
+        <Pressable style={commonStyles.bottomSheetContainer} onPress={(e) => e.stopPropagation()}>
+          <Text style={[commonStyles.bottomSheetTitle, { marginBottom: spacing.md }]}>
+            {t('sleep.title')}
+          </Text>
 
           <FlatList
             ref={flatListRef}
@@ -127,20 +138,20 @@ export function SleepDurationPickerModal({
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             getItemLayout={getItemLayout}
-            style={styles.list}
+            style={commonStyles.bottomSheetList}
           />
 
           {/* Action Buttons -- DayBoundaryPicker と同じ buttonRow パターン + Clear ボタン */}
           <View style={styles.buttonRow}>
-            <Pressable style={styles.textButton} onPress={handleClear}>
+            <Pressable style={commonStyles.bottomSheetTextButton} onPress={handleClear}>
               <Text style={styles.clearButtonLabel}>{t('sleep.clear')}</Text>
             </Pressable>
             <View style={styles.buttonRowRight}>
-              <Pressable style={styles.textButton} onPress={onClose}>
-                <Text style={styles.textButtonLabel}>{tCommon('cancel')}</Text>
+              <Pressable style={commonStyles.bottomSheetTextButton} onPress={onClose}>
+                <Text style={commonStyles.bottomSheetTextButtonLabel}>{tCommon('cancel')}</Text>
               </Pressable>
-              <Pressable style={styles.primaryButton} onPress={handleSave}>
-                <Text style={styles.primaryButtonLabel}>{tCommon('save')}</Text>
+              <Pressable style={commonStyles.bottomSheetPrimaryButton} onPress={handleSave}>
+                <Text style={commonStyles.bottomSheetPrimaryButtonLabel}>{tCommon('save')}</Text>
               </Pressable>
             </View>
           </View>
@@ -151,57 +162,6 @@ export function SleepDurationPickerModal({
 }
 
 const styles = StyleSheet.create({
-  // Modal overlay & sheet -- DayBoundaryPicker と同じ構造
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    maxHeight: '70%',
-  },
-  title: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-
-  // FlatList
-  list: {
-    marginBottom: spacing.md,
-  },
-  item: {
-    height: ITEM_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.sm,
-  },
-  itemSelected: {
-    backgroundColor: colors.surfaceLight,
-  },
-  itemText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  itemTextSelected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  checkmark: {
-    color: colors.primary,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-  },
-
   // Buttons -- Clear を左寄せ、Cancel/Save を右寄せにするレイアウト
   buttonRow: {
     flexDirection: 'row',
@@ -213,28 +173,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  textButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  textButtonLabel: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
   clearButtonLabel: {
     color: colors.textMuted,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  primaryButtonLabel: {
-    color: colors.text,
     fontSize: fontSize.md,
     fontWeight: '600',
   },

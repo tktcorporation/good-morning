@@ -3,11 +3,11 @@ import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Platform, Text, View } from 'react-native';
 import { MorningRoutineBanner } from '../../src/components/MorningRoutineBanner';
-import { colors } from '../../src/constants/theme';
+import { colors, fontSize } from '../../src/constants/theme';
 
 function TabIcon({ label, focused }: { readonly label: string; readonly focused: boolean }) {
   return (
-    <Text style={{ fontSize: 22, color: focused ? colors.primary : colors.textMuted }}>
+    <Text style={{ fontSize: fontSize.xl, color: focused ? colors.primary : colors.textMuted }}>
       {label}
     </Text>
   );

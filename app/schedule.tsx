@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '../src/constants/theme';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek, TranslateFn } from '../src/types/alarm';
 import { formatTime, getDayLabel } from '../src/types/alarm';
@@ -63,6 +63,48 @@ function InlineTimePicker({
   );
 }
 
+/**
+ * 各曜日の状態（default / custom / off）を明示的に切り替える3択セグメント。
+ *
+ * 以前は行全体タップで default → custom → off → default と循環させていたが、
+ * ピッカーを閉じたいだけのタップが 'off' に化けたり（アラームの意図せぬ無効化）、
+ * off から戻すと customTime が defaultTime にリセットされたりする事故があった。
+ * セグメントを直接選択する方式にすることで、選択と状態が1:1に対応し曖昧さがなくなる。
+ */
+function DaySegmentedControl({
+  state,
+  onSelect,
+}: {
+  readonly state: DayState;
+  readonly onSelect: (state: DayState) => void;
+}) {
+  const { t } = useTranslation('common');
+  const segments: ReadonlyArray<{ readonly key: DayState; readonly label: string }> = [
+    { key: 'default', label: t('schedule.useDefault') },
+    { key: 'custom', label: t('schedule.customTime') },
+    { key: 'off', label: t('schedule.off') },
+  ];
+
+  return (
+    <View style={styles.segmentedControl}>
+      {segments.map((segment) => {
+        const isActive = segment.key === state;
+        return (
+          <Pressable
+            key={segment.key}
+            style={[styles.segment, isActive && styles.segmentActive]}
+            onPress={() => onSelect(segment.key)}
+          >
+            <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+              {segment.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function ScheduleScreen() {
   const { t } = useTranslation('common');
   const target = useWakeTargetStore((s) => s.target);
@@ -72,20 +114,27 @@ export default function ScheduleScreen() {
 
   const defaultTime = target?.defaultTime ?? { hour: 7, minute: 0 };
 
-  const handleDayPress = useCallback(
-    async (day: DayOfWeek) => {
+  const handleDaySegmentSelect = useCallback(
+    async (day: DayOfWeek, nextState: DayState) => {
       if (target === null) return;
       const currentState = getDayState(day, target.dayOverrides);
 
-      if (currentState === 'default') {
-        await setDayOverride(day, { type: 'custom', time: defaultTime });
-        setEditingDay(day);
-      } else if (currentState === 'custom') {
-        setEditingDay(null);
+      if (currentState === nextState) {
+        // 既にその状態のセグメントを選び直した場合、custom だけはピッカーの
+        // 開閉トグルとして扱う（customTime を defaultTime に巻き戻さないため）。
+        if (nextState === 'custom') {
+          setEditingDay((prev) => (prev === day ? null : day));
+        }
+        return;
+      }
+
+      setEditingDay(nextState === 'custom' ? day : null);
+      if (nextState === 'default') {
+        await removeDayOverride(day);
+      } else if (nextState === 'off') {
         await setDayOverride(day, { type: 'off' });
       } else {
-        setEditingDay(null);
-        await removeDayOverride(day);
+        await setDayOverride(day, { type: 'custom', time: defaultTime });
       }
     },
     [target, defaultTime, setDayOverride, removeDayOverride],
@@ -108,7 +157,7 @@ export default function ScheduleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.defaultTimeSection}>
+      <View style={[commonStyles.card, styles.defaultTimeSection]}>
         <Text style={styles.defaultTimeLabel}>{t('schedule.defaultTime')}</Text>
         <Text style={styles.defaultTimeValue}>{formatTime(defaultTime)}</Text>
       </View>
@@ -127,9 +176,8 @@ export default function ScheduleScreen() {
 
           return (
             <View key={day}>
-              <Pressable
-                style={[styles.dayRow, hasOverride && styles.dayRowOverride]}
-                onPress={() => handleDayPress(day)}
+              <View
+                style={[commonStyles.card, styles.dayRow, hasOverride && styles.dayRowOverride]}
               >
                 <View style={styles.dayInfo}>
                   <Text style={styles.dayName}>{getDayLabel(day, t as TranslateFn)}</Text>
@@ -144,7 +192,11 @@ export default function ScheduleScreen() {
                 <Text style={[styles.dayTime, state === 'off' && styles.dayTimeOff]}>
                   {resolvedTime !== null ? formatTime(resolvedTime) : t('schedule.off')}
                 </Text>
-              </Pressable>
+              </View>
+              <DaySegmentedControl
+                state={state}
+                onSelect={(nextState) => handleDaySegmentSelect(day, nextState)}
+              />
               {isEditing && (
                 <View style={styles.pickerContainer}>
                   <InlineTimePicker
@@ -212,8 +264,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
     marginBottom: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
   },
   defaultTimeLabel: {
     fontSize: fontSize.sm,
@@ -232,10 +282,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
   },
   dayRowOverride: {
     backgroundColor: colors.surfaceLight,
@@ -269,5 +315,30 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: borderRadius.md,
     borderBottomRightRadius: borderRadius.md,
     marginTop: -spacing.sm,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  segmentActive: {
+    borderBottomColor: colors.primary,
+  },
+  segmentText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  segmentTextActive: {
+    color: colors.primary,
   },
 });

@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: {
-    fontSize: fontSize.time,
+    fontSize: fontSize.display,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',

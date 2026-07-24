@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
-import { colors } from '../../constants/theme';
+import { colors, fontSize } from '../../constants/theme';
 import type { AlarmTime } from '../../types/alarm';
 
 const TIMELINE_START_HOUR = 20;
@@ -134,7 +134,7 @@ export function SleepTimelineBar({
                   x={toX(frac)}
                   y={labelY}
                   fill={colors.textMuted}
-                  fontSize={10}
+                  fontSize={fontSize.xs}
                   textAnchor="middle"
                 >
                   {`${hour}`}

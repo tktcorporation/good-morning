@@ -20,6 +20,7 @@
     "allow": "Allow",
     "granted": "Granted",
     "denied": "Denied",
+    "openSettings": "Open Settings",
     "required": "Required",
     "optional": "Optional",
     "items": {

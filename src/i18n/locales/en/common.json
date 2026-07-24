@@ -48,6 +48,7 @@
     "permissionGranted": "Granted",
     "permissionDenied": "Not Granted",
     "permissionRequestFailed": "Permission request failed. Please enable it in the Settings app.",
+    "openSettings": "Open Settings",
     "permissionItems": {
       "alarmKit": {
         "name": "Notifications",

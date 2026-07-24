@@ -2,7 +2,17 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Alert,
+  AppState,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { DayBoundaryPicker } from '../../src/components/DayBoundaryPicker';
 import {
   APP_PERMISSIONS,
@@ -103,11 +113,30 @@ export default function SettingsScreen() {
         Alert.alert(
           t(`settings.permissionItems.${perm.i18nKey}.name`),
           t('settings.permissionRequestFailed'),
+          [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('settings.openSettings'), onPress: () => Linking.openSettings() },
+          ],
         );
       }
     },
     [permissionStatuses, t, setAlarmKitGranted],
   );
+
+  // OS の設定アプリから許可して復帰したケースを拾うため、フォアグラウンド復帰時に
+  // 未許可の権限を再チェックする。再度拒否されていれば同じ Alert が出るが、
+  // 許可済みなら handlePermissionRequest 内の早期リターンで無害。
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      for (const perm of APP_PERMISSIONS) {
+        if (permissionStatuses[perm.id] !== 'granted') {
+          void handlePermissionRequest(perm);
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [permissionStatuses, handlePermissionRequest]);
 
   const isEnabled = target?.enabled ?? false;
 
@@ -115,7 +144,10 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Schedule */}
       <View style={commonStyles.section}>
-        <Pressable style={styles.row} onPress={() => router.push('/schedule')}>
+        <Pressable
+          style={[commonStyles.card, styles.rowLayout]}
+          onPress={() => router.push('/schedule')}
+        >
           <View>
             <Text style={styles.rowTitle}>{t('settings.schedule')}</Text>
             <Text style={styles.rowSubtitle}>{t('schedule.subtitle')}</Text>
@@ -126,7 +158,7 @@ export default function SettingsScreen() {
 
       {/* Alarm Toggle */}
       <View style={commonStyles.section}>
-        <View style={styles.row}>
+        <View style={[commonStyles.card, styles.rowLayout]}>
           <Text style={styles.rowTitle}>{isEnabled ? tDash('enabled') : tDash('disabled')}</Text>
           <Switch
             value={isEnabled}
@@ -145,7 +177,10 @@ export default function SettingsScreen() {
 
       {/* Squat Check - 朝のスクワット検出を本番フロー外で確認するための動作確認モード */}
       <View style={commonStyles.section}>
-        <Pressable style={styles.row} onPress={() => router.push('/squat-check')}>
+        <Pressable
+          style={[commonStyles.card, styles.rowLayout]}
+          onPress={() => router.push('/squat-check')}
+        >
           <View>
             <Text style={styles.rowTitle}>{t('settings.squatCheck')}</Text>
             <Text style={styles.rowSubtitle}>{t('settings.squatCheckSubtitle')}</Text>
@@ -163,7 +198,7 @@ export default function SettingsScreen() {
           return (
             <Pressable
               key={perm.id}
-              style={styles.permissionRow}
+              style={[commonStyles.card, styles.permissionRowLayout]}
               onPress={() => handlePermissionRequest(perm)}
               disabled={isGranted}
             >
@@ -203,14 +238,10 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: spacing.md,
   },
-  row: {
+  rowLayout: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
   },
   rowTitle: {
     fontSize: fontSize.md,
@@ -226,14 +257,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     color: colors.textMuted,
   },
-  permissionRow: {
+  permissionRowLayout: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
     marginBottom: spacing.xs,
   },
   permissionInfo: {

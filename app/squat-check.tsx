@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
     paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    paddingVertical: spacing.xxs,
     backgroundColor: colors.background,
     borderRadius: borderRadius.sm,
     overflow: 'hidden',
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    paddingVertical: 2,
+    paddingVertical: spacing.xxs,
   },
   debugRowLabel: {
     fontSize: fontSize.sm,

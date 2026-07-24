@@ -24,6 +24,8 @@ export const colors = {
 } as const;
 
 export const spacing = {
+  /** デバッグ表示等、8px グリッドの粒度では粗すぎる箇所向けの最小刻み */
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 16,
@@ -40,6 +42,11 @@ export const fontSize = {
   xl: 24,
   xxl: 32,
   time: 56,
+  /**
+   * 時刻表示の time (56) と同サイズだが、時刻専用ではない大型見出し用。
+   * time と分離することで、時刻表示のサイズ変更が非時刻テキストへ波及しない。
+   */
+  display: 56,
 } as const;
 
 export const borderRadius = {
@@ -59,6 +66,9 @@ export const RESULT_COLORS: Readonly<Record<WakeResult, string>> = {
 export const semanticColors = {
   successLight: 'rgba(46, 213, 115, 0.15)',
   warningLight: 'rgba(255, 165, 2, 0.15)',
+  errorLight: 'rgba(233, 69, 96, 0.15)',
+  /** モーダル/ボトムシートの背後を暗く覆う半透明オーバーレイの共通色 */
+  overlay: 'rgba(0, 0, 0, 0.5)',
 } as const;
 
 export const commonStyles = StyleSheet.create({
@@ -75,5 +85,80 @@ export const commonStyles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '600',
     marginBottom: spacing.md,
+  },
+  /** チェックボックス付きリスト行など、行単位のコンパクトなカード（TodoListItem / SquatChallengeItem 共通） */
+  listItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  // ボトムシート風モーダル（DayBoundaryPicker / SleepDurationPickerModal 共通パターン）
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: semanticColors.overlay,
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContainer: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    maxHeight: '70%',
+  },
+  bottomSheetTitle: {
+    color: colors.text,
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  bottomSheetList: {
+    marginBottom: spacing.md,
+  },
+  bottomSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+  },
+  bottomSheetItemSelected: {
+    backgroundColor: colors.surfaceLight,
+  },
+  bottomSheetItemText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  bottomSheetItemTextSelected: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  bottomSheetCheckmark: {
+    color: colors.primary,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+  },
+  bottomSheetTextButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  bottomSheetTextButtonLabel: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  bottomSheetPrimaryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  bottomSheetPrimaryButtonLabel: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
 });

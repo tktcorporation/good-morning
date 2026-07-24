@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '@/constants/theme';
+import { colors, commonStyles, fontSize, spacing } from '@/constants/theme';
 import type { AlarmTime } from '@/types/alarm';
 import { formatTime } from '@/types/alarm';
 import { calculateBedtime, formatSleepDuration } from '@/utils/sleep';
@@ -63,7 +63,7 @@ export function SleepDurationCard({
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.card} onPress={handleOpen}>
+      <Pressable style={[commonStyles.card, styles.card]} onPress={handleOpen}>
         {hasValue ? (
           <Text style={styles.valueText}>
             {formatSleepDuration(targetSleepMinutes)}
@@ -89,10 +89,8 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.lg,
   },
+  /** commonStyles.card の horizontal padding は維持しつつ vertical だけ詰める */
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     alignItems: 'center',
   },

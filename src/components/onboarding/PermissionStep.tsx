@@ -1,12 +1,19 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   APP_PERMISSIONS,
   type PermissionItem,
   type PermissionStatus,
 } from '../../constants/permissions';
-import { borderRadius, colors, fontSize, semanticColors, spacing } from '../../constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  semanticColors,
+  spacing,
+} from '../../constants/theme';
 import { StepButton } from './StepButton';
 import { StepHeader } from './StepHeader';
 
@@ -36,6 +43,20 @@ export function PermissionStep({ onNext, onBack }: PermissionStepProps) {
       return next;
     });
   }, []);
+
+  // OS の権限ダイアログは一度 deny すると二度と出せない。Settings アプリで許可し直して
+  // 戻ってきたケースを拾うため、フォアグラウンド復帰時に未許可の権限を静かに再チェックする。
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      for (const permission of APP_PERMISSIONS) {
+        if (statuses.get(permission.id) !== 'granted') {
+          void handleRequest(permission);
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [statuses, handleRequest]);
 
   // required な権限が全て granted であれば「次へ」を有効化
   const allRequiredGranted = APP_PERMISSIONS.filter((p) => p.required).every(
@@ -91,7 +112,7 @@ function PermissionRow({ permission, status, onRequest }: PermissionRowProps) {
     status === 'granted'
       ? t('permission.granted')
       : status === 'denied'
-        ? t('permission.denied')
+        ? t('permission.openSettings')
         : t('permission.allow');
 
   const buttonStyle =
@@ -106,8 +127,19 @@ function PermissionRow({ permission, status, onRequest }: PermissionRowProps) {
   const nameKey = `permission.items.${permission.i18nKey}.name` as const;
   const descKey = `permission.items.${permission.i18nKey}.description` as const;
 
+  // iOS は一度 deny された権限のシステムダイアログを二度と出さないため、
+  // request() の再実行は無意味。Settings アプリへ誘導して復帰時の
+  // AppState リスナーで許可状態を拾い直す。
+  const handlePress = () => {
+    if (status === 'denied') {
+      Linking.openSettings();
+      return;
+    }
+    onRequest(permission);
+  };
+
   return (
-    <View style={styles.row}>
+    <View style={[commonStyles.card, styles.row]}>
       <Text style={styles.icon}>{permission.icon}</Text>
       <View style={styles.rowInfo}>
         <View style={styles.rowNameLine}>
@@ -122,7 +154,7 @@ function PermissionRow({ permission, status, onRequest }: PermissionRowProps) {
       </View>
       <Pressable
         style={[styles.btn, buttonStyle]}
-        onPress={() => onRequest(permission)}
+        onPress={handlePress}
         disabled={status === 'granted'}
         accessibilityRole="button"
       >
@@ -159,9 +191,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
     gap: spacing.md,
   },
   icon: {

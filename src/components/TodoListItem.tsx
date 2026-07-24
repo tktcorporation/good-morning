@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '../constants/theme';
 import type { TodoItem } from '../types/alarm';
 
 interface TodoListItemProps {
@@ -21,7 +21,7 @@ export function TodoListItem({
   const { t } = useTranslation('alarm');
 
   return (
-    <View style={styles.container}>
+    <View style={commonStyles.listItemCard}>
       <Pressable
         style={[styles.checkbox, item.completed && styles.checkboxChecked]}
         onPress={() => onToggle(item.id)}
@@ -59,14 +59,6 @@ export function TodoListItem({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
   checkbox: {
     width: 28,
     height: 28,

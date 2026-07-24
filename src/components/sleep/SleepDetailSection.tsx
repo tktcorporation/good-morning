@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../constants/theme';
+import { colors, commonStyles, fontSize, spacing } from '../../constants/theme';
 import type { DailySummary } from '../../hooks/useDailySummary';
 import { useSettingsStore } from '../../stores/settings-store';
 import { formatTimeFromIso, splitDuration } from '../../utils/sleep';
@@ -29,9 +29,9 @@ export function SleepDetailSection({ summary }: SleepDetailSectionProps) {
   // Loading
   if (summary.loading) {
     return (
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('healthKit.sleep.title')}</Text>
-        <View style={styles.content}>
+        <View style={commonStyles.card}>
           <ActivityIndicator color={colors.primary} />
         </View>
       </View>
@@ -42,9 +42,9 @@ export function SleepDetailSection({ summary }: SleepDetailSectionProps) {
   // 権限が取り消された可能性があるため、ヒントで設定確認を促す。
   if (summary.sleep === null) {
     return (
-      <View style={styles.section}>
+      <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('healthKit.sleep.title')}</Text>
-        <View style={styles.content}>
+        <View style={commonStyles.card}>
           <Text style={styles.noDataText}>{t('healthKit.sleep.noData')}</Text>
           <Text style={styles.noDataHintText}>{t('healthKit.noDataHint')}</Text>
         </View>
@@ -55,10 +55,10 @@ export function SleepDetailSection({ summary }: SleepDetailSectionProps) {
   const { sleep, record } = summary;
 
   return (
-    <View style={styles.section}>
+    <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('healthKit.sleep.title')}</Text>
 
-      <View style={styles.content}>
+      <View style={commonStyles.card}>
         {/* Timeline bar (full size) */}
         <SleepTimelineBar
           bedtime={new Date(sleep.bedtime)}
@@ -90,14 +90,6 @@ export function SleepDetailSection({ summary }: SleepDetailSectionProps) {
 }
 
 const styles = StyleSheet.create({
-  section: {
-    marginBottom: spacing.lg,
-  },
-  content: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
   detailRows: {
     marginTop: spacing.md,
   },

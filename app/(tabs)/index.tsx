@@ -10,7 +10,14 @@ import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
 import { TodoListItem } from '../../src/components/TodoListItem';
-import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../src/constants/theme';
+import {
+  borderRadius,
+  colors,
+  commonStyles,
+  fontSize,
+  semanticColors,
+  spacing,
+} from '../../src/constants/theme';
 import { useCountdown } from '../../src/hooks/useCountdown';
 import { useDailySummary } from '../../src/hooks/useDailySummary';
 import { useGradeFinalization } from '../../src/hooks/useGradeFinalization';
@@ -52,7 +59,7 @@ function WeeklyStatsCard({
   return (
     <View style={commonStyles.section}>
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
+        <View style={[commonStyles.card, styles.statCardLayout]}>
           <Text style={styles.statValue}>
             {t('week.success', { count: successCount, total: totalCount })}
           </Text>
@@ -82,7 +89,7 @@ function WeeklyCalendar({
   return (
     <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('week.title')}</Text>
-      <View style={styles.weekRow}>
+      <View style={[commonStyles.card, styles.weekRowLayout]}>
         {recentDates.map((date) => {
           const dateStr = getLogicalDateString(date, dayBoundaryHour);
           const gradeRecord = getGradeForDate(dateStr);
@@ -405,32 +412,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* Target Time Display */}
-      <Pressable style={styles.targetSection} onPress={handleTargetPress}>
-        <Text style={styles.targetLabel}>{tomorrowLabel}</Text>
-        <Text style={styles.targetTime}>
-          {resolvedTime !== null ? formatTime(resolvedTime) : t('targetOff')}
-        </Text>
-        {target?.nextOverride !== null && target?.nextOverride !== undefined && (
-          <View style={styles.overrideBadge}>
-            <Text style={styles.overrideBadgeText}>{t('override')}</Text>
-          </View>
-        )}
-      </Pressable>
-
-      {/* Sleep Duration Card -- 目標睡眠時間と就寝目標時刻を表示 */}
-      <SleepDurationCard
-        alarmTime={resolvedTime}
-        targetSleepMinutes={target?.targetSleepMinutes ?? null}
-        onSleepMinutesChange={setTargetSleepMinutes}
-      />
-
-      {/* Wake-up Goal Buffer -- 起床目標バッファ設定 */}
-      {target !== null && !sessionActive && (
-        <GoalBufferSection target={target} resolvedTime={resolvedTime} />
-      )}
-
-      {/* Morning Routine Session (active) OR Todo List (inactive) */}
+      {/* Morning Routine Session (active) OR Target/Sleep/Goal/Todo (inactive) */}
       {sessionActive && progress !== null ? (
         <MorningRoutineSection
           session={session}
@@ -443,7 +425,32 @@ export default function DashboardScreen() {
           onCompleteTodo={handleCompleteTodo}
         />
       ) : (
-        <TodoDisplaySection />
+        <>
+          {/* Target Time Display */}
+          <Pressable style={styles.targetSection} onPress={handleTargetPress}>
+            <Text style={styles.targetLabel}>{tomorrowLabel}</Text>
+            <Text style={styles.targetTime}>
+              {resolvedTime !== null ? formatTime(resolvedTime) : t('targetOff')}
+            </Text>
+            {target?.nextOverride !== null && target?.nextOverride !== undefined && (
+              <View style={styles.overrideBadge}>
+                <Text style={styles.overrideBadgeText}>{t('override')}</Text>
+              </View>
+            )}
+          </Pressable>
+
+          {/* Sleep Duration Card -- 目標睡眠時間と就寝目標時刻を表示 */}
+          <SleepDurationCard
+            alarmTime={resolvedTime}
+            targetSleepMinutes={target?.targetSleepMinutes ?? null}
+            onSleepMinutesChange={setTargetSleepMinutes}
+          />
+
+          {/* Wake-up Goal Buffer -- 起床目標バッファ設定 */}
+          {target !== null && <GoalBufferSection target={target} resolvedTime={resolvedTime} />}
+
+          <TodoDisplaySection />
+        </>
       )}
 
       {/* Streak Badge — グレードストアから取得したストリーク情報を表示 */}
@@ -492,7 +499,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
   },
   errorBanner: {
-    backgroundColor: 'rgba(233, 69, 96, 0.15)',
+    backgroundColor: semanticColors.errorLight,
     borderWidth: 1,
     borderColor: colors.primary,
     borderRadius: borderRadius.sm,
@@ -617,7 +624,7 @@ const styles = StyleSheet.create({
   todoBullet: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     marginRight: spacing.md,
   },
@@ -631,12 +638,9 @@ const styles = StyleSheet.create({
   },
 
   // Weekly Calendar
-  weekRow: {
+  weekRowLayout: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
   },
   dayColumn: {
     alignItems: 'center',
@@ -662,11 +666,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  statCard: {
+  statCardLayout: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
     alignItems: 'center',
   },
   statValue: {

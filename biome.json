@@ -52,7 +52,10 @@
       "!**/coverage",
       "!**/ios",
       "!**/android",
-      "!**/expo-env.d.ts"
+      "!**/expo-env.d.ts",
+      "!**/.ds-sync",
+      "!**/.design-sync",
+      "!**/ds-bundle"
     ]
   }
 }

@@ -48,6 +48,7 @@
     "permissionGranted": "許可済み",
     "permissionDenied": "未許可",
     "permissionRequestFailed": "権限の取得に失敗しました。「設定」アプリから許可してください。",
+    "openSettings": "設定を開く",
     "permissionItems": {
       "alarmKit": {
         "name": "通知",

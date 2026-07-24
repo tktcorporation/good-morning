@@ -10,7 +10,7 @@ import { TimeStep } from '../src/components/onboarding/TimeStep';
 import { TodosStep } from '../src/components/onboarding/TodosStep';
 import { WelcomeStep } from '../src/components/onboarding/WelcomeStep';
 import { STORAGE_KEYS } from '../src/constants/storage-keys';
-import { colors, spacing } from '../src/constants/theme';
+import { borderRadius, colors, spacing } from '../src/constants/theme';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
 import { DEFAULT_WAKE_TARGET } from '../src/types/wake-target';
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.border,
   },
   dotActive: {

@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../src/constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '../src/constants/theme';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime } from '../src/types/alarm';
 import { resolveTimeForDate } from '../src/types/wake-target';
@@ -76,7 +76,7 @@ export default function TargetEditScreen() {
       </View>
 
       {/* Mode Selection */}
-      <View style={styles.modeSection}>
+      <View style={[commonStyles.card, styles.modeSection]}>
         <Pressable style={styles.modeRow} onPress={() => setMode('tomorrowOnly')}>
           <View style={[styles.radio, mode === 'tomorrowOnly' && styles.radioSelected]}>
             {mode === 'tomorrowOnly' && <View style={styles.radioInner} />}
@@ -148,9 +148,6 @@ const styles = StyleSheet.create({
 
   // Mode Selection
   modeSection: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
     marginBottom: spacing.xl,
   },
   modeRow: {
@@ -161,7 +158,7 @@ const styles = StyleSheet.create({
   radio: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: borderRadius.full,
     borderWidth: 2,
     borderColor: colors.textMuted,
     alignItems: 'center',
@@ -174,7 +171,7 @@ const styles = StyleSheet.create({
   radioInner: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
   },
   modeLabel: {

@@ -4,6 +4,9 @@ import { colors, fontSize, spacing } from '../../constants/theme';
 import { StepButton } from './StepButton';
 import { StepHeader } from './StepHeader';
 
+// 絵文字アイコンのサイズはテキストのフォントスケールとは独立の値のため、専用の theme トークン化はしない
+const EMOJI_ICON_SIZE = 72;
+
 interface TodosStepProps {
   readonly onNext: () => void;
   readonly onBack: () => void;
@@ -50,7 +53,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   icon: {
-    fontSize: 72,
+    fontSize: EMOJI_ICON_SIZE,
   },
   taskLabel: {
     color: colors.text,

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '@/constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '@/constants/theme';
 
 /** FlatList の各行の高さ。getItemLayout で固定高さを指定してスクロール性能を最適化する。 */
 const ITEM_HEIGHT = 48;
@@ -76,13 +76,22 @@ export function DayBoundaryPicker({ value, onValueChange }: DayBoundaryPickerPro
       const isSelected = hour === selectedHour;
       return (
         <Pressable
-          style={[styles.item, isSelected && styles.itemSelected]}
+          style={[
+            commonStyles.bottomSheetItem,
+            { height: ITEM_HEIGHT },
+            isSelected && commonStyles.bottomSheetItemSelected,
+          ]}
           onPress={() => setSelectedHour(hour)}
         >
-          <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
+          <Text
+            style={[
+              commonStyles.bottomSheetItemText,
+              isSelected && commonStyles.bottomSheetItemTextSelected,
+            ]}
+          >
             {t('settings.dayBoundaryHour', { hour })}
           </Text>
-          {isSelected && <Text style={styles.checkmark}>{'✓'}</Text>}
+          {isSelected && <Text style={commonStyles.bottomSheetCheckmark}>{'✓'}</Text>}
         </Pressable>
       );
     },
@@ -107,10 +116,12 @@ export function DayBoundaryPicker({ value, onValueChange }: DayBoundaryPickerPro
         onShow={handleShow}
         onRequestClose={handleClose}
       >
-        <Pressable style={styles.overlay} onPress={handleClose}>
+        <Pressable style={commonStyles.bottomSheetOverlay} onPress={handleClose}>
           {/* 内側のシートをタップしてもモーダルが閉じないようにイベント伝播を止める */}
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.title}>{t('settings.dayBoundary')}</Text>
+          <Pressable style={commonStyles.bottomSheetContainer} onPress={(e) => e.stopPropagation()}>
+            <Text style={[commonStyles.bottomSheetTitle, { marginBottom: spacing.xs }]}>
+              {t('settings.dayBoundary')}
+            </Text>
             <Text style={styles.description}>{t('settings.dayBoundaryDescription')}</Text>
 
             <FlatList
@@ -119,16 +130,16 @@ export function DayBoundaryPicker({ value, onValueChange }: DayBoundaryPickerPro
               renderItem={renderItem}
               keyExtractor={keyExtractor}
               getItemLayout={getItemLayout}
-              style={styles.list}
+              style={commonStyles.bottomSheetList}
             />
 
             {/* Action Buttons */}
             <View style={styles.buttonRow}>
-              <Pressable style={styles.textButton} onPress={handleClose}>
-                <Text style={styles.textButtonLabel}>{t('cancel')}</Text>
+              <Pressable style={commonStyles.bottomSheetTextButton} onPress={handleClose}>
+                <Text style={commonStyles.bottomSheetTextButtonLabel}>{t('cancel')}</Text>
               </Pressable>
-              <Pressable style={styles.primaryButton} onPress={handleSave}>
-                <Text style={styles.primaryButtonLabel}>{t('save')}</Text>
+              <Pressable style={commonStyles.bottomSheetPrimaryButton} onPress={handleSave}>
+                <Text style={commonStyles.bottomSheetPrimaryButtonLabel}>{t('save')}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -159,29 +170,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-  // Modal overlay & sheet — ボトムシート風モーダル
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    // FlatList の高さを制限するため maxHeight を設定。
-    // 画面の60%程度に抑えて下から表示する。
-    maxHeight: '70%',
-  },
-  title: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
   description: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
@@ -190,60 +178,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // FlatList
-  list: {
-    marginBottom: spacing.md,
-  },
-  item: {
-    height: ITEM_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.sm,
-  },
-  itemSelected: {
-    backgroundColor: colors.surfaceLight,
-  },
-  itemText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  itemTextSelected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  checkmark: {
-    color: colors.primary,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-  },
-
   // Buttons
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  textButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  textButtonLabel: {
-    color: colors.textSecondary,
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  primaryButtonLabel: {
-    color: colors.text,
-    fontSize: fontSize.md,
-    fontWeight: '600',
   },
 });

@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { borderRadius, colors, fontSize, spacing } from '../constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '../constants/theme';
 import { useSquatDetector } from '../hooks/useSquatDetector';
 import type { SessionTodo } from '../types/morning-session';
 
@@ -51,7 +51,7 @@ export function SquatChallengeItem({ todo, onIncrement, onComplete }: SquatChall
   const strokeDashoffset = useMemo(() => CIRCUMFERENCE * (1 - progress), [progress]);
 
   return (
-    <View style={[styles.container, todo.completed && styles.containerCompleted]}>
+    <View style={[commonStyles.listItemCard, todo.completed && styles.containerCompleted]}>
       <View style={styles.ringContainer}>
         <Svg width={RING_SIZE} height={RING_SIZE}>
           {/* 背景リング */}
@@ -112,14 +112,6 @@ export function SquatChallengeItem({ todo, onIncrement, onComplete }: SquatChall
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
   containerCompleted: {
     opacity: 0.7,
   },
@@ -174,7 +166,7 @@ const styles = StyleSheet.create({
   pulsingDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     marginRight: spacing.xs,
   },

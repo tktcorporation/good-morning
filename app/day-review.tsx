@@ -61,7 +61,7 @@ export default function DayReviewScreen() {
           </View>
 
           {/* Time Info */}
-          <View style={styles.infoSection}>
+          <View style={[commonStyles.card, styles.infoSection]}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>{t('review.target')}</Text>
               <Text style={styles.infoValue}>{formatTime(record.targetTime)}</Text>
@@ -90,7 +90,7 @@ export default function DayReviewScreen() {
 
           {/* Todo Completion */}
           {record.todos.length > 0 && (
-            <View style={styles.todosSection}>
+            <View style={commonStyles.card}>
               <Text style={commonStyles.sectionTitle}>{t('review.todos')}</Text>
               {record.todos.map((todo) => (
                 <View key={todo.id} style={styles.todoRow}>
@@ -170,9 +170,6 @@ const styles = StyleSheet.create({
 
   // Info Section
   infoSection: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
     marginBottom: spacing.lg,
   },
   infoRow: {
@@ -191,12 +188,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Todos Section
-  todosSection: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
   todoRow: {
     flexDirection: 'row',
     alignItems: 'center',

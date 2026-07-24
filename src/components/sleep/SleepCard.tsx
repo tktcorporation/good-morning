@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { borderRadius, colors, fontSize, spacing } from '../../constants/theme';
+import { borderRadius, colors, commonStyles, fontSize, spacing } from '../../constants/theme';
 import type { DailySummary } from '../../hooks/useDailySummary';
 import { initHealthKit } from '../../services/health';
 import { useSettingsStore } from '../../stores/settings-store';
@@ -49,7 +49,7 @@ export function SleepCard({ summary }: SleepCardProps) {
   // Not connected to HealthKit
   if (!healthKitEnabled) {
     return (
-      <View style={styles.card}>
+      <View style={commonStyles.card}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <Pressable
           style={[styles.connectButton, connecting && styles.connectButtonDisabled]}
@@ -69,7 +69,7 @@ export function SleepCard({ summary }: SleepCardProps) {
   // Loading
   if (summary.loading) {
     return (
-      <View style={styles.card}>
+      <View style={commonStyles.card}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <ActivityIndicator color={colors.primary} />
       </View>
@@ -80,7 +80,7 @@ export function SleepCard({ summary }: SleepCardProps) {
   // ヒントテキストで設定アプリへの誘導を表示する。
   if (summary.sleep === null) {
     return (
-      <View style={styles.card}>
+      <View style={commonStyles.card}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <Text style={styles.noDataText}>{t('healthKit.sleep.noData')}</Text>
         <Text style={styles.noDataHintText}>{t('healthKit.noDataHint')}</Text>
@@ -92,7 +92,7 @@ export function SleepCard({ summary }: SleepCardProps) {
   const { sleep, record } = summary;
 
   return (
-    <View style={styles.card}>
+    <View style={commonStyles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('healthKit.sleep.lastNight')}</Text>
         <Text style={styles.durationText}>
@@ -123,11 +123,6 @@ export function SleepCard({ summary }: SleepCardProps) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
   title: {
     color: colors.text,
     fontSize: fontSize.md,
