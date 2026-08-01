@@ -6,8 +6,9 @@ Pod::Spec.new do |s|
   s.name           = 'ExpoSkyVision'
   s.version        = package['version']
   s.summary        = package['description']
-  s.description    = package['description']
+  s.description    = "#{package['description']}. Wraps VNClassifyImageRequest as an Expo Module."
   s.license        = package['license']
+  s.authors        = 'tktcorporation'
   s.homepage       = 'https://github.com/tktcorporation/good-morning'
   s.platforms      = {
     :ios => '26.0',
