@@ -1,10 +1,11 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
   AppState,
+  type AppStateStatus,
   Linking,
   Pressable,
   ScrollView,
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
   const healthKitEnabled = useSettingsStore((s) => s.healthKitEnabled);
   const alarmKitGranted = useSettingsStore((s) => s.alarmKitGranted);
   const setAlarmKitGranted = useSettingsStore((s) => s.setAlarmKitGranted);
+  const setHealthKitEnabled = useSettingsStore((s) => s.setHealthKitEnabled);
 
   /**
    * 各権限の現在の状態を管理する。
@@ -92,6 +94,21 @@ export default function SettingsScreen() {
   );
 
   /**
+   * 許可された権限を対応する store フラグへ永続化する。次回起動時の状態復元、
+   * および他画面（SleepCard 等の healthKitEnabled 判定）との整合に必要。
+   */
+  const persistGrantedPermission = useCallback(
+    async (permId: string) => {
+      if (permId === 'alarmKit') {
+        await setAlarmKitGranted(true);
+      } else if (permId === 'healthKit') {
+        await setHealthKitEnabled(true);
+      }
+    },
+    [setAlarmKitGranted, setHealthKitEnabled],
+  );
+
+  /**
    * 権限リクエストのハンドラ。
    * すでに granted な権限はタップしても何もしない。
    * request() が false を返した場合はiOS設定アプリへの誘導を表示する。
@@ -104,10 +121,7 @@ export default function SettingsScreen() {
       const success = await perm.request();
       if (success) {
         setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'granted' }));
-        // AlarmKit 権限の許可状態を永続化して、次回起動時に復元する
-        if (perm.id === 'alarmKit') {
-          await setAlarmKitGranted(true);
-        }
+        await persistGrantedPermission(perm.id);
       } else {
         setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'denied' }));
         Alert.alert(
@@ -120,23 +134,44 @@ export default function SettingsScreen() {
         );
       }
     },
-    [permissionStatuses, t, setAlarmKitGranted],
+    [permissionStatuses, t, persistGrantedPermission],
   );
 
-  // OS の設定アプリから許可して復帰したケースを拾うため、フォアグラウンド復帰時に
-  // 未許可の権限を再チェックする。再度拒否されていれば同じ Alert が出るが、
-  // 許可済みなら handlePermissionRequest 内の早期リターンで無害。
+  /**
+   * OS の設定アプリから許可し直して戻ってきたケースを拾うための、Alert を
+   * 出さないサイレント版。denied だった権限だけを対象にする — pending は
+   * ユーザーがまだ何もタップしていないので、フォアグラウンド復帰のたびに
+   * OS 権限ダイアログを勝手に出さないようにするため。
+   */
+  const recheckDeniedPermission = useCallback(
+    async (perm: PermissionItem) => {
+      const success = await perm.request();
+      if (success) {
+        setPermissionStatuses((prev) => ({ ...prev, [perm.id]: 'granted' }));
+        await persistGrantedPermission(perm.id);
+      }
+    },
+    [persistGrantedPermission],
+  );
+
+  // バックグラウンド → フォアグラウンド復帰時のみ再チェックする。このガードが
+  // ないと、権限ダイアログ表示による一時的な inactive 遷移でも毎回再発火する。
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') return;
+      const wasBackground =
+        appStateRef.current === 'inactive' || appStateRef.current === 'background';
+      appStateRef.current = nextState;
+      if (!wasBackground || nextState !== 'active') return;
+
       for (const perm of APP_PERMISSIONS) {
-        if (permissionStatuses[perm.id] !== 'granted') {
-          void handlePermissionRequest(perm);
+        if (permissionStatuses[perm.id] === 'denied') {
+          void recheckDeniedPermission(perm);
         }
       }
     });
     return () => subscription.remove();
-  }, [permissionStatuses, handlePermissionRequest]);
+  }, [permissionStatuses, recheckDeniedPermission]);
 
   const isEnabled = target?.enabled ?? false;
 

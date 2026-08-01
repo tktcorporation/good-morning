@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  AppState,
+  type AppStateStatus,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   APP_PERMISSIONS,
   type PermissionItem,
@@ -45,12 +54,19 @@ export function PermissionStep({ onNext, onBack }: PermissionStepProps) {
   }, []);
 
   // OS の権限ダイアログは一度 deny すると二度と出せない。Settings アプリで許可し直して
-  // 戻ってきたケースを拾うため、フォアグラウンド復帰時に未許可の権限を静かに再チェックする。
+  // 戻ってきたケースを拾うため、バックグラウンド → フォアグラウンド復帰時に denied な
+  // 権限だけを静かに再チェックする。pending はユーザーがまだ何もタップしていないので
+  // 対象外にする — 対象にすると復帰のたびに OS 権限ダイアログが勝手に出てしまう。
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') return;
+      const wasBackground =
+        appStateRef.current === 'inactive' || appStateRef.current === 'background';
+      appStateRef.current = nextState;
+      if (!wasBackground || nextState !== 'active') return;
+
       for (const permission of APP_PERMISSIONS) {
-        if (statuses.get(permission.id) !== 'granted') {
+        if (statuses.get(permission.id) === 'denied') {
           void handleRequest(permission);
         }
       }

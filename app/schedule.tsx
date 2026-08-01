@@ -312,9 +312,8 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     backgroundColor: colors.surfaceLight,
-    borderBottomLeftRadius: borderRadius.md,
-    borderBottomRightRadius: borderRadius.md,
-    marginTop: -spacing.sm,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.xs,
   },
   segmentedControl: {
     flexDirection: 'row',

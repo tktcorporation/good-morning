@@ -78,7 +78,7 @@ export function DayBoundaryPicker({ value, onValueChange }: DayBoundaryPickerPro
         <Pressable
           style={[
             commonStyles.bottomSheetItem,
-            { height: ITEM_HEIGHT },
+            styles.item,
             isSelected && commonStyles.bottomSheetItemSelected,
           ]}
           onPress={() => setSelectedHour(hour)}
@@ -119,7 +119,7 @@ export function DayBoundaryPicker({ value, onValueChange }: DayBoundaryPickerPro
         <Pressable style={commonStyles.bottomSheetOverlay} onPress={handleClose}>
           {/* 内側のシートをタップしてもモーダルが閉じないようにイベント伝播を止める */}
           <Pressable style={commonStyles.bottomSheetContainer} onPress={(e) => e.stopPropagation()}>
-            <Text style={[commonStyles.bottomSheetTitle, { marginBottom: spacing.xs }]}>
+            <Text style={[commonStyles.bottomSheetTitle, styles.title]}>
               {t('settings.dayBoundary')}
             </Text>
             <Text style={styles.description}>{t('settings.dayBoundaryDescription')}</Text>
@@ -168,6 +168,13 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: fontSize.lg,
     color: colors.textMuted,
+  },
+
+  title: {
+    marginBottom: spacing.xs,
+  },
+  item: {
+    height: ITEM_HEIGHT,
   },
 
   description: {

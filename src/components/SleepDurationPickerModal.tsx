@@ -95,7 +95,7 @@ export function SleepDurationPickerModal({
         <Pressable
           style={[
             commonStyles.bottomSheetItem,
-            { height: ITEM_HEIGHT },
+            styles.item,
             isSelected && commonStyles.bottomSheetItemSelected,
           ]}
           onPress={() => setSelectedValue(minutes)}
@@ -128,9 +128,7 @@ export function SleepDurationPickerModal({
       <Pressable style={commonStyles.bottomSheetOverlay} onPress={onClose}>
         {/* 内側のシートをタップしてもモーダルが閉じないようにイベント伝播を止める */}
         <Pressable style={commonStyles.bottomSheetContainer} onPress={(e) => e.stopPropagation()}>
-          <Text style={[commonStyles.bottomSheetTitle, { marginBottom: spacing.md }]}>
-            {t('sleep.title')}
-          </Text>
+          <Text style={[commonStyles.bottomSheetTitle, styles.title]}>{t('sleep.title')}</Text>
 
           <FlatList
             ref={flatListRef}
@@ -162,6 +160,13 @@ export function SleepDurationPickerModal({
 }
 
 const styles = StyleSheet.create({
+  title: {
+    marginBottom: spacing.md,
+  },
+  item: {
+    height: ITEM_HEIGHT,
+  },
+
   // Buttons -- Clear を左寄せ、Cancel/Save を右寄せにするレイアウト
   buttonRow: {
     flexDirection: 'row',

@@ -32,8 +32,8 @@ export function DailyGradeSection({ gradeRecord, streak }: DailyGradeSectionProp
   const { t } = useTranslation('dashboard');
 
   return (
-    <View style={[commonStyles.card, { marginTop: spacing.lg }]}>
-      <Text style={[commonStyles.sectionTitle, { textAlign: 'center' }]}>{t('grade.title')}</Text>
+    <View style={[commonStyles.card, styles.container]}>
+      <Text style={[commonStyles.sectionTitle, styles.sectionTitle]}>{t('grade.title')}</Text>
 
       {gradeRecord === undefined ? (
         <Text style={styles.undetermined}>{t('grade.undetermined')}</Text>
@@ -78,6 +78,12 @@ export function DailyGradeSection({ gradeRecord, streak }: DailyGradeSectionProp
 }
 
 const styles = StyleSheet.create({
+  container: {
+    marginTop: spacing.lg,
+  },
+  sectionTitle: {
+    textAlign: 'center',
+  },
   undetermined: {
     color: colors.textMuted,
     fontSize: fontSize.md,
