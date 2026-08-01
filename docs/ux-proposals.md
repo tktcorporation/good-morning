@@ -106,6 +106,7 @@
 - **schedule.tsxのデフォルト時刻セクションが編集不可・導線なし**: `app/schedule.tsx:160-163` の `defaultTimeSection` はテキスト表示のみで `onPress` がなく、デフォルト時刻の変更が `target-edit.tsx`（「デフォルトを変更」モード）経由でしかできないことを示す説明もリンクもない。タップで `target-edit.tsx` に遷移する導線か注記を追加する。
 - **target-edit.tsxが既存オーバーライドの有無を示さない**: `target-edit.tsx:20-29` の `currentResolvedTime` は `nextOverride > dayOverride > defaultTime` の優先順位で解決済みの値をそのまま初期値にするだけで、それが「通常のデフォルト」なのか「既存の明日だけオーバーライド」なのかを示すラベルがない。既存オーバーライドがあればその旨を明示する。
 - **target-edit.tsxに既存オーバーライドを取り消す手段がない**: `src/stores/wake-target-store.ts:135-142` に `clearNextOverride` が実装済みだが、`target-edit.tsx` はどこからも呼び出していない。一度「明日だけ変更」を設定すると、新しい時刻で上書きする以外に取り消す方法がUI上にない。「オーバーライドを解除」ボタンを追加する。
+- **customからoffを経て画面を離れて戻ると、直前のカスタム時刻が復元できない**: `schedule.tsx` の `lastCustomTimeRef`（`useRef`）はコンポーネントローカルな状態のため、`custom → off` のあと画面を離れて（アンマウントして）戻ると失われる。`off` は型上（`DayOverride`、`wake-target.ts:50`）時刻を保持しないため、同一画面滞在中の direct toggle では直前時刻を復元できるが、画面遷移をまたぐケースでは `defaultTime` に静かにフォールバックする。恒久的に復元するには `DayOverride` の `off` にも時刻を保持させるか、`wake-target-store` 側で最終カスタム時刻を永続化する必要がある。
 
 ### 設定・情報設計
 
