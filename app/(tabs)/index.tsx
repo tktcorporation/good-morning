@@ -1,11 +1,12 @@
 import { Effect } from 'effect';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
 import { StreakBadge } from '../../src/components/grade/StreakBadge';
 import { ProgressBar } from '../../src/components/ProgressBar';
+import { SkyChallengeItem } from '../../src/components/SkyChallengeItem';
 import { SleepDurationCard } from '../../src/components/SleepDurationCard';
 import { SquatChallengeItem } from '../../src/components/SquatChallengeItem';
 import { SleepCard } from '../../src/components/sleep/SleepCard';
@@ -26,6 +27,7 @@ import {
   isAlarmKitAvailable,
   onAllTodosCompletedEffect,
   runEffectFork,
+  syncWidgetEffect,
 } from '../../src/services';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
@@ -34,7 +36,7 @@ import { useWakeRecordStore } from '../../src/stores/wake-record-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek } from '../../src/types/alarm';
 import { formatTime, getDayLabel } from '../../src/types/alarm';
-import type { WakeTarget } from '../../src/types/wake-target';
+import type { WakeTarget, WakeTaskType } from '../../src/types/wake-target';
 import {
   getNextLogicalDay,
   resolveOverrideEditDay,
@@ -118,6 +120,7 @@ function WeeklyCalendar({
  */
 function MorningRoutineSection({
   session,
+  taskType,
   progress,
   goalRemaining,
   goalExceeded,
@@ -125,8 +128,11 @@ function MorningRoutineSection({
   onToggleTodo,
   onIncrementTodo,
   onCompleteTodo,
+  onCompleteSkyTodo,
+  onSwitchTaskType,
 }: {
   readonly session: import('../../src/types/morning-session').MorningSession;
+  readonly taskType: WakeTaskType;
   readonly progress: { completed: number; total: number };
   readonly goalRemaining: string | null;
   readonly goalExceeded: boolean;
@@ -134,6 +140,8 @@ function MorningRoutineSection({
   readonly onToggleTodo: (id: string) => void;
   readonly onIncrementTodo: (id: string) => void;
   readonly onCompleteTodo: (id: string) => void;
+  readonly onCompleteSkyTodo: (id: string) => void;
+  readonly onSwitchTaskType: (taskType: WakeTaskType) => void;
 }) {
   const { t } = useTranslation('dashboard');
   return (
@@ -166,21 +174,64 @@ function MorningRoutineSection({
           {t('morningRoutine.snoozeCountdown', { time: snoozeRemaining })}
         </Text>
       )}
-      {session.todos.map((todo) =>
-        (todo.type ?? 'checkbox') === 'squat' ? (
-          <SquatChallengeItem
-            key={todo.id}
-            todo={todo}
-            onIncrement={onIncrementTodo}
-            onComplete={onCompleteTodo}
-          />
-        ) : (
+      {session.todos.map((todo) => {
+        const type = todo.type ?? 'checkbox';
+        if (type === 'squat') {
+          return (
+            <SquatChallengeItem
+              key={todo.id}
+              todo={todo}
+              onIncrement={onIncrementTodo}
+              onComplete={onCompleteTodo}
+            />
+          );
+        }
+        if (type === 'sky') {
+          return <SkyChallengeItem key={todo.id} todo={todo} onComplete={onCompleteSkyTodo} />;
+        }
+        return (
           <TodoListItem
             key={todo.id}
             item={{ id: todo.id, title: todo.title, completed: todo.completed }}
             onToggle={onToggleTodo}
           />
-        ),
+        );
+      })}
+      {/* 全完了後は表示しない: 完了済みタスクを未完了に戻すと、TODO全完了時の
+          WakeRecord確定処理（onAllTodosCompletedEffect）が再発火し、確定済みの
+          完了記録を上書きしてしまうため。*/}
+      {progress.completed < progress.total && (
+        <View style={styles.taskTypeSwitcher}>
+          <Text style={styles.taskTypeSwitcherLabel}>{t('morningRoutine.switchTaskType')}</Text>
+          <View style={styles.taskTypeRow}>
+            <Pressable
+              style={[styles.taskTypeOption, taskType === 'squat' && styles.taskTypeOptionSelected]}
+              onPress={() => onSwitchTaskType('squat')}
+            >
+              <Text
+                style={[
+                  styles.taskTypeOptionText,
+                  taskType === 'squat' && styles.taskTypeOptionTextSelected,
+                ]}
+              >
+                {t('morningRoutine.squat.title')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.taskTypeOption, taskType === 'sky' && styles.taskTypeOptionSelected]}
+              onPress={() => onSwitchTaskType('sky')}
+            >
+              <Text
+                style={[
+                  styles.taskTypeOptionText,
+                  taskType === 'sky' && styles.taskTypeOptionTextSelected,
+                ]}
+              >
+                {t('morningRoutine.sky.title')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -189,18 +240,25 @@ function MorningRoutineSection({
 /**
  * 明日のタスク表示セクション（セッション非アクティブ時）。
  *
- * 起床タスクは「スクワット 10 回」固定（FIXED_SQUAT_TODO_ID 参照）。
- * 編集・追加・削除 UI は意図的に持たない — ユーザーがタスクを自分で組み立てる
- * 認知負荷を下げるため、選択肢ゼロにしている。
+ * 起床タスクは taskType が指す1種類に固定（設定画面で切り替え可能。FIXED_SQUAT_TODO_ID /
+ * FIXED_SKY_TODO_ID 参照）。自由な編集・追加・削除 UI は意図的に持たない —
+ * ユーザーがタスクを自分で組み立てる認知負荷を下げるため、種類の選択肢だけを提供する。
  */
-function TodoDisplaySection() {
+function TodoDisplaySection({ taskType }: { readonly taskType: WakeTaskType }) {
   const { t } = useTranslation('dashboard');
+  const label = taskType === 'sky' ? t('todos.fixedSkyTaskLabel') : t('todos.fixedTaskLabel');
   return (
     <View style={commonStyles.section}>
       <Text style={commonStyles.sectionTitle}>{t('todos.title')}</Text>
       <View style={styles.todoRow}>
-        <View style={[styles.todoBullet, styles.todoBulletSquat]} />
-        <Text style={styles.todoText}>{t('todos.fixedTaskLabel')}</Text>
+        <View
+          style={[
+            styles.todoBullet,
+            taskType === 'squat' && styles.todoBulletSquat,
+            taskType === 'sky' && styles.todoBulletSky,
+          ]}
+        />
+        <Text style={styles.todoText}>{label}</Text>
       </View>
     </View>
   );
@@ -276,14 +334,29 @@ export default function DashboardScreen() {
   const setTargetSleepMinutes = useWakeTargetStore((s) => s.setTargetSleepMinutes);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
+  const setTaskType = useWakeTargetStore((s) => s.setTaskType);
+  const isSwitchingTaskTypeRef = useRef(false);
+
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
   const incrementTodoCount = useMorningSessionStore((s) => s.incrementTodoCount);
+  const completeSkyTodo = useMorningSessionStore((s) => s.completeSkyTodo);
+  const switchSessionTaskType = useMorningSessionStore((s) => s.switchTaskType);
   const areAllCompleted = useMorningSessionStore((s) => s.areAllCompleted);
   const getProgress = useMorningSessionStore((s) => s.getProgress);
   const snoozeFiresAt = useMorningSessionStore((s) => s.session?.snoozeFiresAt ?? null);
 
   const alarmKitAvailable = useMemo(() => isAlarmKitAvailable(), []);
+
+  // 進行中セッションがあればその実タスク種別を優先する。設定画面からの
+  // taskType 変更は次回以降のデフォルトのみを更新しセッションには影響しないため、
+  // target.taskType だけで判定するとセッション中の表示・切り替え判定が実態とズレる。
+  const activeTaskType: WakeTaskType = useMemo(() => {
+    const sessionType = session?.todos[0]?.type;
+    if (sessionType === 'sky') return 'sky';
+    if (sessionType === 'squat') return 'squat';
+    return target?.taskType ?? 'squat';
+  }, [session, target]);
 
   // カウントダウンタイマー: スヌーズ（超過後は非表示）と目標（超過後も経過時間を警告表示）
   const { remaining: snoozeRemaining } = useCountdown(snoozeFiresAt);
@@ -341,37 +414,41 @@ export default function DashboardScreen() {
     runEffectFork(onAllTodosCompletedEffect(session));
   }, [session, areAllCompleted]);
 
+  // session.todos の内容が変わる操作（toggle / タスク種別切り替え等）の後に
+  // Live Activity（ロック画面 / Dynamic Island）の表示を最新の todos に同期する。
+  const syncLiveActivityWithSession = useCallback(() => {
+    const state = useMorningSessionStore.getState();
+    const activityId = state.session?.liveActivityId ?? null;
+    const currentSession = state.session;
+    if (activityId === null || currentSession === null) return;
+    const snoozeEpoch = currentSession.snoozeFiresAt
+      ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
+      : null;
+    runEffectFork(
+      Effect.gen(function* () {
+        const kit = yield* AlarmKit;
+        yield* kit.updateLiveActivity(
+          activityId,
+          currentSession.todos.map((todo) => ({
+            id: todo.id,
+            title: getLocalizedTodoTitle(todo),
+            completed: todo.completed,
+          })),
+          snoozeEpoch,
+        );
+      }),
+    );
+  }, []);
+
   const handleToggleTodo = useCallback(
     async (todoId: string) => {
       // await で persistSession 完了を保証する。set() 自体は同期なので
       // UI は即座に更新されるが、await 後に getState() すれば
       // AsyncStorage 永続化も完了した確定状態を読める。
       await toggleTodo(todoId);
-
-      const state = useMorningSessionStore.getState();
-      const activityId = state.session?.liveActivityId ?? null;
-      const currentSession = state.session;
-      if (activityId !== null && currentSession !== null) {
-        const snoozeEpoch = currentSession.snoozeFiresAt
-          ? Math.floor(new Date(currentSession.snoozeFiresAt).getTime() / 1000)
-          : null;
-        runEffectFork(
-          Effect.gen(function* () {
-            const kit = yield* AlarmKit;
-            yield* kit.updateLiveActivity(
-              activityId,
-              currentSession.todos.map((todo) => ({
-                id: todo.id,
-                title: getLocalizedTodoTitle(todo),
-                completed: todo.completed,
-              })),
-              snoozeEpoch,
-            );
-          }),
-        );
-      }
+      syncLiveActivityWithSession();
     },
-    [toggleTodo],
+    [toggleTodo, syncLiveActivityWithSession],
   );
 
   const handleIncrementTodo = useCallback(
@@ -379,6 +456,89 @@ export default function DashboardScreen() {
       await incrementTodoCount(todoId);
     },
     [incrementTodoCount],
+  );
+
+  const handleCompleteSkyTodo = useCallback(
+    async (todoId: string) => {
+      await completeSkyTodo(todoId);
+      syncLiveActivityWithSession();
+    },
+    [completeSkyTodo, syncLiveActivityWithSession],
+  );
+
+  const handleSwitchTaskType = useCallback(
+    (type: WakeTaskType) => {
+      // 切り替え処理中の連打で setTaskType と switchSessionTaskType の非同期呼び出しが
+      // 交差すると、target.taskType と session.todos[0].type が異なる値で確定しうる。
+      // 完了までは以降の切り替え操作を無視して排他にする。
+      if (isSwitchingTaskTypeRef.current) return;
+
+      // activeTaskType は type 未設定のレガシー checkbox セッションだと
+      // target.taskType にフォールバックするため、そのフォールバック値と
+      // 一致するボタンを早期 return すると、実際は checkbox のままのセッションを
+      // 切り替えられなくなる。session の実際の type が squat/sky で判別できる
+      // ときだけ、この等値チェックで無駄な切り替えを防ぐ。
+      const sessionType = session?.todos[0]?.type;
+      const isKnownSessionType = sessionType === 'squat' || sessionType === 'sky';
+      if ((session === null || isKnownSessionType) && type === activeTaskType) return;
+
+      const performSwitch = () => {
+        isSwitchingTaskTypeRef.current = true;
+        void (async () => {
+          try {
+            // switchSessionTaskType を先に呼ぶ: session 側の areAllCompleted() ガードは
+            // 呼び出しの冒頭で同期的に評価される。setTaskType を先に await すると、
+            // その永続化待ちの間に（切り替え中もタスク完了操作自体は塞がれていないため）
+            // 現在のタスクが完了してセッションが全完了になり、後続の
+            // switchSessionTaskType がガードで no-op になりうる。その場合 target だけ
+            // 新しい種別になり session は古いままという不整合が残ってしまう。
+            //
+            // 次回以降のデフォルトにも反映する。セッション中の切り替えは
+            // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
+            // 両ストアのアクションは自身の変更後にそれぞれウィジェット同期を fork するが、
+            // ここでは syncWidget: false で抑制し、両方の更新が確定した後に 1 回だけ
+            // 同期する。2つの fork をそのまま並行させると、target 用と session 用の
+            // ネイティブ書き込みの完了順が入れ替わり、古い表示が最終状態として残りうる。
+            await switchSessionTaskType(type, { syncWidget: false });
+            await setTaskType(type, { syncWidget: false });
+            runEffectFork(syncWidgetEffect);
+            syncLiveActivityWithSession();
+          } finally {
+            isSwitchingTaskTypeRef.current = false;
+          }
+        })();
+      };
+
+      // 失う進捗が無い（squat は未着手、sky は未完了なら常に該当）場合は
+      // 確認なしで即切り替える。進捗がある場合のみ、失うことを確認する。
+      // レガシーの複数 checkbox セッションでは todos[0] 以外が完了/進行中のこともあるため、
+      // 全 todo を見て判定する（todos[0] だけを見ると他の todo の完了済み進捗が
+      // 確認なしで失われる）。
+      const hasProgress =
+        session?.todos.some((todo) => todo.completed || (todo.currentCount ?? 0) > 0) === true;
+      if (!hasProgress) {
+        performSwitch();
+        return;
+      }
+
+      Alert.alert(
+        t('morningRoutine.switchTaskTypeConfirmTitle'),
+        t('morningRoutine.switchTaskTypeConfirmMessage'),
+        [
+          { text: tCommon('cancel'), style: 'cancel' },
+          { text: t('morningRoutine.switchTaskTypeConfirmButton'), onPress: performSwitch },
+        ],
+      );
+    },
+    [
+      activeTaskType,
+      session,
+      setTaskType,
+      switchSessionTaskType,
+      syncLiveActivityWithSession,
+      t,
+      tCommon,
+    ],
   );
 
   // スクワットタスク完了時も handleToggleTodo と同じ Live Activity 更新が走る。
@@ -465,6 +625,7 @@ export default function DashboardScreen() {
       {sessionActive && progress !== null ? (
         <MorningRoutineSection
           session={session}
+          taskType={activeTaskType}
           progress={progress}
           goalRemaining={goalRemaining}
           goalExceeded={goalExceeded}
@@ -472,9 +633,11 @@ export default function DashboardScreen() {
           onToggleTodo={handleToggleTodo}
           onIncrementTodo={handleIncrementTodo}
           onCompleteTodo={handleCompleteTodo}
+          onCompleteSkyTodo={handleCompleteSkyTodo}
+          onSwitchTaskType={handleSwitchTaskType}
         />
       ) : (
-        <TodoDisplaySection />
+        <TodoDisplaySection taskType={target?.taskType ?? 'squat'} />
       )}
 
       {/* Streak Badge — グレードストアから取得したストリーク情報を表示 */}
@@ -614,6 +777,40 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
+  // Task Type Switcher (in-session)
+  taskTypeSwitcher: {
+    marginTop: spacing.md,
+  },
+  taskTypeSwitcherLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  taskTypeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  taskTypeOption: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  taskTypeOptionSelected: {
+    borderColor: colors.primary,
+  },
+  taskTypeOptionText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  taskTypeOptionTextSelected: {
+    color: colors.text,
+  },
+
   // Goal Buffer
   bufferRow: {
     flexDirection: 'row',
@@ -668,6 +865,9 @@ const styles = StyleSheet.create({
   },
   todoBulletSquat: {
     backgroundColor: colors.warning,
+  },
+  todoBulletSky: {
+    backgroundColor: colors.success,
   },
   todoText: {
     flex: 1,

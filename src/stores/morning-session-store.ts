@@ -15,7 +15,23 @@ import {
 import type { StorageError } from '../services/errors';
 import type { MorningSession, SessionTodo, StoredMorningSession } from '../types/morning-session';
 import { normalizeStoredSession } from '../types/morning-session';
+import type { WakeTaskType } from '../types/wake-target';
+import { buildFixedTodoForTaskType } from '../types/wake-target';
 import { logError } from '../utils/logger';
+
+/** taskType の固定 TODO テンプレート（TodoItem）を、未着手の SessionTodo に変換する。 */
+function buildInitialSessionTodo(taskType: WakeTaskType): SessionTodo {
+  const todo = buildFixedTodoForTaskType(taskType);
+  return {
+    id: todo.id,
+    title: todo.title,
+    completed: false,
+    completedAt: null,
+    type: todo.type,
+    requiredCount: todo.requiredCount,
+    currentCount: 0,
+  };
+}
 
 const STORAGE_KEY = STORAGE_KEYS.morningSession;
 
@@ -110,6 +126,26 @@ interface MorningSessionState {
    * checkbox タスクに対して呼ばれた場合は何もしない。
    */
   incrementTodoCount: (todoId: string) => Promise<void>;
+  /**
+   * sky タスクをネイティブ画像分類の判定成功時にのみ完了させる。
+   * toggleTodo と異なりタップだけでは完了できない — squat の加速度センサー判定と同様、
+   * 寝ぼけたままの操作だけで完了できる抜け道を作らないため、呼び出し元
+   * （SkyChallengeItem）は判定成功時にのみこれを呼ぶ。sky 以外のタスクや、
+   * 既に completed なタスクに対して呼ばれた場合は何もしない。
+   */
+  completeSkyTodo: (todoId: string) => Promise<void>;
+  /**
+   * 進行中セッションの起床タスクを別の種別（squat/sky）に丸ごと切り替える。
+   * WakeTarget.todos と同じ「taskType に対応する固定 TODO 1 件のみ」という
+   * 不変条件をセッション側でも保つため、既存の進捗（completed/currentCount）は
+   * 引き継がず、新しい taskType の未着手状態から始める。session が null の場合、
+   * および全タスク完了済みの場合（完了済みを未完了に戻すと onAllTodosCompletedEffect
+   * の再発火で確定済み WakeRecord が上書きされるため）は何もしない。
+   * options.syncWidget=false でウィジェット同期を呼び出し元に委譲できる
+   * （wake-target-store の setTaskType と続けて呼ぶ場合に、ウィジェット同期の
+   * 重複 fork を避けるため）。
+   */
+  switchTaskType: (taskType: WakeTaskType, options?: { syncWidget?: boolean }) => Promise<void>;
   clearSession: () => Promise<void>;
   /**
    * snoozeAlarmIds と snoozeFiresAt をアトミックに更新し、session を AsyncStorage に永続化する。
@@ -270,6 +306,46 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     set({ session: updated });
     await persistSession(updated);
     runEffectFork(syncWidgetEffect);
+  },
+
+  completeSkyTodo: async (todoId: string) => {
+    const { session } = get();
+    if (session === null) return;
+
+    const todo = session.todos.find((t) => t.id === todoId);
+    if (todo === undefined || todo.type !== 'sky') return;
+    if (todo.completed) return;
+
+    const updated: MorningSession = {
+      ...session,
+      todos: session.todos.map((t) =>
+        t.id === todoId ? { ...t, completed: true, completedAt: new Date().toISOString() } : t,
+      ),
+    };
+    set({ session: updated });
+    await persistSession(updated);
+    runEffectFork(syncWidgetEffect);
+  },
+
+  switchTaskType: async (taskType: WakeTaskType, options?: { syncWidget?: boolean }) => {
+    const { session, areAllCompleted } = get();
+    if (session === null) return;
+    // 全完了済みセッションを未完了に戻すと、onAllTodosCompletedEffect の
+    // useEffect（app/(tabs)/index.tsx）が session 参照の変化を検知して再発火し、
+    // 確定済みの WakeRecord（完了時刻・所要時間・todos）を新タスクの記録で
+    // 上書きしてしまう。UI 側でも全完了後は切り替え導線を隠すが、ストア単体で
+    // 呼ばれた場合の安全策としてもここでガードする。
+    if (areAllCompleted()) return;
+
+    const updated: MorningSession = {
+      ...session,
+      todos: [buildInitialSessionTodo(taskType)],
+    };
+    set({ session: updated });
+    await persistSession(updated);
+    if (options?.syncWidget !== false) {
+      runEffectFork(syncWidgetEffect);
+    }
   },
 
   /** セッションをクリアする。snooze state は session 内に含まれるため、session = null で自動的にクリアされる。 */

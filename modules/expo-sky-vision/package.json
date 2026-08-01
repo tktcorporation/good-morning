@@ -1,0 +1,16 @@
+{
+  "name": "expo-sky-vision",
+  "version": "1.0.0",
+  "description": "On-device sky photo classification using the iOS Vision framework",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "dependencies": {
+    "expo-modules-core": "^55.0.25"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

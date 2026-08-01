@@ -38,6 +38,13 @@ interface WakeDismissRecord {
 }
 
 /**
+ * WakeRecord・Live Activity の構築に必要な todo の最小形。
+ * target.todos（TodoItem[]）と session.todos（SessionTodo[]）はどちらも
+ * この形を満たすため、dismiss 時点でどちらを使うかを呼び出し元で選べる。
+ */
+type DismissTodoSource = Pick<SessionTodo, 'id' | 'title' | 'type'>;
+
+/**
  * dismiss を WakeRecord として記録する Effect（セッション・スヌーズには触れない）。
  *
  * 複数の未処理 dismiss イベントを遡って処理する場面（recoverMissedDismiss）で、
@@ -49,6 +56,7 @@ interface WakeDismissRecord {
  */
 export const recordWakeDismiss = (
   target: WakeTarget,
+  todos: readonly DismissTodoSource[],
   alarmInstant: Date,
   dismissTime: Date,
   mountedAt: Date,
@@ -59,11 +67,11 @@ export const recordWakeDismiss = (
       hour: alarmInstant.getHours(),
       minute: alarmInstant.getMinutes(),
     };
-    const hasTodos = target.todos.length > 0;
+    const hasTodos = todos.length > 0;
     const diffMinutes = calculateDiffMinutes(resolvedTime, dismissTime);
     const result = calculateWakeResult(diffMinutes);
 
-    const todoRecords: readonly WakeTodoRecord[] = target.todos.map((todo) => ({
+    const todoRecords: readonly WakeTodoRecord[] = todos.map((todo) => ({
       id: todo.id,
       title: todo.title,
       completedAt: null,
@@ -131,9 +139,18 @@ export const handleAlarmDismissEffect = (
     const kit = yield* AlarmKit;
     const dateStr = resolveDismissDateStr(alarmInstant, dismissTime, target, dayBoundaryHour);
 
+    // 事前ウィンドウで既にセッションが自動開始されている場合、そのセッションの
+    // todos が実際にユーザーが取り組む内容になる。dismiss 時点までに設定画面で
+    // target.taskType が変更されている可能性があり、target.todos を使うと
+    // WakeRecord・Live Activity がセッションと異なるタスク種別を表示してしまう。
+    const sessionStore = useMorningSessionStore.getState();
+    const activeSession = sessionStore.isActive() ? sessionStore.session : null;
+    const dismissTodos: readonly DismissTodoSource[] = activeSession?.todos ?? target.todos;
+
     // 1. WakeRecord 作成
     const { record, goalDeadline, hasTodos } = yield* recordWakeDismiss(
       target,
+      dismissTodos,
       alarmInstant,
       dismissTime,
       mountedAt,
@@ -143,8 +160,6 @@ export const handleAlarmDismissEffect = (
     if (!hasTodos) return;
 
     // 2. セッション紐づけ or 新規作成
-    const sessionStore = useMorningSessionStore.getState();
-
     if (sessionStore.isActive()) {
       yield* Effect.promise(() => sessionStore.setRecordId(record.id));
       yield* Effect.promise(() => sessionStore.setGoalDeadline(goalDeadline));
@@ -209,13 +224,13 @@ export const handleAlarmDismissEffect = (
     );
 
     // 4. リマインド通知（失敗してもセッションは有効に保つ）
-    yield* bestEffort(scheduleReminderNotifications(target.todos.length));
+    yield* bestEffort(scheduleReminderNotifications(dismissTodos.length));
 
     // 5. Live Activity 開始（失敗してもセッションは有効に保つ）
     yield* bestEffort(
       Effect.gen(function* () {
         const { session: currentSession } = useMorningSessionStore.getState();
-        const liveActivityTodos = target.todos.map((td) => ({
+        const liveActivityTodos = dismissTodos.map((td) => ({
           id: td.id,
           title: getLocalizedTodoTitle(td),
           completed: false,

@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- \
-            app src package.json pnpm-lock.yaml patches .npmrc \
+            app src modules package.json pnpm-lock.yaml patches .npmrc \
             jest.config.js jest.setup.js babel.config.js tsconfig.json \
             .github/workflows/ci.yml .github/actions/setup-pnpm)
           if [ -z "$CHANGED" ]; then
@@ -147,7 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- \
-            app src assets package.json pnpm-lock.yaml patches .npmrc \
+            app src assets modules package.json pnpm-lock.yaml patches .npmrc \
             app.config.ts babel.config.js tsconfig.json \
             .github/workflows/ci.yml .github/actions/setup-pnpm)
           if [ -z "$CHANGED" ]; then

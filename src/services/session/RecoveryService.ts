@@ -275,7 +275,14 @@ const processPrimaryDismissEvent = (
         dayBoundaryHour,
       });
     } else {
-      yield* recordWakeDismiss(target, alarmInstant, dismissTime, dismissTime, dateStr);
+      yield* recordWakeDismiss(
+        target,
+        target.todos,
+        alarmInstant,
+        dismissTime,
+        dismissTime,
+        dateStr,
+      );
     }
 
     return true;

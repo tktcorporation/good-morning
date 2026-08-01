@@ -7,7 +7,8 @@
     "expo-system-ui",
     "@expo/vector-icons",
     "expo-splash-screen",
-    "expo-status-bar"
+    "expo-status-bar",
+    "expo-modules-core"
   ],
   "rules": {
     "exports": "warn",

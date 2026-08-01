@@ -61,6 +61,10 @@
     "dayBoundary": "Day Boundary",
     "dayBoundaryDescription": "Hours before midnight count as the previous day",
     "dayBoundaryHour": "{{hour}}:00",
+    "taskType": "Wake-up Task",
+    "taskTypeSquat": "10 Squats",
+    "taskTypeSky": "Sky Photo",
+    "taskTypeSwitchInSessionHint": "This won't change your current task. Switch it from the Home screen instead.",
     "squatCheck": "Squat Check",
     "squatCheckSubtitle": "Try the same detection used at alarm time"
   },

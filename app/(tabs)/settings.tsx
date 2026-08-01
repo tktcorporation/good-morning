@@ -13,8 +13,10 @@ import {
   semanticColors,
   spacing,
 } from '../../src/constants/theme';
+import { useMorningSessionStore } from '../../src/stores/morning-session-store';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { useWakeTargetStore } from '../../src/stores/wake-target-store';
+import type { WakeTaskType } from '../../src/types/wake-target';
 
 /**
  * 権限の許可状態を settings-store の値から純粋に導出する。
@@ -35,6 +37,10 @@ export default function SettingsScreen() {
 
   const target = useWakeTargetStore((s) => s.target);
   const toggleEnabled = useWakeTargetStore((s) => s.toggleEnabled);
+  const setTaskType = useWakeTargetStore((s) => s.setTaskType);
+  // ここでの切り替えは次回以降のデフォルトのみ更新する。進行中セッションのタスクは
+  // ホーム画面（起床フロー中の画面）から切り替える導線があるため、そちらに誘導する。
+  const isSessionActive = useMorningSessionStore((s) => s.session !== null);
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
   const setDayBoundaryHour = useSettingsStore((s) => s.setDayBoundaryHour);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -57,6 +63,15 @@ export default function SettingsScreen() {
       await setDayBoundaryHour(hour);
     },
     [setDayBoundaryHour],
+  );
+
+  const taskType = target?.taskType ?? 'squat';
+  const handleTaskTypeChange = useCallback(
+    async (type: WakeTaskType) => {
+      if (type === taskType) return;
+      await setTaskType(type);
+    },
+    [taskType, setTaskType],
   );
 
   /**
@@ -118,6 +133,42 @@ export default function SettingsScreen() {
       <View style={commonStyles.section}>
         <Text style={commonStyles.sectionTitle}>{t('settings.dayBoundary')}</Text>
         <DayBoundaryPicker value={dayBoundaryHour} onValueChange={handleDayBoundaryChange} />
+      </View>
+
+      {/* Task Type - 起床タスクの種類（スクワット / 空の写真）を選択 */}
+      <View style={commonStyles.section}>
+        <Text style={commonStyles.sectionTitle}>{t('settings.taskType')}</Text>
+        <View style={styles.taskTypeRow}>
+          <Pressable
+            style={[styles.taskTypeOption, taskType === 'squat' && styles.taskTypeOptionSelected]}
+            onPress={() => handleTaskTypeChange('squat')}
+          >
+            <Text
+              style={[
+                styles.taskTypeOptionText,
+                taskType === 'squat' && styles.taskTypeOptionTextSelected,
+              ]}
+            >
+              {t('settings.taskTypeSquat')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.taskTypeOption, taskType === 'sky' && styles.taskTypeOptionSelected]}
+            onPress={() => handleTaskTypeChange('sky')}
+          >
+            <Text
+              style={[
+                styles.taskTypeOptionText,
+                taskType === 'sky' && styles.taskTypeOptionTextSelected,
+              ]}
+            >
+              {t('settings.taskTypeSky')}
+            </Text>
+          </Pressable>
+        </View>
+        {isSessionActive && (
+          <Text style={styles.taskTypeNote}>{t('settings.taskTypeSwitchInSessionHint')}</Text>
+        )}
       </View>
 
       {/* Squat Check - 朝のスクワット検出を本番フロー外で確認するための動作確認モード */}
@@ -187,6 +238,35 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+  },
+  taskTypeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  taskTypeOption: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  taskTypeOptionSelected: {
+    borderColor: colors.primary,
+  },
+  taskTypeOptionText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  taskTypeOptionTextSelected: {
+    color: colors.text,
+  },
+  taskTypeNote: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
   },
   rowTitle: {
     fontSize: fontSize.md,

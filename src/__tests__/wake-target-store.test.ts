@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWakeTargetStore } from '../stores/wake-target-store';
 import type { WakeTarget } from '../types/wake-target';
 import {
+  buildFixedSkyTodo,
   buildFixedSquatTodo,
   DEFAULT_WAKE_TARGET,
   FIXED_SQUAT_REQUIRED_COUNT,
@@ -206,6 +207,86 @@ describe('useWakeTargetStore', () => {
     });
     await useWakeTargetStore.getState().loadTarget();
     expect(useWakeTargetStore.getState().target?.todos).toEqual([fixedTodo]);
+  });
+
+  test('setTaskType(sky) は taskType と todos を fixed sky todo に切り替えて永続化する', async () => {
+    mockGetItem.mockResolvedValue(null);
+    await useWakeTargetStore.getState().loadTarget();
+    mockSetItem.mockClear();
+
+    await useWakeTargetStore.getState().setTaskType('sky');
+
+    const target = useWakeTargetStore.getState().target;
+    expect(target?.taskType).toBe('sky');
+    expect(target?.todos).toEqual([buildFixedSkyTodo()]);
+    expect(mockSetItem).toHaveBeenCalledWith(
+      'wake-target',
+      expect.stringContaining('"taskType":"sky"'),
+    );
+  });
+
+  test('setTaskType(squat) は sky から squat の fixed todo に戻す', async () => {
+    mockGetItem.mockResolvedValue(null);
+    await useWakeTargetStore.getState().loadTarget();
+    await useWakeTargetStore.getState().setTaskType('sky');
+
+    await useWakeTargetStore.getState().setTaskType('squat');
+
+    const target = useWakeTargetStore.getState().target;
+    expect(target?.taskType).toBe('squat');
+    expect(target?.todos).toEqual([buildFixedSquatTodo()]);
+  });
+
+  test('setTaskType は target が null の場合は何もしない', async () => {
+    await useWakeTargetStore.getState().setTaskType('sky');
+    expect(useWakeTargetStore.getState().target).toBeNull();
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  test('loadTarget は保存済みの taskType: sky を復元する', async () => {
+    const stored = { ...DEFAULT_WAKE_TARGET, taskType: 'sky', todos: [buildFixedSkyTodo()] };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const target = useWakeTargetStore.getState().target;
+    expect(target?.taskType).toBe('sky');
+    expect(target?.todos).toEqual([buildFixedSkyTodo()]);
+  });
+
+  test('loadTarget は taskType 欠落（レガシーデータ）を squat にフォールバックする', async () => {
+    const { taskType: _taskType, ...legacyStored } = DEFAULT_WAKE_TARGET as WakeTarget & {
+      taskType?: string;
+    };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(legacyStored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.taskType).toBe('squat');
+  });
+
+  test('loadTarget は taskType の不正値を squat にフォールバックする', async () => {
+    const stored = { ...DEFAULT_WAKE_TARGET, taskType: 'walk' };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    expect(useWakeTargetStore.getState().target?.taskType).toBe('squat');
+  });
+
+  test('loadTarget は taskType: sky なのに todos が squat の固定 todo のままなら fixed sky todo に正規化する', async () => {
+    const stored = { ...DEFAULT_WAKE_TARGET, taskType: 'sky', todos: [buildFixedSquatTodo()] };
+    mockGetItem.mockImplementation((key: string) => {
+      if (key === 'wake-target') return Promise.resolve(JSON.stringify(stored));
+      return Promise.resolve(null);
+    });
+    await useWakeTargetStore.getState().loadTarget();
+    const target = useWakeTargetStore.getState().target;
+    expect(target?.taskType).toBe('sky');
+    expect(target?.todos).toEqual([buildFixedSkyTodo()]);
   });
 
   test('setAlarmIds persists to AsyncStorage', async () => {

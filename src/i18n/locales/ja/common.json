@@ -61,6 +61,10 @@
     "dayBoundary": "日付変更ライン",
     "dayBoundaryDescription": "この時刻より前は前日として扱います",
     "dayBoundaryHour": "{{hour}}:00",
+    "taskType": "起床タスク",
+    "taskTypeSquat": "スクワット 10 回",
+    "taskTypeSky": "空の写真",
+    "taskTypeSwitchInSessionHint": "進行中のタスクはここでは変わりません。ホーム画面から切り替えられます",
     "squatCheck": "スクワット動作確認",
     "squatCheckSubtitle": "アラーム時と同じ検出を試す"
   },

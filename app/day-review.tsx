@@ -16,6 +16,7 @@ import { useDailySummary } from '../src/hooks/useDailySummary';
 import { useDailyGradeStore } from '../src/stores/daily-grade-store';
 import { useWakeRecordStore } from '../src/stores/wake-record-store';
 import { formatTime } from '../src/types/alarm';
+import { getLocalizedTodoTitle } from '../src/utils/todo-display';
 
 export default function DayReviewScreen() {
   const { t } = useTranslation('dashboard');
@@ -98,12 +99,7 @@ export default function DayReviewScreen() {
                   <Text
                     style={[styles.todoText, todo.completedAt !== null && styles.todoCompleted]}
                   >
-                    {/*
-                     * type 既知のタスクは現在のロケールでラベルを引く（履歴データには
-                     * 永続化時点のロケールに依存しない type を保存している）。
-                     * 未設定のレガシーレコードは title をそのまま表示。
-                     */}
-                    {todo.type === 'squat' ? t('morningRoutine.squat.title') : todo.title}
+                    {getLocalizedTodoTitle(todo)}
                   </Text>
                 </View>
               ))}

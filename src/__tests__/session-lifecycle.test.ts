@@ -67,6 +67,7 @@ function createTargetWithTodos(): WakeTarget {
       { id: 'todo-1', title: 'Stretch', completed: false },
       { id: 'todo-2', title: 'Drink water', completed: false },
     ],
+    taskType: 'squat',
     enabled: true,
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,
@@ -79,6 +80,7 @@ function createTargetWithoutTodos(): WakeTarget {
     dayOverrides: {},
     nextOverride: null,
     todos: [],
+    taskType: 'squat',
     enabled: true,
     targetSleepMinutes: null,
     wakeUpGoalBufferMinutes: 30,
@@ -366,6 +368,7 @@ describe('handleAlarmDismissEffect', () => {
       dayOverrides: {},
       nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
       todos: [],
+      taskType: 'squat',
       enabled: true,
       targetSleepMinutes: null,
       wakeUpGoalBufferMinutes: 30,
@@ -413,6 +416,7 @@ describe('handleAlarmDismissEffect', () => {
       dayOverrides: {},
       nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
       todos: [],
+      taskType: 'squat',
       enabled: true,
       targetSleepMinutes: null,
       wakeUpGoalBufferMinutes: 30,
@@ -457,6 +461,7 @@ describe('handleAlarmDismissEffect', () => {
       dayOverrides: {},
       nextOverride: { time: { hour: 23, minute: 50 }, targetDate: '2026-02-26' },
       todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+      taskType: 'squat',
       enabled: true,
       targetSleepMinutes: null,
       wakeUpGoalBufferMinutes: 30,
@@ -478,6 +483,43 @@ describe('handleAlarmDismissEffect', () => {
     const records = useWakeRecordStore.getState().records;
     expect(records).toHaveLength(1);
     expect(records[0]?.goalDeadline).toBe(new Date(2026, 1, 26, 23, 80, 0).toISOString());
+  });
+
+  test('事前ウィンドウで自動開始済みのセッションがあれば、dismiss 後に taskType が変更されていても WakeRecord と Live Activity はセッションの todos を使う', async () => {
+    // 事前自動開始セッションは sky タスクで開始済み（ユーザーが実際に取り組む内容）。
+    // その後 dismiss までの間に設定画面で target.taskType が squat に変更された、
+    // というシナリオを再現する。
+    setActiveSession({
+      recordId: null,
+      todos: [
+        {
+          id: 'sky-todo-1',
+          title: 'Take a sky photo',
+          completed: false,
+          completedAt: null,
+          type: 'sky',
+        },
+      ],
+    });
+    const target: WakeTarget = {
+      ...createTargetWithTodos(),
+      todos: [{ id: 'squat-todo-1', title: '10 Squats', completed: false, type: 'squat' }],
+      taskType: 'squat',
+    };
+    const params = createStartParams({ target });
+
+    await runEffect(handleAlarmDismissEffect(params));
+
+    const records = useWakeRecordStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]?.todos).toHaveLength(1);
+    expect(records[0]?.todos[0]?.id).toBe('sky-todo-1');
+    expect(records[0]?.todos[0]?.type).toBe('sky');
+
+    expect(mockStartLiveActivity).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'sky-todo-1' })]),
+      expect.anything(),
+    );
   });
 });
 
@@ -608,6 +650,7 @@ describe('restoreSessionOnLaunch', () => {
           dayOverrides: {},
           nextOverride: { time: { hour: 0, minute: 10 }, targetDate: '2026-02-26' },
           todos: [],
+          taskType: 'squat',
           enabled: true,
           targetSleepMinutes: null,
           wakeUpGoalBufferMinutes: 30,
@@ -670,6 +713,7 @@ describe('restoreSessionOnLaunch', () => {
           dayOverrides: {},
           nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
           todos: [],
+          taskType: 'squat',
           enabled: true,
           targetSleepMinutes: null,
           wakeUpGoalBufferMinutes: 30,
@@ -1033,6 +1077,7 @@ describe('recoverMissedDismiss', () => {
         dayOverrides: {},
         nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
         todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+        taskType: 'squat',
         enabled: true,
         targetSleepMinutes: null,
         wakeUpGoalBufferMinutes: 30,
@@ -1175,6 +1220,7 @@ describe('recoverMissedDismiss', () => {
       dayOverrides: {},
       nextOverride: { time: { hour: 7, minute: 0 }, targetDate: '2026-02-26' },
       todos: [{ id: 'todo-1', title: 'Stretch', completed: false }],
+      taskType: 'squat',
       enabled: true,
       targetSleepMinutes: null,
       wakeUpGoalBufferMinutes: 30,

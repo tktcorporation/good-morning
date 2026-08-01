@@ -6,7 +6,8 @@
   "override": "明日だけ",
   "todos": {
     "title": "明日のタスク",
-    "fixedTaskLabel": "スクワット 10 回"
+    "fixedTaskLabel": "スクワット 10 回",
+    "fixedSkyTaskLabel": "空の写真を撮影"
   },
   "morningRoutine": {
     "title": "今朝のルーティン",
@@ -16,11 +17,27 @@
     "goalCountdown": "目標まで {{time}}",
     "goalExceeded": "{{time}} 超過",
     "allDone": "全タスク完了!",
+    "switchTaskType": "タスクを切り替える",
+    "switchTaskTypeConfirmTitle": "タスクを切り替えますか?",
+    "switchTaskTypeConfirmMessage": "現在の進捗は失われ、新しいタスクを最初からやり直すことになります。",
+    "switchTaskTypeConfirmButton": "切り替える",
     "squat": {
       "title": "スクワット",
       "detecting": "スクワット検出中...",
       "done": "完了!",
       "waiting": "準備中..."
+    },
+    "sky": {
+      "title": "空の写真",
+      "waiting": "準備中...",
+      "openCamera": "カメラを開く",
+      "classifying": "判定中...",
+      "shutter": "シャッター",
+      "cancel": "キャンセル",
+      "retry": "もう一度撮影",
+      "failed": "空が写っていませんでした。もう一度撮影してください",
+      "permissionDenied": "カメラへのアクセスが許可されていません。設定アプリから許可してください。",
+      "done": "完了!"
     }
   },
   "goalBuffer": {

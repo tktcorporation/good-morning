@@ -145,4 +145,4 @@ export function asRecord(value: unknown): Readonly<Record<string, unknown>> {
  * morning-session）の永続化スキーマから共有する。TodoType（types/alarm.ts）に
  * 新しい種別を追加したときはここも合わせて更新すること。
  */
-export const TodoTypeSchema: Schema.Schema<TodoType> = Schema.Literal('checkbox', 'squat');
+export const TodoTypeSchema: Schema.Schema<TodoType> = Schema.Literal('checkbox', 'squat', 'sky');
