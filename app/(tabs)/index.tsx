@@ -486,14 +486,21 @@ export default function DashboardScreen() {
         isSwitchingTaskTypeRef.current = true;
         void (async () => {
           try {
+            // switchSessionTaskType を先に呼ぶ: session 側の areAllCompleted() ガードは
+            // 呼び出しの冒頭で同期的に評価される。setTaskType を先に await すると、
+            // その永続化待ちの間に（切り替え中もタスク完了操作自体は塞がれていないため）
+            // 現在のタスクが完了してセッションが全完了になり、後続の
+            // switchSessionTaskType がガードで no-op になりうる。その場合 target だけ
+            // 新しい種別になり session は古いままという不整合が残ってしまう。
+            //
             // 次回以降のデフォルトにも反映する。セッション中の切り替えは
             // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
             // 両ストアのアクションは自身の変更後にそれぞれウィジェット同期を fork するが、
             // ここでは syncWidget: false で抑制し、両方の更新が確定した後に 1 回だけ
             // 同期する。2つの fork をそのまま並行させると、target 用と session 用の
             // ネイティブ書き込みの完了順が入れ替わり、古い表示が最終状態として残りうる。
-            await setTaskType(type, { syncWidget: false });
             await switchSessionTaskType(type, { syncWidget: false });
+            await setTaskType(type, { syncWidget: false });
             runEffectFork(syncWidgetEffect);
             syncLiveActivityWithSession();
           } finally {
