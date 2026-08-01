@@ -154,24 +154,31 @@ export default function SettingsScreen() {
     [persistGrantedPermission],
   );
 
-  // バックグラウンド → フォアグラウンド復帰時のみ再チェックする。このガードが
-  // ないと、権限ダイアログ表示による一時的な inactive 遷移でも毎回再発火する。
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      const wasBackground =
-        appStateRef.current === 'inactive' || appStateRef.current === 'background';
-      appStateRef.current = nextState;
-      if (!wasBackground || nextState !== 'active') return;
-
-      for (const perm of APP_PERMISSIONS) {
-        if (permissionStatuses[perm.id] === 'denied') {
-          void recheckDeniedPermission(perm);
-        }
+  const recheckAllDeniedPermissions = useCallback(() => {
+    for (const perm of APP_PERMISSIONS) {
+      if (permissionStatuses[perm.id] === 'denied') {
+        void recheckDeniedPermission(perm);
       }
+    }
+  }, [permissionStatuses, recheckDeniedPermission]);
+
+  // 「一度でも background を経由したか」で判定する — 権限リクエスト自体が開く
+  // システムダイアログは active→inactive→active としか遷移せず background を
+  // 経由しないため、ダイアログの開閉だけでは誤って再発火しない。
+  const wasBackgroundedRef = useRef(false);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'background') {
+        wasBackgroundedRef.current = true;
+        return;
+      }
+      if (nextState !== 'active') return;
+      const shouldRecheck = wasBackgroundedRef.current;
+      wasBackgroundedRef.current = false;
+      if (shouldRecheck) recheckAllDeniedPermissions();
     });
     return () => subscription.remove();
-  }, [permissionStatuses, recheckDeniedPermission]);
+  }, [recheckAllDeniedPermissions]);
 
   const isEnabled = target?.enabled ?? false;
 
