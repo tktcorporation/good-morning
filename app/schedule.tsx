@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, commonStyles, fontSize, spacing } from '../src/constants/theme';
 import { useWakeTargetStore } from '../src/stores/wake-target-store';
 import type { AlarmTime, DayOfWeek, TranslateFn } from '../src/types/alarm';
 import { formatTime, getDayLabel } from '../src/types/alarm';
+import type { DayOverride } from '../src/types/wake-target';
 import { resolveTimeForDate } from '../src/types/wake-target';
 
 const ALL_DAYS: readonly DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
@@ -19,6 +20,40 @@ function getDayState(
   if (override === undefined) return 'default';
   if (override.type === 'off') return 'off';
   return 'custom';
+}
+
+/** custom 状態から離れる直前の時刻を lastCustomTimeRef に退避する。 */
+function captureCustomTimeIfLeaving(
+  currentState: DayState,
+  day: DayOfWeek,
+  dayOverrides: Partial<Readonly<Record<DayOfWeek, DayOverride>>>,
+  lastCustomTimeRef: { current: Partial<Record<DayOfWeek, AlarmTime>> },
+): void {
+  if (currentState !== 'custom') return;
+  const override = dayOverrides[day];
+  if (override?.type === 'custom') {
+    lastCustomTimeRef.current[day] = override.time;
+  }
+}
+
+/** 選択されたセグメントに応じて dayOverride を更新する。 */
+async function applyDayState(
+  day: DayOfWeek,
+  nextState: DayState,
+  lastCustomTime: AlarmTime | undefined,
+  defaultTime: AlarmTime,
+  setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>,
+  removeDayOverride: (day: DayOfWeek) => Promise<void>,
+): Promise<void> {
+  if (nextState === 'default') {
+    await removeDayOverride(day);
+    return;
+  }
+  if (nextState === 'off') {
+    await setDayOverride(day, { type: 'off' });
+    return;
+  }
+  await setDayOverride(day, { type: 'custom', time: lastCustomTime ?? defaultTime });
 }
 
 function InlineTimePicker({
@@ -111,6 +146,10 @@ export default function ScheduleScreen() {
   const setDayOverride = useWakeTargetStore((s) => s.setDayOverride);
   const removeDayOverride = useWakeTargetStore((s) => s.removeDayOverride);
   const [editingDay, setEditingDay] = useState<DayOfWeek | null>(null);
+  // off は型上 { type: 'off' } のみで時刻を保持しないため、custom から離れる
+  // 直前の時刻をここに退避しておく。off → custom で defaultTime に巻き戻らず、
+  // 直前のカスタム時刻へ戻せるようにするため（画面を離れると失われるセッション内限定の記憶）。
+  const lastCustomTimeRef = useRef<Partial<Record<DayOfWeek, AlarmTime>>>({});
 
   const defaultTime = target?.defaultTime ?? { hour: 7, minute: 0 };
 
@@ -128,14 +167,16 @@ export default function ScheduleScreen() {
         return;
       }
 
+      captureCustomTimeIfLeaving(currentState, day, target.dayOverrides, lastCustomTimeRef);
       setEditingDay(nextState === 'custom' ? day : null);
-      if (nextState === 'default') {
-        await removeDayOverride(day);
-      } else if (nextState === 'off') {
-        await setDayOverride(day, { type: 'off' });
-      } else {
-        await setDayOverride(day, { type: 'custom', time: defaultTime });
-      }
+      await applyDayState(
+        day,
+        nextState,
+        lastCustomTimeRef.current[day],
+        defaultTime,
+        setDayOverride,
+        removeDayOverride,
+      );
     },
     [target, defaultTime, setDayOverride, removeDayOverride],
   );

@@ -111,6 +111,7 @@
 
 - **権限ステータスの pending と denied が同じ表示になる**: `settings.tsx:196-215` の `isGranted` は true/false の2値判定のみで、初期値 `'pending'`（未リクエスト）でも `t('settings.permissionDenied')` と同じ「拒否」ラベル・警告色（`statusDenied`）で表示される。一度も権限を尋ねていないユーザーにまで「拒否」と表示されてしまう。pending / denied / granted の3状態を区別して表示する。
 - **権限が一度 granted になると再検証されない（settings側）**: `settings.tsx:132-134` の for ループは `permissionStatuses[perm.id] !== 'granted'` の権限のみ再チェック対象とするため、許可後にOS側で権限を取り消されてもバッジは「許可済み」のまま更新されない。表示のたびに実OS状態を問い合わせる。
+- **HealthKit権限は「リクエスト成功」であってもRead権限拒否の場合がある**: `src/services/health.ts:25-26` に明記の通り、HealthKitはプライバシー上の理由からRead権限の拒否状態を隠蔽し、ユーザーが拒否しても `initHealthKit()` が `true` を返しうる。`settings.tsx`・`PermissionStep.tsx`・`SleepCard.tsx` はいずれもこの戻り値をそのまま `healthKitEnabled=true` として永続化しており、実際にはデータを取得できないのに「許可済み」と表示されうる。「リクエスト成功」と「実際にデータ取得できた」を区別する3状態モデルへの変更が必要。
 
 ---
 
