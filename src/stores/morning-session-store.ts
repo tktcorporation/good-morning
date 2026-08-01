@@ -141,8 +141,11 @@ interface MorningSessionState {
    * 引き継がず、新しい taskType の未着手状態から始める。session が null の場合、
    * および全タスク完了済みの場合（完了済みを未完了に戻すと onAllTodosCompletedEffect
    * の再発火で確定済み WakeRecord が上書きされるため）は何もしない。
+   * options.syncWidget=false でウィジェット同期を呼び出し元に委譲できる
+   * （wake-target-store の setTaskType と続けて呼ぶ場合に、ウィジェット同期の
+   * 重複 fork を避けるため）。
    */
-  switchTaskType: (taskType: WakeTaskType) => Promise<void>;
+  switchTaskType: (taskType: WakeTaskType, options?: { syncWidget?: boolean }) => Promise<void>;
   clearSession: () => Promise<void>;
   /**
    * snoozeAlarmIds と snoozeFiresAt をアトミックに更新し、session を AsyncStorage に永続化する。
@@ -324,7 +327,7 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     runEffectFork(syncWidgetEffect);
   },
 
-  switchTaskType: async (taskType: WakeTaskType) => {
+  switchTaskType: async (taskType: WakeTaskType, options?: { syncWidget?: boolean }) => {
     const { session, areAllCompleted } = get();
     if (session === null) return;
     // 全完了済みセッションを未完了に戻すと、onAllTodosCompletedEffect の
@@ -340,7 +343,9 @@ export const useMorningSessionStore = create<MorningSessionState>((set, get) => 
     };
     set({ session: updated });
     await persistSession(updated);
-    runEffectFork(syncWidgetEffect);
+    if (options?.syncWidget !== false) {
+      runEffectFork(syncWidgetEffect);
+    }
   },
 
   /** セッションをクリアする。snooze state は session 内に含まれるため、session = null で自動的にクリアされる。 */

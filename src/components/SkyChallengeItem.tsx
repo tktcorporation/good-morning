@@ -16,6 +16,7 @@ interface SkyChallengeItemProps {
 type CaptureStatus = 'idle' | 'capturing' | 'classifying' | 'failed';
 
 const SKY_EMOJI = '\u{1F324}️';
+const CANCEL_ICON = '\u{00D7}';
 
 /**
  * 空撮影チャレンジの UI。カメラでシャッターを切り、端末上の Vision framework による
@@ -54,6 +55,9 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
       const classifications = await classifyImageAsync(photo.uri);
       if (isSkyClassification(classifications)) {
         onComplete(todo.id);
+        // セッションが期限切れ等で completeSkyTodo が no-op になった場合、
+        // todo.completed が変化せず classifying のまま復帰できなくなるための保険。
+        setStatus('idle');
       } else {
         setStatus('failed');
       }
@@ -61,6 +65,10 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
       setStatus('failed');
     }
   }, [status, onComplete, todo.id]);
+
+  const handleCancelCapture = useCallback(() => {
+    setStatus('idle');
+  }, []);
 
   if (todo.completed) {
     return (
@@ -84,13 +92,22 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
             <Text style={styles.overlayText}>{t('morningRoutine.sky.classifying')}</Text>
           </View>
         ) : (
-          <Pressable
-            style={styles.shutterButton}
-            onPress={handleCapture}
-            accessibilityLabel={t('morningRoutine.sky.shutter')}
-          >
-            <View style={styles.shutterInner} />
-          </Pressable>
+          <>
+            <Pressable
+              style={styles.cancelButton}
+              onPress={handleCancelCapture}
+              accessibilityLabel={t('morningRoutine.sky.cancel')}
+            >
+              <Text style={styles.cancelButtonText}>{CANCEL_ICON}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.shutterButton}
+              onPress={handleCapture}
+              accessibilityLabel={t('morningRoutine.sky.shutter')}
+            >
+              <View style={styles.shutterInner} />
+            </Pressable>
+          </>
         )}
       </View>
     );
@@ -209,5 +226,21 @@ const styles = StyleSheet.create({
     height: SHUTTER_SIZE - 16,
     borderRadius: borderRadius.full,
     backgroundColor: colors.text,
+  },
+  cancelButton: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: semanticColors.overlay,
+  },
+  cancelButtonText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    lineHeight: fontSize.md,
   },
 });

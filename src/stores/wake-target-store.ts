@@ -52,8 +52,12 @@ interface WakeTargetState {
   clearExpiredOverride: () => Promise<void>;
   setDayOverride: (day: DayOfWeek, override: DayOverride) => Promise<void>;
   removeDayOverride: (day: DayOfWeek) => Promise<void>;
-  /** 起床タスクの種別を切り替える。todos は新しい taskType の固定 TODO 1 件に作り直される。 */
-  setTaskType: (taskType: WakeTaskType) => Promise<void>;
+  /**
+   * 起床タスクの種別を切り替える。todos は新しい taskType の固定 TODO 1 件に作り直される。
+   * options.syncWidget=false でウィジェット同期を呼び出し元に委譲できる
+   * （session も続けて切り替える場合に、ウィジェット同期の重複 fork を避けるため）。
+   */
+  setTaskType: (taskType: WakeTaskType, options?: { syncWidget?: boolean }) => Promise<void>;
   setTargetSleepMinutes: (minutes: number | null) => Promise<void>;
   setWakeUpGoalBufferMinutes: (minutes: number) => Promise<void>;
   toggleEnabled: () => Promise<void>;
@@ -86,9 +90,17 @@ function readStoredEffect(): Effect.Effect<
  * target 変更時にウィジェットとアラームを同期する。
  * Effect ランタイムで実行し、エラーは console.error に出力される
  * （従来の `.catch(() => {})` よりエラーが見える）。
+ *
+ * syncWidget=false は、呼び出し元が target と session の両方を続けて更新し
+ * 最後に 1 回だけウィジェット同期したい場合に使う（例:
+ * handleSwitchTaskType）。同期先が state ではなくネイティブ側のため、
+ * target 用と session 用の syncWidgetEffect を並行して fork すると
+ * 後勝ちが入れ替わり古い表示が残りうる。
  */
-function syncAfterTargetChange(): void {
-  runEffectFork(syncWidgetEffect);
+function syncAfterTargetChange(options?: { syncWidget?: boolean }): void {
+  if (options?.syncWidget !== false) {
+    runEffectFork(syncWidgetEffect);
+  }
   runEffectFork(syncAlarmsEffect);
 }
 
@@ -349,7 +361,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     syncAfterTargetChange();
   },
 
-  setTaskType: async (taskType: WakeTaskType) => {
+  setTaskType: async (taskType: WakeTaskType, options?: { syncWidget?: boolean }) => {
     const { target } = get();
     if (target === null) return;
     const updated: WakeTarget = {
@@ -359,7 +371,7 @@ export const useWakeTargetStore = create<WakeTargetState>((set, get) => ({
     };
     set({ target: updated });
     await persist(updated);
-    syncAfterTargetChange();
+    syncAfterTargetChange(options);
   },
 
   setTargetSleepMinutes: async (minutes: number | null) => {

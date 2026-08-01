@@ -37,6 +37,14 @@ public class ExpoSkyVisionModule: Module {
           domain: "ExpoSkyVision", code: 1,
           userInfo: [NSLocalizedDescriptionKey: "Invalid image URI: \(imageUri)"])
       }
+      // 呼び出し元(SkyChallengeItem)は撮影のたびに新しいキャッシュファイルを作り、
+      // 分類後も自分では消さない。ここで読み込み後に削除し、判定の成否に関わらず
+      // キャッシュが撮影のたびに蓄積するのを防ぐ。
+      defer {
+        if url.isFileURL {
+          try? FileManager.default.removeItem(at: url)
+        }
+      }
       guard let data = try? Data(contentsOf: url), let uiImage = UIImage(data: data),
         let cgImage = uiImage.cgImage
       else {
@@ -50,8 +58,11 @@ public class ExpoSkyVisionModule: Module {
       let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
       try handler.perform([request])
 
+      // results の並び順(信頼度順かどうか)は保証されないため件数で打ち切らない。
+      // JS 側(isSkyClassification)は既知の空関連ラベル5件のみを見るので、
+      // 打ち切ると本来ヒットすべきラベルを取りこぼすリスクがある。
       let observations = request.results ?? []
-      return observations.prefix(30).map { observation in
+      return observations.map { observation in
         ["identifier": observation.identifier, "confidence": observation.confidence]
       }
     }

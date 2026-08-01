@@ -5,13 +5,14 @@ describe('isSkyClassification', () => {
     expect(isSkyClassification([{ identifier: 'Sky', confidence: 0.8 }])).toBe(true);
   });
 
-  it('空関連ラベルが識別子の一部として含まれていれば大文字小文字を無視して一致する', () => {
-    expect(isSkyClassification([{ identifier: 'CLOUDY SKY', confidence: 0.4 }])).toBe(true);
+  it('大文字小文字を無視して一致する', () => {
+    expect(isSkyClassification([{ identifier: 'BLUE_SKY', confidence: 0.4 }])).toBe(true);
   });
 
-  it('雲・夕焼けなど空関連キーワードのバリエーションにも一致する', () => {
-    expect(isSkyClassification([{ identifier: 'sunset', confidence: 0.5 }])).toBe(true);
-    expect(isSkyClassification([{ identifier: 'cumulus cloud', confidence: 0.3 }])).toBe(true);
+  it('複合語ラベル（night_sky, sunset_sunrise, cloudy）にも一致する', () => {
+    expect(isSkyClassification([{ identifier: 'night_sky', confidence: 0.5 }])).toBe(true);
+    expect(isSkyClassification([{ identifier: 'sunset_sunrise', confidence: 0.3 }])).toBe(true);
+    expect(isSkyClassification([{ identifier: 'cloudy', confidence: 0.3 }])).toBe(true);
   });
 
   it('信頼度が閾値ちょうどなら true を返す（境界値）', () => {
@@ -38,7 +39,7 @@ describe('isSkyClassification', () => {
     expect(
       isSkyClassification([
         { identifier: 'dog', confidence: 0.9 },
-        { identifier: 'cloud', confidence: 0.2 },
+        { identifier: 'cloudy', confidence: 0.2 },
       ]),
     ).toBe(true);
   });
@@ -47,7 +48,7 @@ describe('isSkyClassification', () => {
     expect(
       isSkyClassification([
         { identifier: 'sky', confidence: 0.05 },
-        { identifier: 'cloud', confidence: 0.05 },
+        { identifier: 'cloudy', confidence: 0.05 },
       ]),
     ).toBe(false);
   });
@@ -67,23 +68,19 @@ describe('isSkyClassification', () => {
 
   it.each([
     'sky',
-    'cloud',
-    'sunset',
-    'sunrise',
-    'horizon',
-    'cumulus',
-    'overcast',
-    'dusk',
-    'dawn',
-  ])('キーワード "%s" を含むラベルに一致する', (keyword) => {
-    expect(isSkyClassification([{ identifier: keyword, confidence: 0.5 }])).toBe(true);
+    'blue_sky',
+    'night_sky',
+    'sunset_sunrise',
+    'cloudy',
+  ])('Vision の実ラベル "%s" に一致する', (identifier) => {
+    expect(isSkyClassification([{ identifier, confidence: 0.5 }])).toBe(true);
   });
 
   it.each([
     'skyscraper',
     'skydiving',
-    'dusky grouse',
-  ])('空関連キーワードを部分文字列として含むだけの無関係なラベル "%s" には一致しない（単語境界チェック）', (identifier) => {
+    'husky',
+  ])('空関連キーワードを部分文字列として含むだけの無関係なラベル "%s" には一致しない（完全一致チェック）', (identifier) => {
     expect(isSkyClassification([{ identifier, confidence: 0.9 }])).toBe(false);
   });
 });

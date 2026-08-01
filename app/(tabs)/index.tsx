@@ -27,6 +27,7 @@ import {
   isAlarmKitAvailable,
   onAllTodosCompletedEffect,
   runEffectFork,
+  syncWidgetEffect,
 } from '../../src/services';
 import { useDailyGradeStore } from '../../src/stores/daily-grade-store';
 import { useMorningSessionStore } from '../../src/stores/morning-session-store';
@@ -459,20 +460,33 @@ export default function DashboardScreen() {
   const handleCompleteSkyTodo = useCallback(
     async (todoId: string) => {
       await completeSkyTodo(todoId);
+      syncLiveActivityWithSession();
     },
-    [completeSkyTodo],
+    [completeSkyTodo, syncLiveActivityWithSession],
   );
 
   const handleSwitchTaskType = useCallback(
     (type: WakeTaskType) => {
-      if (type === activeTaskType) return;
+      // activeTaskType は type 未設定のレガシー checkbox セッションだと
+      // target.taskType にフォールバックするため、そのフォールバック値と
+      // 一致するボタンを早期 return すると、実際は checkbox のままのセッションを
+      // 切り替えられなくなる。session の実際の type が squat/sky で判別できる
+      // ときだけ、この等値チェックで無駄な切り替えを防ぐ。
+      const sessionType = session?.todos[0]?.type;
+      const isKnownSessionType = sessionType === 'squat' || sessionType === 'sky';
+      if ((session === null || isKnownSessionType) && type === activeTaskType) return;
 
       const performSwitch = () => {
         void (async () => {
           // 次回以降のデフォルトにも反映する。セッション中の切り替えは
           // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
-          await setTaskType(type);
-          await switchSessionTaskType(type);
+          // 両ストアのアクションは自身の変更後にそれぞれウィジェット同期を fork するが、
+          // ここでは syncWidget: false で抑制し、両方の更新が確定した後に 1 回だけ
+          // 同期する。2つの fork をそのまま並行させると、target 用と session 用の
+          // ネイティブ書き込みの完了順が入れ替わり、古い表示が最終状態として残りうる。
+          await setTaskType(type, { syncWidget: false });
+          await switchSessionTaskType(type, { syncWidget: false });
+          runEffectFork(syncWidgetEffect);
           syncLiveActivityWithSession();
         })();
       };
