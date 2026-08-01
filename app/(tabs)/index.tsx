@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GradeIcon } from '../../src/components/grade/GradeIcon';
@@ -335,6 +335,7 @@ export default function DashboardScreen() {
   const dayBoundaryHour = useSettingsStore((s) => s.dayBoundaryHour);
 
   const setTaskType = useWakeTargetStore((s) => s.setTaskType);
+  const isSwitchingTaskTypeRef = useRef(false);
 
   const session = useMorningSessionStore((s) => s.session);
   const toggleTodo = useMorningSessionStore((s) => s.toggleTodo);
@@ -467,6 +468,11 @@ export default function DashboardScreen() {
 
   const handleSwitchTaskType = useCallback(
     (type: WakeTaskType) => {
+      // 切り替え処理中の連打で setTaskType と switchSessionTaskType の非同期呼び出しが
+      // 交差すると、target.taskType と session.todos[0].type が異なる値で確定しうる。
+      // 完了までは以降の切り替え操作を無視して排他にする。
+      if (isSwitchingTaskTypeRef.current) return;
+
       // activeTaskType は type 未設定のレガシー checkbox セッションだと
       // target.taskType にフォールバックするため、そのフォールバック値と
       // 一致するボタンを早期 return すると、実際は checkbox のままのセッションを
@@ -477,25 +483,32 @@ export default function DashboardScreen() {
       if ((session === null || isKnownSessionType) && type === activeTaskType) return;
 
       const performSwitch = () => {
+        isSwitchingTaskTypeRef.current = true;
         void (async () => {
-          // 次回以降のデフォルトにも反映する。セッション中の切り替えは
-          // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
-          // 両ストアのアクションは自身の変更後にそれぞれウィジェット同期を fork するが、
-          // ここでは syncWidget: false で抑制し、両方の更新が確定した後に 1 回だけ
-          // 同期する。2つの fork をそのまま並行させると、target 用と session 用の
-          // ネイティブ書き込みの完了順が入れ替わり、古い表示が最終状態として残りうる。
-          await setTaskType(type, { syncWidget: false });
-          await switchSessionTaskType(type, { syncWidget: false });
-          runEffectFork(syncWidgetEffect);
-          syncLiveActivityWithSession();
+          try {
+            // 次回以降のデフォルトにも反映する。セッション中の切り替えは
+            // 「タスクを選び直した」操作そのものなので、次回だけ元に戻る方が驚きが大きい。
+            // 両ストアのアクションは自身の変更後にそれぞれウィジェット同期を fork するが、
+            // ここでは syncWidget: false で抑制し、両方の更新が確定した後に 1 回だけ
+            // 同期する。2つの fork をそのまま並行させると、target 用と session 用の
+            // ネイティブ書き込みの完了順が入れ替わり、古い表示が最終状態として残りうる。
+            await setTaskType(type, { syncWidget: false });
+            await switchSessionTaskType(type, { syncWidget: false });
+            runEffectFork(syncWidgetEffect);
+            syncLiveActivityWithSession();
+          } finally {
+            isSwitchingTaskTypeRef.current = false;
+          }
         })();
       };
 
       // 失う進捗が無い（squat は未着手、sky は未完了なら常に該当）場合は
       // 確認なしで即切り替える。進捗がある場合のみ、失うことを確認する。
-      const currentTodo = session?.todos[0];
+      // レガシーの複数 checkbox セッションでは todos[0] 以外が完了/進行中のこともあるため、
+      // 全 todo を見て判定する（todos[0] だけを見ると他の todo の完了済み進捗が
+      // 確認なしで失われる）。
       const hasProgress =
-        currentTodo !== undefined && !currentTodo.completed && (currentTodo.currentCount ?? 0) > 0;
+        session?.todos.some((todo) => todo.completed || (todo.currentCount ?? 0) > 0) === true;
       if (!hasProgress) {
         performSwitch();
         return;

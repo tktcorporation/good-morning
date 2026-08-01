@@ -31,7 +31,7 @@ public class ExpoSkyVisionModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoSkyVision")
 
-    AsyncFunction("classifyImageAsync") { (imageUri: String) -> [[String: Any]] in
+    AsyncFunction("classifyImageAsync") { (imageUri: String, minConfidence: Double?) -> [[String: Any]] in
       guard let url = URL(string: imageUri) else {
         throw NSError(
           domain: "ExpoSkyVision", code: 1,
@@ -59,9 +59,12 @@ public class ExpoSkyVisionModule: Module {
       try handler.perform([request])
 
       // results の並び順(信頼度順かどうか)は保証されないため件数で打ち切らない。
-      // JS 側(isSkyClassification)は既知の空関連ラベル5件のみを見るので、
-      // 打ち切ると本来ヒットすべきラベルを取りこぼすリスクがある。
-      let observations = request.results ?? []
+      // 代わりに minConfidence 未満を信頼度で除外する(位置ではなく値による
+      // フィルタなので、閾値以上のラベルを取りこぼすことはない)。
+      // Vision の分類語彙は約1300件あり、フィルタ無しだと撮影のたびに
+      // 全件がブリッジを渡ることになる。
+      let threshold = minConfidence ?? -Double.greatestFiniteMagnitude
+      let observations = (request.results ?? []).filter { Double($0.confidence) >= threshold }
       return observations.map { observation in
         ["identifier": observation.identifier, "confidence": observation.confidence]
       }

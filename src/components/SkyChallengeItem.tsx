@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { borderRadius, colors, fontSize, semanticColors, spacing } from '../constants/theme';
 import type { SessionTodo } from '../types/morning-session';
-import { isSkyClassification } from '../utils/sky-classification';
+import { isSkyClassification, SKY_CONFIDENCE_THRESHOLD } from '../utils/sky-classification';
 
 interface SkyChallengeItemProps {
   readonly todo: SessionTodo;
@@ -52,7 +52,9 @@ export function SkyChallengeItem({ todo, onComplete }: SkyChallengeItemProps) {
     setStatus('classifying');
     try {
       const photo = await camera.takePictureAsync({ quality: 0.5 });
-      const classifications = await classifyImageAsync(photo.uri);
+      // isSkyClassification は SKY_CONFIDENCE_THRESHOLD 未満を採用しないため、
+      // ネイティブ側で同じ閾値未満を先に除外してブリッジのペイロードを抑える。
+      const classifications = await classifyImageAsync(photo.uri, SKY_CONFIDENCE_THRESHOLD);
       if (isSkyClassification(classifications)) {
         onComplete(todo.id);
         // セッションが期限切れ等で completeSkyTodo が no-op になった場合、
