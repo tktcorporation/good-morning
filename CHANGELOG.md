@@ -1,5 +1,88 @@
 # good-morning
 
+## 1.5.0
+
+### Minor Changes
+
+- [#100](https://github.com/tktcorporation/good-morning/pull/100) [`b10ea1f`](https://github.com/tktcorporation/good-morning/commit/b10ea1f7b4be01c97abac14d7e69217acf45381f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - アラーム後の起床フロー中でも、起床タスクの種類（スクワット / 空の写真）を切り替えられるようにした
+
+  - ホーム画面のセッション中表示に、タスク種別を切り替えるボタンを追加。切り替えると進行中の進捗が失われるため確認ダイアログを表示する
+  - 設定画面からの切り替えは引き続き次回以降のデフォルトのみを変更する。進行中セッションのタスクを変えたい場合はホーム画面から切り替える旨を案内文言で明示した
+
+- [#100](https://github.com/tktcorporation/good-morning/pull/100) [`b10ea1f`](https://github.com/tktcorporation/good-morning/commit/b10ea1f7b4be01c97abac14d7e69217acf45381f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 起床タスクに「空の写真」を追加し、スクワットと並ぶ選択肢として設定画面から切り替えられるようにした
+
+  - 空判定は端末上の Vision framework（VNClassifyImageRequest）による画像分類のみで行い、
+    撮影した写真は端末外に送信・保存しない。ローカル Expo Module `modules/expo-sky-vision` として実装
+  - 設定画面に起床タスクの種類（スクワット / 空の写真）を切り替えるセクションを追加
+  - `expo-camera` を依存に追加し、`NSCameraUsageDescription` を設定
+
+### Patch Changes
+
+- [#92](https://github.com/tktcorporation/good-morning/pull/92) [`940274d`](https://github.com/tktcorporation/good-morning/commit/940274dd5d930bb0bb47bd27773d97b18bb74a1d) Thanks [@tktcorporation](https://github.com/tktcorporation)! - アラームが設定時刻に鳴らない問題を修正し、スケジューリングの回帰テストを整備
+
+  - launch payload の consume-once 二重読みにより、アラーム経由の cold-start で dismiss 処理・スヌーズ到着処理が実行されなかった問題を修正
+  - アラーム登録が「先キャンセル → 後スケジュール」だったため、ネイティブの一時的な失敗 1 回でアラームが 0 本になる問題を修正（先スケジュール + 失敗時ロールバックで旧アラームを温存）
+  - アラーム同期の並行実行で登録済みアラームが孤立扱いで取り消される競合を Semaphore 直列化で修正
+  - 「明日だけ変更」が当日を対象日にしてしまい、翌日に鳴らない問題を修正（論理翌日を対象に）
+  - レガシー・破損した保存データ（dayOverrides / nextOverride 欠落等）でスケジューリング全体が例外死する問題を正規化で修正
+  - dismiss イベントの取りこぼし（ストア未ロード時の破棄・自動開始セッションとの誤判定）と、ネイティブ先行スヌーズが孤立キャンセルで消える問題を修正
+  - セッション自動開始がストア未ロード時に進行中セッション・完了済みレコードを見誤り上書きする問題を修正
+  - 深夜 0 時をまたぐ「明日だけ変更」で、日付が変わる直前のセッションウィンドウ前半を見失う問題を修正
+  - 「明日だけ変更」画面が、日付変更ラインより前の深夜に開くと保存先と異なる曜日の予定時刻を表示する問題を修正
+  - 起床設定データが破損した場合にダッシュボードがローディング画面に固まり続け、修復手段がない問題を修正（リセット導線を追加）
+  - settings ストア未ロード時に、有効な永続化済みセッションを誤って別日と判定し破棄してしまう問題、および誤った設定でセッションを自動開始してしまう問題を修正
+  - 深夜 0 時をまたぐ「明日だけ変更」で、直前の通常アラームの dismiss 記録が override 対象日に紐づき、実際の override dismiss が重複と誤判定されて記録されなくなる問題を修正
+  - 二重鳴動を許容する設計（override 対象日でも通常アラームが維持される）で、同日 2 回目の dismiss が既存の WakeRecord（TODO 進捗・完了状態）を上書きしてしまう問題を修正
+  - records ストア未ロード時に期限切れセッションのクリーンアップが空の起床履歴を永続化し、既存の記録を消してしまう問題を修正
+  - 深夜に近い時刻の「明日だけ変更」で、dismiss が日付をまたいだ直後に行われると WakeRecord が翌日の通常アラーム基準で誤計算される問題を修正
+  - override と通常アラームが近接する時刻設定で、まだ発火していないアラームの時刻が dismiss 記録に誤って採用されてしまう問題を修正
+  - アプリを開かないまま複数の朝にわたってアラームを dismiss した場合、最後の 1 件しか WakeRecord にならず、それ以前の日の起床記録が失われる問題を修正
+  - records ストア未ロード時に expireSessionIfNeeded の保留を「期限切れでない」と誤解釈し、WakeRecord 未更新のままセッションを stale 破棄してしまう問題を修正
+  - 深夜 0 時をまたいで override が採用された dismiss で、goalDeadline が dismiss 日基準で計算され 1 日ズレる問題を修正
+  - 複数の未処理 dismiss イベントを遡って処理する際、古いイベントでもセッション・スヌーズが開始され、最新イベントのスヌーズが古い日付のセッションに誤って紐づく問題を修正（セッション・スヌーズの取り込みは最新イベントのみに限定）
+  - ダッシュボードとホームウィジェットの「次のアラーム」表示が、暦日ベースの計算のため dayBoundaryHour 前の深夜や、今日のアラームを消化した後の「明日だけ変更」を正しく反映しない問題を修正
+  - 二重鳴動を許容する設計で同一論理日付に複数の primary dismiss イベントが積まれた場合、最新イベントが古いイベントとの同日重複と誤判定され、WakeRecord はあるのにセッション・スヌーズが開始されない問題を修正
+  - dayBoundaryHour がアラーム時刻より後の設定で、発火後〜境界通過前は次のアラーム表示が既に過ぎた時刻に戻ってしまう問題を修正
+  - dismiss 時刻の解決ロジックを絶対時刻ベースの候補比較に刷新し、前日深夜の通常アラームと当日早朝の override が近接する設定で、前日の通常アラーム dismiss を見落とす問題を修正
+  - 二重鳴動を許容する設計で、次のアラーム表示（ダッシュボード・ウィジェット）が override 対象日の通常アラームを考慮せず、まだ発火していないアラームを見逃したり誤って報告したりする問題を修正
+  - 自動開始セッション（recordId 未確定）中にスヌーズが届いた場合、未消化の dismiss イベントが復元されずネイティブスヌーズが孤立キャンセルされる問題を修正
+  - 次のアラーム表示が翌日 1 日分しか探索しないため、翌日が OFF 設定で他の曜日にまだ有効なアラームがある場合に「次のアラームなし」と誤って報告する問題を修正
+  - 日付変更直後（暦日は override 対象日に入っているが、実際に鳴ったのは前夜の通常アラーム）の dismiss で、記録日が override 対象日に誤って紐づき、後続の実際の override dismiss が同日重複と誤判定されて記録されなくなる問題を修正
+  - dayBoundaryHour がアラーム時刻より後の設定で、境界通過前に「明日だけ変更」画面を開くとピッカーの表示（今日の曜日設定）と実際の保存先（1 日先送りされた override 対象日）がズレる問題を修正
+  - 起床履歴・セッションストアの読み込みが失敗すると loaded フラグが永久に立たず、以降アラーム無効化・時刻変更・「明日だけ変更」保存などの明示的な操作をしてもネイティブアラーム同期が二度と走らなくなる問題を修正。読み取り自体の一時的な失敗はリトライで復旧し、リトライしても読み取れない場合は空データで確定させず（実データの上書き消失を防ぐため）loaded=false のまま保持するようにした
+  - 二重鳴動を許容する設計で、override 対象日でもまだ発火していない通常アラームのウィンドウ内でセッションの自動開始判定が override 時刻優先で見落とされ、実際のアラーム発火時にセッションが開始されない問題を修正
+  - 前夜の通常アラームが既に発火してアフターウィンドウ内（有効中）でも、近接する翌暦日の未発火 override の方が分差で近いというだけでセッションの自動開始判定が override 側に奪われてしまう問題を修正
+  - 「明日だけ変更」画面で、dayBoundaryHour がアラーム時刻より後の設定で境界通過前にピッカーが翌日を表示している状態からユーザーが時刻を初期値から変更すると、保存時に対象日が独立して再計算され、表示していた翌日ではなく当日（数十分後）の override として保存されてしまう問題を修正
+  - ダッシュボードの「次に迎える朝」表示が、dayBoundaryHour がアラーム時刻より後の設定で境界通過前は暦日ベースのまま今日に戻ってしまい、「明日だけ変更」画面（resolveOverrideEditDay で正しく翌日に補正済み）と異なる日の予定を表示していた問題を修正
+  - 二重鳴動を許容する設計で、override 対象日と暦日が一致しただけで、前夜の通常アラームセッション（windowEnd 前でまだ有効中）を別日の stale セッションと誤判定して TODO 進捗ごと破棄してしまう問題を修正
+  - 同日 override と通常アラームのウィンドウが重なる場合、セッション自動開始の候補選択が配列の並び順で最初に一致したものを返していたため、まだ発火していない候補を誤って選び、実際に発火したアラームの期限切れ・スヌーズ処理が遅れる問題を修正
+  - 起動時に settings の読み込みが失敗すると、未回収の dismiss イベントが確保するはずのネイティブ先行スヌーズを syncAlarmsEffect が孤立とみなしてキャンセルしてしまう問題を修正。settings ストアの読み込みにも records/session ストアと同じ読み取りリトライ + 安全なデフォルト値のパターンを適用し、syncAlarmsEffect のガードに settings ロード状態を追加した
+
+- [#98](https://github.com/tktcorporation/good-morning/pull/98) [`9645362`](https://github.com/tktcorporation/good-morning/commit/964536253fc890c16190fc3039fd894f4274cca9) Thanks [@tktcorporation](https://github.com/tktcorporation)! - ストア永続化を Effect の StorageService に統一し、データ破損時の安定性を強化
+
+  - daily-grade ストアの読み込みで grades/streak の JSON が破損しているとロード処理全体が例外を投げていた問題を修正（他ストアと同様、破損データはデフォルト値にフォールバックする）
+  - wake-target ストアの読み込みに読み取りリトライが無く、ストレージの一時的な読み取り失敗が未処理のまま伝播していた問題を修正
+  - 全 5 ストア（settings / wake-target / wake-record / morning-session / daily-grade）の永続化を、型付きエラー・統一されたリトライ・JSON パース保護を持つ Effect の StorageService 経由に統一（従来は個別に AsyncStorage を直接操作しており、リトライ適用や失敗処理が不統一だった）
+  - settings / morning-session / daily-grade（streak）はスキーマ検証を追加し、型が一致しない永続化データをデータ破損として安全にデフォルト値へフォールバックするようにした
+
+- [#98](https://github.com/tktcorporation/good-morning/pull/98) [`9645362`](https://github.com/tktcorporation/good-morning/commit/964536253fc890c16190fc3039fd894f4274cca9) Thanks [@tktcorporation](https://github.com/tktcorporation)! - Schema 検証の一括デコードにより永続化データの正常なフィールドが巻き添えで失われる問題を修正
+
+  - settings / daily-grade（streak）/ wake-record / morning-session の永続化データデコードを、
+    Schema.Struct による一括デコードからフィールド単位のデコードに変更。従来は 1 フィールドの
+    型不一致だけでオブジェクト全体のデコードが失敗し、他の正常なフィールド（AlarmKit 権限許可
+    状態・ストリーク実績・起床履歴・進行中セッションのスヌーズ状態等）までデフォルト値に
+    巻き添えで上書きされていた
+  - wake-record の永続化スキーマが必須フィールドを厳格に要求していたため、後から追加された
+    フィールドを持たない過去データが要素ごと静かに破棄されうる問題を修正（id/date/result 以外は
+    フィールド単位でデフォルト補完するよう変更）
+  - morning-session の読み込みで、破損した startedAt から windowEnd を計算する際に
+    RangeError が発生すると StorageDecodeError の捕捉から漏れ、データ破損時と異なる
+    エラー経路（ロード状態が復旧不能になる）を辿っていた問題を修正
+  - daily-grade の grades 配列読み込みが要素単位の形状検証をしていなかった問題を修正
+    （wake-record と同じレコード単位検証パターンに統一）
+
+- [#86](https://github.com/tktcorporation/good-morning/pull/86) [`1077c62`](https://github.com/tktcorporation/good-morning/commit/1077c6229d6bf5ce663bfea9239167a91f26547a) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 依存パッケージのセキュリティ更新: shell-quote (critical) / ws / form-data / @xmldom/xmldom / uuid / js-yaml / brace-expansion / @tootallnate/once / @babel/core を修正版へ更新し、@expo/dom-webview を 55.0.6 へ更新
+
 ## 1.4.1
 
 ### Patch Changes
